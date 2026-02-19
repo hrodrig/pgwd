@@ -1,0 +1,17 @@
+# systemd timer: run pgwd one-shot every 5 minutes.
+# Requires pgwd-once.service. Enable the timer, not the service.
+#
+#   sudo systemctl enable --now pgwd.timer
+#   systemctl list-timers --all | grep pgwd
+
+[Unit]
+Description=Run Postgres Watch Dog every 5 minutes
+Documentation=https://github.com/hrodrig/pgwd
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

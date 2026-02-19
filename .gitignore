@@ -1,0 +1,17 @@
+# Ignore everything by default (including dotfiles).
+# Only what is explicitly allowed below is tracked.
+
+*
+.*
+!.gitignore
+!.cursorrules
+!README.md
+!Dockerfile
+!go.mod
+!go.sum
+!cmd/
+!cmd/**
+!internal/
+!internal/**
+!contrib/
+!contrib/**

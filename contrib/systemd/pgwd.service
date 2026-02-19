@@ -1,0 +1,31 @@
+# systemd unit for pgwd (daemon mode).
+# Copy to /etc/systemd/system/pgwd.service and adjust paths.
+# Config: set variables in /etc/pgwd.env (or /etc/pgwd/pgwd.env) and restrict with chmod 600.
+#
+#   sudo cp contrib/systemd/pgwd.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now pgwd
+
+[Unit]
+Description=Postgres Watch Dog (daemon)
+Documentation=https://github.com/hrodrig/pgwd
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/pgwd
+Restart=on-failure
+RestartSec=30
+
+# Load env from one of these (first existing wins if you create both).
+# Use /etc/pgwd/pgwd.env if you prefer a dedicated directory for future config.
+EnvironmentFile=-/etc/pgwd/pgwd.env
+EnvironmentFile=-/etc/pgwd.env
+
+# Optional: run as a dedicated user (create with: useradd -r -s /bin/false pgwd)
+# User=pgwd
+# Group=pgwd
+
+[Install]
+WantedBy=multi-user.target
