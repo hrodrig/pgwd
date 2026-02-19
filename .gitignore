@@ -6,6 +6,7 @@
 !.gitignore
 !.cursorrules
 !README.md
+!LICENSE
 !Dockerfile
 !go.mod
 !go.sum
