@@ -185,6 +185,18 @@ All parameters can be set via **CLI** or **environment variables** with prefix `
 
 **Default thresholds:** If you do not set `threshold-total` or `threshold-active` (leave them 0), pgwd sets them to a **percentage of the server's `max_connections`** after connecting. The percentage is controlled by **`-default-threshold-percent`** / **`PGWD_DEFAULT_THRESHOLD_PERCENT`** (default **80**, range 1–100). Example: with `max_connections=100` and default percent 80, total and active thresholds become 80; with `-default-threshold-percent 70` they become 70. So you can run with only `-db-url` and a notifier and get alerts at your chosen percentage of the server limit. Idle and stale have no default (0 = disabled). Defaults are applied once at startup; the DB user must be able to read `max_connections` (any normal role can).
 
+## Install
+
+**From source (recommended):**
+
+```bash
+go install github.com/hrodrig/pgwd@latest
+```
+
+This installs the binary to `$GOBIN` (default `$HOME/go/bin`). Ensure `$GOBIN` is on your `PATH`.
+
+**Pre-built binaries:** [Releases](https://github.com/hrodrig/pgwd/releases) provide binaries (tar.gz, zip), `.deb`, and `.rpm` packages for Linux, macOS, and Windows (amd64 and arm64).
+
 ## Build
 
 ```bash
@@ -195,7 +207,7 @@ make install
 # Custom install path: GOBIN=~/bin make install  (default is $HOME/go/bin)
 ```
 
-**Release (GitHub):** From branch `main`, after tagging (e.g. `git tag v0.1.0`), run `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
+**Release (GitHub):** From branch `main`, after tagging (e.g. `git tag v0.1.6`), run `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
 
 ## Testing
 
@@ -339,7 +351,7 @@ This runs `docker build` with `--build-arg VERSION=...`, `--build-arg COMMIT=...
 # Help (no DB needed)
 docker run --rm pgwd -h
 
-# Version (should show e.g. pgwd v0.1.0 (commit 288e86d, built 2026-02-20T...))
+# Version (should show e.g. pgwd v0.1.6 (commit ..., built ...))
 docker run --rm pgwd --version
 
 # Expect "missing database URL" (validates startup path)
