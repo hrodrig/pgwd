@@ -65,6 +65,22 @@ release:
     owner: hrodrig
     name: pgwd
 
+# Docker: multi-arch image to ghcr.io (same GITHUB_TOKEN). Requires buildx + qemu for local release.
+dockers_v2:
+  - dockerfile: Dockerfile.release
+    ids:
+      - pgwd
+    images:
+      - ghcr.io/hrodrig/pgwd
+    tags:
+      - "v{{ .Version }}"
+      - "{{ if not .IsSnapshot }}latest{{ end }}"
+    labels:
+      org.opencontainers.image.title: "pgwd"
+      org.opencontainers.image.description: "Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki"
+      org.opencontainers.image.source: "https://github.com/hrodrig/pgwd"
+      org.opencontainers.image.version: "{{ .Version }}"
+
 # Homebrew: publish cask to tap so users can "brew install hrodrig/pgwd/pgwd"
 # Create repo https://github.com/hrodrig/homebrew-pgwd first. For CI, set HOMEBREW_TAP_TOKEN (PAT with repo scope).
 homebrew_casks:

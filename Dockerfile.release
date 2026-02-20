@@ -1,0 +1,18 @@
+# Runtime image for GoReleaser dockers_v2. Binary is under linux/<arch>/pgwd per platform.
+# We COPY the whole linux/ tree then pick the right binary so we work with both
+# single-platform (snapshot) and multi-platform (release) contexts.
+ARG TARGETPLATFORM
+FROM alpine:3.23
+RUN apk --no-cache add ca-certificates \
+	&& rm -f /usr/bin/wget /usr/bin/nc
+RUN adduser -D -g "" pgwd
+COPY linux/ /tmp/linux/
+ARG TARGETPLATFORM
+RUN case "$TARGETPLATFORM" in \
+	linux/amd64) cp /tmp/linux/amd64/pgwd /home/pgwd/pgwd ;; \
+	linux/arm64) cp /tmp/linux/arm64/pgwd /home/pgwd/pgwd ;; \
+	*) cp /tmp/linux/amd64/pgwd /home/pgwd/pgwd ;; \
+	esac && chown pgwd:pgwd /home/pgwd/pgwd
+USER pgwd
+WORKDIR /home/pgwd
+ENTRYPOINT ["/home/pgwd/pgwd"]

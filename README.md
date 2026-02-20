@@ -1,5 +1,6 @@
 # pgwd — Postgres Watch Dog
 
+[![Version](https://img.shields.io/badge/version-0.1.7-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -8,7 +9,9 @@
 
 Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via **Slack** and/or **Loki** when configured thresholds are exceeded. It can also alert on **stale connections** (connections that stay open and never close).
 
-**Documentation:** [Sequence diagrams](docs/README.md#sequence-diagrams) (Mermaid) for each use case and [terminal demo](docs/demo.gif) (recorded with [VHS](https://github.com/charmbracelet/vhs)) — see [docs/](docs/README.md).
+**Documentation:** [Sequence diagrams](docs/README.md#sequence-diagrams) (Mermaid) for each use case and terminal demo (recorded with [VHS](https://github.com/charmbracelet/vhs)) — see [docs/](docs/README.md).
+
+![Terminal demo](docs/demo.gif)
 
 ---
 
@@ -197,6 +200,12 @@ This installs the binary to `$GOBIN` (default `$HOME/go/bin`). Ensure `$GOBIN` i
 
 **Pre-built binaries:** [Releases](https://github.com/hrodrig/pgwd/releases) provide binaries (tar.gz, zip), `.deb`, and `.rpm` packages for Linux, macOS, and Windows (amd64 and arm64).
 
+**Homebrew (macOS):**
+
+```bash
+brew install hrodrig/pgwd/pgwd
+```
+
 ## Build
 
 ```bash
@@ -326,7 +335,15 @@ Same placeholders as Slack. Timestamp is the time of the push. You can query in 
 
 ## Docker
 
-Multi-stage **Dockerfile** (Go 1.26, Alpine 3.23): build stage compiles the binary with version/commit/build date injected via build args; runtime stage is minimal and runs as non-root.
+**Published image (each release):** Multi-arch images (linux/amd64, linux/arm64) are published to [GitHub Container Registry](https://github.com/hrodrig/pgwd/pkgs/container/pgwd) as `ghcr.io/hrodrig/pgwd`. Use a version tag or `latest`:
+
+```bash
+docker pull ghcr.io/hrodrig/pgwd:v0.1.6
+# or
+docker pull ghcr.io/hrodrig/pgwd:latest
+```
+
+**Build from source:** The repo includes a multi-stage **Dockerfile** (Go 1.26, Alpine 3.23): build stage compiles the binary with version/commit/build date injected via build args; runtime stage is minimal and runs as non-root. Use `make docker-build` to build locally with version info.
 
 **Image details**
 
@@ -347,15 +364,17 @@ This runs `docker build` with `--build-arg VERSION=...`, `--build-arg COMMIT=...
 
 **Validate the image**
 
+Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.1.6`), or `pgwd` if you built locally with `make docker-build`:
+
 ```bash
 # Help (no DB needed)
-docker run --rm pgwd -h
+docker run --rm ghcr.io/hrodrig/pgwd:latest -h
 
 # Version (should show e.g. pgwd v0.1.6 (commit ..., built ...))
-docker run --rm pgwd --version
+docker run --rm ghcr.io/hrodrig/pgwd:latest --version
 
 # Expect "missing database URL" (validates startup path)
-docker run --rm pgwd
+docker run --rm ghcr.io/hrodrig/pgwd:latest
 ```
 
 **Run (one-shot or daemon)**
@@ -366,7 +385,7 @@ docker run --rm \
   -e PGWD_DB_URL="postgres://user:pass@host.docker.internal:5432/mydb" \
   -e PGWD_THRESHOLD_TOTAL=80 \
   -e PGWD_SLACK_WEBHOOK="https://hooks.slack.com/..." \
-  pgwd
+  ghcr.io/hrodrig/pgwd:latest
 
 # Daemon (interval 60s)
 docker run --rm -d --name pgwd \
@@ -374,7 +393,7 @@ docker run --rm -d --name pgwd \
   -e PGWD_THRESHOLD_TOTAL=80 \
   -e PGWD_SLACK_WEBHOOK="https://hooks.slack.com/..." \
   -e PGWD_INTERVAL=60 \
-  pgwd
+  ghcr.io/hrodrig/pgwd:latest
 ```
 
 Use `host.docker.internal` (or your host IP) to reach Postgres on the host from the container. For secrets, prefer env files or a secrets manager instead of hardcoding in the image.
