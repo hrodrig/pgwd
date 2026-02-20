@@ -1,0 +1,11 @@
+# Exclude everything by default; only what the build needs is sent as context.
+# Build needs: go.mod, go.sum, cmd/, internal/. No docs/, contrib/, README, etc.
+
+*
+.*
+!go.mod
+!go.sum
+!cmd/
+!cmd/**
+!internal/
+!internal/**

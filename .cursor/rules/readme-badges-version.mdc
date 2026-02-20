@@ -1,0 +1,34 @@
+---
+description: Main README must have badges; versions kept in sync across the project
+globs: README.md
+alwaysApply: false
+---
+
+# README badges and version sync
+
+## Badges
+
+The **main project README** (repository root `README.md`) must always include badges at the top, under the title. Typical badges:
+
+- **Release / version**: link to GitHub releases (e.g. `img.shields.io/github/v/release/owner/repo`).
+- **Go version**: matches `go.mod` (e.g. badge "Go 1.26" when `go.mod` has `go 1.26`).
+- **License**: project license (e.g. MIT).
+
+Add or adjust badges when adding new relevant metadata (e.g. CI status, code coverage) or when the project evolves. Do not remove badges without replacing them with equivalent or better information.
+
+## Version synchronization
+
+Keep these aligned whenever the project version changes:
+
+| What | Where |
+|------|--------|
+| Canonical version | `VERSION` file (e.g. `0.1.6`). |
+| Release tags | Git tags `v<version>` (e.g. `v0.1.6`) on `main`. |
+| Go / runtime | `README.md` badge for Go version must match `go.mod` (e.g. `go 1.26`). |
+| Release badge | Points at GitHub releases; tag and push so the badge shows the right version. |
+
+When bumping the version (e.g. for a release or after notable changes):
+
+1. Update the `VERSION` file.
+2. If the Go version in `go.mod` changes, update the Go version badge in `README.md`.
+3. After release: tag and push (e.g. `git tag v0.1.6`, `git push origin v0.1.6`) so the release badge reflects the new version.

@@ -1,15 +1,9 @@
-# pgwd project rules
+---
+description: Git flow — develop for work, main for production; releases via tags.
+alwaysApply: true
+---
 
-## .gitignore (whitelist)
-
-- **Ignore everything by default**: The `.gitignore` excludes all files from the repo, including dotfiles (files and directories whose names start with `.`). No file or folder is tracked unless it is explicitly allowed.
-- **Whitelist only**: Add exceptions (e.g. `!path/` or `!file`) only for what must be in the repository. Anything not listed as an exception stays ignored.
-
-## Language
-
-- **English only**: All project artifacts must be in English: code, comments, commit messages, docs, README, variable/function names, UI strings, and any other project content.
-
-## Git flow (GitHub): develop → main and tagged releases
+# Git flow (GitHub): develop → main and tagged releases
 
 - **Branches**: Day-to-day work happens on `develop`. The `main` branch is production and must only be updated from `develop` (merge or squash) when the code is ready for release.
 - **Releases**: Before publishing to GitHub or releasing a version:

@@ -1,8 +1,14 @@
 # pgwd — Postgres Watch Dog
 
-**Repo:** [github.com/hrodrig/pgwd](https://github.com/hrodrig/pgwd)
+[![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
+[![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+**Repo:** [github.com/hrodrig/pgwd](https://github.com/hrodrig/pgwd) · **Releases:** [Releases](https://github.com/hrodrig/pgwd/releases)
 
 Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via **Slack** and/or **Loki** when configured thresholds are exceeded. It can also alert on **stale connections** (connections that stay open and never close).
+
+**Documentation:** [Sequence diagrams](docs/README.md#sequence-diagrams) (Mermaid) for each use case and [terminal demo](docs/demo.gif) (recorded with [VHS](https://github.com/charmbracelet/vhs)) — see [docs/](docs/README.md).
 
 ---
 
@@ -183,7 +189,13 @@ All parameters can be set via **CLI** or **environment variables** with prefix `
 
 ```bash
 go build -o pgwd ./cmd/pgwd
+# or use the Makefile:
+make build
+make install
+# Custom install path: GOBIN=~/bin make install  (default is $HOME/go/bin)
 ```
+
+**Release (GitHub):** From branch `main`, after tagging (e.g. `git tag v0.1.0`), run `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
 
 ## Testing
 
@@ -198,6 +210,41 @@ Run all tests (including any in other packages):
 ```bash
 go test ./...
 ```
+
+## Development — validating locally
+
+Run a PostgreSQL container to test pgwd without a real server. Use port **5433** on the host so connections from your machine go to the container and not to a local Postgres on 5432 (common on macOS):
+
+```bash
+docker stop pgwd-pg 2>/dev/null; docker rm pgwd-pg 2>/dev/null
+docker run -d --name pgwd-pg \
+  -e POSTGRES_PASSWORD=secret \
+  -e POSTGRES_DB=postgres \
+  -p 5433:5432 \
+  postgres:16-alpine
+```
+
+**Connection URL** (host port 5433, `sslmode=disable`):
+
+`postgres://postgres:secret@127.0.0.1:5433/postgres?sslmode=disable`
+
+**Dry-run:**
+
+```bash
+pgwd -db-url "postgres://postgres:secret@127.0.0.1:5433/postgres?sslmode=disable" -dry-run
+```
+
+**With a notifier** (e.g. Slack): add `-slack-webhook "https://..."` and optionally `-threshold-total 5`.
+
+**Stop and remove:**
+
+```bash
+docker stop pgwd-pg && docker rm pgwd-pg
+```
+
+Using **127.0.0.1** and host port **5433** avoids hitting a local Postgres on 5432 and avoids IPv6 resolution quirks.
+
+**Who is on 5432?** Run `lsof -i :5432`. If you see both `postgres` (local) and `com.docke` (Docker), connections to **localhost:5432** go to the local postgres (it binds to localhost); the container is on `*:5432`. Use host port **5433** for the container so your client clearly reaches the container.
 
 ## Requirements
 
@@ -267,20 +314,49 @@ Same placeholders as Slack. Timestamp is the time of the push. You can query in 
 
 ## Docker
 
-Example run with Docker (one-shot, env-based config). Build an image that includes the `pgwd` binary, or use a multi-stage build.
+Multi-stage **Dockerfile** (Go 1.26, Alpine 3.23): build stage compiles the binary with version/commit/build date injected via build args; runtime stage is minimal and runs as non-root.
+
+**Image details**
+
+- **Runtime base:** Alpine 3.23. Only `ca-certificates` for HTTPS (Slack/Loki). No `wget`, `nc`, or `curl` (base image’s `wget`/`nc` are BusyBox applets and are removed; they are not separate packages, so we remove the symlinks).
+- **User:** Runs as non-root user `pgwd` (binary in `/home/pgwd/pgwd`).
+- **Labels:** OCI image labels (title, description, source, authors).
+- **Build context:** `.dockerignore` uses a whitelist: only `go.mod`, `go.sum`, `cmd/`, and `internal/` are sent; `docs/`, `contrib/`, README, etc. are excluded.
+
+**Build (from repo root)**
+
+Use **`make docker-build`** so the image gets version, commit, and build date from the `VERSION` file and git (same as `make build`):
 
 ```bash
-# Build (from repo root)
-docker build -t pgwd -f Dockerfile .
+make docker-build
+```
 
-# Run one-shot: pass env and ensure network to Postgres (and Slack/Loki if used)
+This runs `docker build` with `--build-arg VERSION=...`, `--build-arg COMMIT=...`, `--build-arg BUILDDATE=...`. If you build with plain `docker build -t pgwd .`, the binary will report `dev` / `unknown` for version and commit.
+
+**Validate the image**
+
+```bash
+# Help (no DB needed)
+docker run --rm pgwd -h
+
+# Version (should show e.g. pgwd v0.1.0 (commit 288e86d, built 2026-02-20T...))
+docker run --rm pgwd --version
+
+# Expect "missing database URL" (validates startup path)
+docker run --rm pgwd
+```
+
+**Run (one-shot or daemon)**
+
+```bash
+# One-shot: pass env and ensure network to Postgres (and Slack/Loki if used)
 docker run --rm \
   -e PGWD_DB_URL="postgres://user:pass@host.docker.internal:5432/mydb" \
   -e PGWD_THRESHOLD_TOTAL=80 \
   -e PGWD_SLACK_WEBHOOK="https://hooks.slack.com/..." \
   pgwd
 
-# Run daemon (interval 60s)
+# Daemon (interval 60s)
 docker run --rm -d --name pgwd \
   -e PGWD_DB_URL="postgres://user:pass@host.docker.internal:5432/mydb" \
   -e PGWD_THRESHOLD_TOTAL=80 \
@@ -289,23 +365,7 @@ docker run --rm -d --name pgwd \
   pgwd
 ```
 
-Minimal **Dockerfile** (from project root, with `go.mod` and source):
-
-```dockerfile
-FROM golang:1.21-alpine AS build
-WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 go build -o /pgwd ./cmd/pgwd
-
-FROM alpine:3.19
-RUN apk --no-cache add ca-certificates
-COPY --from=build /pgwd /pgwd
-ENTRYPOINT ["/pgwd"]
-```
-
-Notes: use `host.docker.internal` (or your host IP) to reach Postgres on the host from the container; for secrets, prefer env files or a secrets manager instead of hardcoding in the image.
+Use `host.docker.internal` (or your host IP) to reach Postgres on the host from the container. For secrets, prefer env files or a secrets manager instead of hardcoding in the image.
 
 ---
 

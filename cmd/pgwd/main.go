@@ -15,10 +15,36 @@ import (
 	"github.com/hrodrig/pgwd/internal/postgres"
 )
 
+// Set at build time via -ldflags (see Makefile).
+var (
+	Version   string = "dev"
+	Commit    string = ""
+	BuildDate string = ""
+)
+
+func printVersion() {
+	commit := Commit
+	if commit == "" {
+		commit = "unknown"
+	}
+	built := BuildDate
+	if built == "" {
+		built = "unknown"
+	}
+	fmt.Printf("pgwd %s (commit %s, built %s)\n", Version, commit, built)
+}
+
 func main() {
+	// "pgwd version" or "pgwd -version" / "--version": print version and exit
+	if len(os.Args) >= 2 && (os.Args[1] == "version" || os.Args[1] == "-version" || os.Args[1] == "--version") {
+		printVersion()
+		os.Exit(0)
+	}
+
 	cfg := config.FromEnv()
 
 	// CLI overrides (same names as env, without prefix in flags for brevity)
+	showVersion := flag.Bool("version", false, "print version and exit")
 	flag.StringVar(&cfg.DBURL, "db-url", cfg.DBURL, "PostgreSQL connection URL (PGWD_DB_URL)")
 	flag.IntVar(&cfg.ThresholdTotal, "threshold-total", cfg.ThresholdTotal, "Alert when total connections >= N (PGWD_THRESHOLD_TOTAL)")
 	flag.IntVar(&cfg.ThresholdActive, "threshold-active", cfg.ThresholdActive, "Alert when active connections >= N (PGWD_THRESHOLD_ACTIVE)")
@@ -33,6 +59,11 @@ func main() {
 	flag.BoolVar(&cfg.ForceNotification, "force-notification", cfg.ForceNotification, "Always send a test notification to validate delivery/format (PGWD_FORCE_NOTIFICATION)")
 	flag.IntVar(&cfg.DefaultThresholdPercent, "default-threshold-percent", cfg.DefaultThresholdPercent, "When total/active threshold are 0, set to this % of max_connections (1-100, default 80) (PGWD_DEFAULT_THRESHOLD_PERCENT)")
 	flag.Parse()
+
+	if *showVersion {
+		printVersion()
+		os.Exit(0)
+	}
 
 	if cfg.DBURL == "" {
 		log.Fatal("missing database URL: set PGWD_DB_URL or -db-url")
@@ -99,7 +130,12 @@ func main() {
 		}
 
 		if cfg.DryRun {
-			log.Printf("total=%d active=%d idle=%d", stats.Total, stats.Active, stats.Idle)
+			maxConn, _ := postgres.MaxConnections(ctx, pool)
+			if maxConn > 0 {
+				log.Printf("total=%d active=%d idle=%d max_connections=%d", stats.Total, stats.Active, stats.Idle, maxConn)
+			} else {
+				log.Printf("total=%d active=%d idle=%d", stats.Total, stats.Active, stats.Idle)
+			}
 		}
 
 		var events []notify.Event

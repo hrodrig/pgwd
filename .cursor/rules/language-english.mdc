@@ -1,0 +1,8 @@
+---
+description: All project artifacts must be in English.
+alwaysApply: true
+---
+
+# Language
+
+- **English only**: All project artifacts must be in English: code, comments, commit messages, docs, README, variable/function names, UI strings, and any other project content.

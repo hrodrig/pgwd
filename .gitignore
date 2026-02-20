@@ -4,9 +4,15 @@
 *
 .*
 !.gitignore
-!.cursorrules
+!.dockerignore
+!.cursor/
+!.cursor/rules/
+!.cursor/rules/*.mdc
 !README.md
+!VERSION
 !LICENSE
+!Makefile
+!.goreleaser.yaml
 !Dockerfile
 !go.mod
 !go.sum
@@ -16,3 +22,5 @@
 !internal/**
 !contrib/
 !contrib/**
+!docs/
+!docs/***

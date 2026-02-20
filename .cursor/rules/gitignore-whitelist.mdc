@@ -1,0 +1,10 @@
+---
+description: .gitignore uses a whitelist; only explicitly allowed paths are tracked.
+globs: .gitignore
+alwaysApply: true
+---
+
+# .gitignore (whitelist)
+
+- **Ignore everything by default**: The `.gitignore` excludes all files from the repo, including dotfiles (files and directories whose names start with `.`). No file or folder is tracked unless it is explicitly allowed.
+- **Whitelist only**: Add exceptions (e.g. `!path/` or `!file`) only for what must be in the repository. Anything not listed as an exception stays ignored.
