@@ -15,7 +15,7 @@ FROM alpine:3.23
 LABEL org.opencontainers.image.title="pgwd"
 LABEL org.opencontainers.image.description="Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki"
 LABEL org.opencontainers.image.source="https://github.com/hrodrig/pgwd"
-LABEL org.opencontainers.image.authors="Hermes Rodríguez https://github.com/hrodrig/pgwd"
+LABEL org.opencontainers.image.authors="Hermes Rodríguez <https://github.com/hrodrig/pgwd>"
 RUN apk --no-cache add ca-certificates \
 	&& rm -f /usr/bin/wget /usr/bin/nc
 RUN adduser -D -g "" pgwd

@@ -7,7 +7,7 @@ alwaysApply: true
 
 - **Branches**: Day-to-day work happens on `develop`. The `main` branch is production and must only be updated from `develop` (merge or squash) when the code is ready for release.
 - **Releases**: Before publishing to GitHub or releasing a version:
-  1. Ensure everything is committed on `develop` and tests pass.
+  1. Ensure everything is committed on `develop` and **all tests pass** (`make test` or `go test ./...`).
   2. Merge `develop` into `main` (or open a Pull Request develop → main).
   3. On `main`, create an annotated tag with the version number (e.g. `v1.0.0`):  
      `git tag -a v1.0.0 -m "Release 1.0.0"`  

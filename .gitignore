@@ -5,10 +5,14 @@
 .*
 !.gitignore
 !.dockerignore
+!.agents/
+!.agents/**
 !.cursor/
 !.cursor/rules/
 !.cursor/rules/*.mdc
+!AGENTS.md
 !README.md
+!SECURITY.md
 !VERSION
 !LICENSE
 !Makefile
