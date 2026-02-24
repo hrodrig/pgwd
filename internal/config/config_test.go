@@ -19,9 +19,10 @@ func setEnv(key, value string) func() {
 
 func TestFromEnv_Defaults(t *testing.T) {
 	// Clear pgwd-related env so we get real defaults
-	prefixes := []string{"PGWD_DB_URL", "PGWD_THRESHOLD_TOTAL", "PGWD_THRESHOLD_ACTIVE", "PGWD_THRESHOLD_IDLE",
+	prefixes := []string{"PGWD_DB_URL", "PGWD_KUBE_POSTGRES", "PGWD_KUBE_LOCAL_PORT", "PGWD_KUBE_PASSWORD_VAR", "PGWD_KUBE_PASSWORD_CONTAINER",
+		"PGWD_THRESHOLD_TOTAL", "PGWD_THRESHOLD_ACTIVE", "PGWD_THRESHOLD_IDLE",
 		"PGWD_STALE_AGE", "PGWD_THRESHOLD_STALE", "PGWD_SLACK_WEBHOOK", "PGWD_LOKI_URL", "PGWD_LOKI_LABELS",
-		"PGWD_INTERVAL", "PGWD_DRY_RUN", "PGWD_FORCE_NOTIFICATION", "PGWD_DEFAULT_THRESHOLD_PERCENT"}
+		"PGWD_INTERVAL", "PGWD_DRY_RUN", "PGWD_FORCE_NOTIFICATION", "PGWD_NOTIFY_ON_CONNECT_FAILURE", "PGWD_DEFAULT_THRESHOLD_PERCENT"}
 	for _, p := range prefixes {
 		os.Unsetenv(p)
 	}
@@ -38,8 +39,8 @@ func TestFromEnv_Defaults(t *testing.T) {
 	if cfg.DefaultThresholdPercent != 80 {
 		t.Errorf("DefaultThresholdPercent default: got %d", cfg.DefaultThresholdPercent)
 	}
-	if cfg.DryRun || cfg.ForceNotification {
-		t.Errorf("DryRun=%v ForceNotification=%v", cfg.DryRun, cfg.ForceNotification)
+	if cfg.DryRun || cfg.ForceNotification || cfg.NotifyOnConnectFailure {
+		t.Errorf("DryRun=%v ForceNotification=%v NotifyOnConnectFailure=%v", cfg.DryRun, cfg.ForceNotification, cfg.NotifyOnConnectFailure)
 	}
 }
 

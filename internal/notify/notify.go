@@ -12,6 +12,11 @@ type Event struct {
 	Threshold      string // e.g. "total", "active", "idle"
 	ThresholdValue int
 	Message        string
+	// Optional context for Slack (health-check style): cluster, client (host/service/pod), namespace, database.
+	Cluster   string
+	Client    string
+	Namespace string
+	Database  string // database name from connection URL (e.g. for non-Kube runs)
 }
 
 // Sender can send an event to a destination (Slack, Loki).

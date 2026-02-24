@@ -5,12 +5,15 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/hrodrig/pgwd/internal/config"
+	"github.com/hrodrig/pgwd/internal/kube"
 	"github.com/hrodrig/pgwd/internal/notify"
 	"github.com/hrodrig/pgwd/internal/postgres"
 )
@@ -58,6 +61,13 @@ func main() {
 	flag.BoolVar(&cfg.DryRun, "dry-run", cfg.DryRun, "Only print, do not send notifications (PGWD_DRY_RUN)")
 	flag.BoolVar(&cfg.ForceNotification, "force-notification", cfg.ForceNotification, "Always send a test notification to validate delivery/format (PGWD_FORCE_NOTIFICATION)")
 	flag.IntVar(&cfg.DefaultThresholdPercent, "default-threshold-percent", cfg.DefaultThresholdPercent, "When total/active threshold are 0, set to this % of max_connections (1-100, default 80) (PGWD_DEFAULT_THRESHOLD_PERCENT)")
+	flag.StringVar(&cfg.KubePostgres, "kube-postgres", cfg.KubePostgres, "Connect via kubectl port-forward: namespace/type/name (e.g. default/svc/postgres) (PGWD_KUBE_POSTGRES)")
+	flag.IntVar(&cfg.KubeLocalPort, "kube-local-port", cfg.KubeLocalPort, "Local port for kube port-forward (default 5432) (PGWD_KUBE_LOCAL_PORT)")
+	flag.StringVar(&cfg.KubePasswordVar, "kube-password-var", cfg.KubePasswordVar, "Pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD) (PGWD_KUBE_PASSWORD_VAR)")
+	flag.StringVar(&cfg.KubePasswordContainer, "kube-password-container", cfg.KubePasswordContainer, "Container name in pod for password discovery (PGWD_KUBE_PASSWORD_CONTAINER)")
+	flag.StringVar(&cfg.Cluster, "cluster", cfg.Cluster, "Cluster name for notifications (PGWD_CLUSTER); when -kube-postgres is set, detected from kubeconfig if unset")
+	flag.StringVar(&cfg.Client, "client", cfg.Client, "Client/service/pod name for notifications (PGWD_CLIENT); when -kube-postgres is set, derived from resource (e.g. svc/name) if unset")
+	flag.BoolVar(&cfg.NotifyOnConnectFailure, "notify-on-connect-failure", cfg.NotifyOnConnectFailure, "Send an alert to notifiers when Postgres connection fails (infrastructure alert) (PGWD_NOTIFY_ON_CONNECT_FAILURE)")
 	flag.Parse()
 
 	if *showVersion {
@@ -77,12 +87,112 @@ func main() {
 	if cfg.ForceNotification && !cfg.HasAnyNotifier() {
 		log.Fatal("force-notification requires at least one notifier (slack-webhook or loki-url)")
 	}
+	if cfg.NotifyOnConnectFailure && !cfg.HasAnyNotifier() {
+		log.Fatal("notify-on-connect-failure requires at least one notifier (slack-webhook or loki-url)")
+	}
+	if cfg.KubePostgres != "" && cfg.DBURL == "" {
+		log.Fatal("kube-postgres requires PGWD_DB_URL or -db-url (use host localhost and the same port as -kube-local-port)")
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	// Optional: Kubernetes port-forward and password discovery
+	if cfg.KubePostgres != "" {
+		if err := kube.RequireKubectl(); err != nil {
+			log.Fatalf("kube-postgres: %v", err)
+		}
+		namespace, resource, err := kube.ParseKubePostgres(cfg.KubePostgres)
+		if err != nil {
+			log.Fatalf("kube-postgres: %v", err)
+		}
+		if cfg.KubeLocalPort < 1 || cfg.KubeLocalPort > 65535 {
+			log.Fatal("kube-local-port must be between 1 and 65535")
+		}
+		password := ""
+		if kube.URLContainsDiscoverPassword(cfg.DBURL) {
+			podName, err := kube.ResolvePod(ctx, namespace, resource)
+			if err != nil {
+				log.Fatalf("kube resolve pod: %v", err)
+			}
+			password, err = kube.GetPasswordFromPod(ctx, namespace, podName, cfg.KubePasswordContainer, cfg.KubePasswordVar)
+			if err != nil {
+				log.Fatalf("kube get password: %v", err)
+			}
+		}
+		finalURL, err := kube.ReplaceDBURLForKube(cfg.DBURL, password, cfg.KubeLocalPort)
+		if err != nil {
+			log.Fatalf("kube DB URL: %v", err)
+		}
+		cfg.DBURL = finalURL
+		cleanup, err := kube.StartPortForward(ctx, namespace, resource, cfg.KubeLocalPort)
+		if err != nil {
+			log.Fatalf("kube port-forward: %v", err)
+		}
+		defer cleanup()
+	}
+
+	// Run context for notifications (health-check style: cluster, client, namespace)
+	var runCluster, runClient, runNamespace string
+	if cfg.Cluster != "" {
+		runCluster = cfg.Cluster
+	} else if cfg.KubePostgres != "" {
+		runCluster = kube.ClusterName(ctx)
+	}
+	if cfg.Client != "" {
+		runClient = cfg.Client
+	} else if cfg.KubePostgres != "" {
+		if _, res, err := kube.ParseKubePostgres(cfg.KubePostgres); err == nil {
+			runClient = res
+		}
+	}
+	if runClient == "" {
+		if h, err := os.Hostname(); err == nil {
+			runClient = h
+		}
+	}
+	if cfg.KubePostgres != "" {
+		if ns, _, err := kube.ParseKubePostgres(cfg.KubePostgres); err == nil {
+			runNamespace = ns
+		}
+	}
+	var runDatabase string
+	if u, err := url.Parse(cfg.DBURL); err == nil && u.Path != "" {
+		runDatabase = strings.TrimPrefix(strings.TrimSpace(u.Path), "/")
+	}
+
+	// Build senders early so we can notify on connection failure if requested
+	var senders []notify.Sender
+	if cfg.SlackWebhook != "" {
+		senders = append(senders, &notify.Slack{WebhookURL: cfg.SlackWebhook})
+	}
+	if cfg.LokiURL != "" {
+		senders = append(senders, &notify.Loki{
+			URL:    cfg.LokiURL,
+			Labels: notify.ParseLokiLabels(cfg.LokiLabels),
+		})
+	}
+
 	pool, err := postgres.Pool(ctx, cfg.DBURL)
 	if err != nil {
+		// Notify on failure when requested (infrastructure alert) or when force-notification (validate channel/format)
+		if len(senders) > 0 && !cfg.DryRun && (cfg.NotifyOnConnectFailure || cfg.ForceNotification) {
+			ev := notify.Event{
+				Stats:          postgres.ConnectionStats{},
+				Threshold:      "connect_failure",
+				ThresholdValue: 0,
+				Message:        fmt.Sprintf("pgwd could not connect to Postgres. Error: %v. Check database URL, connectivity, credentials, or infrastructure.", err),
+				Cluster:        runCluster,
+				Client:         runClient,
+				Namespace:      runNamespace,
+				Database:       runDatabase,
+			}
+			for _, s := range senders {
+				if sendErr := s.Send(ctx, ev); sendErr != nil {
+					log.Printf("notify (connect failure): %v", sendErr)
+				}
+			}
+		}
 		log.Fatalf("postgres connect: %v", err)
 	}
 	defer pool.Close()
@@ -109,17 +219,6 @@ func main() {
 	}
 	if !cfg.HasAnyThreshold() && !cfg.DryRun && !cfg.ForceNotification {
 		log.Fatal("at least one of: threshold (PGWD_THRESHOLD_* / -threshold-*), -dry-run, or -force-notification required (total/active default to default-threshold-percent of max_connections when unset)")
-	}
-
-	var senders []notify.Sender
-	if cfg.SlackWebhook != "" {
-		senders = append(senders, &notify.Slack{WebhookURL: cfg.SlackWebhook})
-	}
-	if cfg.LokiURL != "" {
-		senders = append(senders, &notify.Loki{
-			URL:    cfg.LokiURL,
-			Labels: notify.ParseLokiLabels(cfg.LokiLabels),
-		})
 	}
 
 	run := func() {
@@ -149,6 +248,10 @@ func main() {
 					Threshold:      "stale",
 					ThresholdValue: cfg.ThresholdStale,
 					Message:        fmt.Sprintf("Stale connections (open > %ds): %d >= %d", cfg.StaleAge, staleCount, cfg.ThresholdStale),
+					Cluster:        runCluster,
+					Client:         runClient,
+					Namespace:      runNamespace,
+					Database:       runDatabase,
 				})
 			}
 		}
@@ -158,6 +261,10 @@ func main() {
 				Threshold:      "total",
 				ThresholdValue: cfg.ThresholdTotal,
 				Message:        fmt.Sprintf("Total connections %d >= %d", stats.Total, cfg.ThresholdTotal),
+				Cluster:        runCluster,
+				Client:         runClient,
+				Namespace:      runNamespace,
+				Database:       runDatabase,
 			})
 		}
 		if cfg.ThresholdActive > 0 && stats.Active >= cfg.ThresholdActive {
@@ -166,6 +273,10 @@ func main() {
 				Threshold:      "active",
 				ThresholdValue: cfg.ThresholdActive,
 				Message:        fmt.Sprintf("Active connections %d >= %d", stats.Active, cfg.ThresholdActive),
+				Cluster:        runCluster,
+				Client:         runClient,
+				Namespace:      runNamespace,
+				Database:       runDatabase,
 			})
 		}
 		if cfg.ThresholdIdle > 0 && stats.Idle >= cfg.ThresholdIdle {
@@ -174,6 +285,10 @@ func main() {
 				Threshold:      "idle",
 				ThresholdValue: cfg.ThresholdIdle,
 				Message:        fmt.Sprintf("Idle connections %d >= %d", stats.Idle, cfg.ThresholdIdle),
+				Cluster:        runCluster,
+				Client:         runClient,
+				Namespace:      runNamespace,
+				Database:       runDatabase,
 			})
 		}
 		if cfg.ForceNotification {
@@ -181,7 +296,11 @@ func main() {
 				Stats:          stats,
 				Threshold:      "test",
 				ThresholdValue: 0,
-				Message:        fmt.Sprintf("Test notification — delivery check (force-notification). Current: total=%d active=%d idle=%d", stats.Total, stats.Active, stats.Idle),
+				Message:        "Test notification — delivery check (force-notification).",
+				Cluster:        runCluster,
+				Client:         runClient,
+				Namespace:      runNamespace,
+				Database:       runDatabase,
 			})
 		}
 

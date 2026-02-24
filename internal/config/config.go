@@ -11,6 +11,17 @@ type Config struct {
 	// Database
 	DBURL string
 
+	// Kubernetes: connect to Postgres via kubectl port-forward (optional)
+	KubePostgres           string // e.g. "default/svc/postgres" or "default/pod/postgres-0"
+	KubeLocalPort          int    // local port for port-forward (default 5432)
+	KubePasswordVar        string // pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD)
+	KubePasswordContainer  string // container name in pod if not default
+
+	// Optional context for notifications (Slack health-check style): cluster name, client (service/pod or hostname).
+	// When -kube-postgres is set, Client and namespace are derived from it; Cluster can be detected from kubeconfig or set via PGWD_CLUSTER.
+	Cluster string
+	Client  string
+
 	// Thresholds (0 = disabled)
 	ThresholdTotal   int
 	ThresholdActive  int
@@ -24,9 +35,10 @@ type Config struct {
 	LokiLabels  string // comma-separated key=value
 
 	// Behavior
-	Interval                int  // seconds; 0 = run once
-	DryRun                  bool
-	ForceNotification       bool // send a test notification regardless of thresholds (to validate delivery/format)
+	Interval                 int  // seconds; 0 = run once
+	DryRun                   bool
+	ForceNotification        bool // send a test notification regardless of thresholds (to validate delivery/format)
+	NotifyOnConnectFailure   bool // when Postgres connection fails, send an alert to notifiers (infrastructure alert)
 	DefaultThresholdPercent  int  // when threshold-total/active are 0, set to this % of max_connections (1-100, default 80)
 }
 
@@ -57,8 +69,14 @@ func envBool(key string, def bool) bool {
 // FromEnv builds config from environment variables (PGWD_*).
 func FromEnv() Config {
 	return Config{
-		DBURL:           env("DB_URL", ""),
-		ThresholdTotal:  envInt("THRESHOLD_TOTAL", 0),
+		DBURL:                  env("DB_URL", ""),
+		KubePostgres:           env("KUBE_POSTGRES", ""),
+		KubeLocalPort:         envInt("KUBE_LOCAL_PORT", 5432),
+		KubePasswordVar:       env("KUBE_PASSWORD_VAR", "POSTGRES_PASSWORD"),
+		KubePasswordContainer: env("KUBE_PASSWORD_CONTAINER", ""),
+		Cluster:               env("CLUSTER", ""),
+		Client:                env("CLIENT", ""),
+		ThresholdTotal:        envInt("THRESHOLD_TOTAL", 0),
 		ThresholdActive: envInt("THRESHOLD_ACTIVE", 0),
 		ThresholdIdle:   envInt("THRESHOLD_IDLE", 0),
 		StaleAge:        envInt("STALE_AGE", 0),
@@ -67,8 +85,9 @@ func FromEnv() Config {
 		LokiURL:         env("LOKI_URL", ""),
 		LokiLabels:      env("LOKI_LABELS", ""),
 		Interval:               envInt("INTERVAL", 0),
-		DryRun:                 envBool("DRY_RUN", false),
-		ForceNotification:      envBool("FORCE_NOTIFICATION", false),
+		DryRun:                  envBool("DRY_RUN", false),
+		ForceNotification:       envBool("FORCE_NOTIFICATION", false),
+		NotifyOnConnectFailure:   envBool("NOTIFY_ON_CONNECT_FAILURE", false),
 		DefaultThresholdPercent: envInt("DEFAULT_THRESHOLD_PERCENT", 80),
 	}
 }

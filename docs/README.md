@@ -12,6 +12,7 @@ Sequence diagrams for main use cases (Mermaid format). View in any Markdown view
 | [04-dry-run](./sequence/04-dry-run.md) | Dry-run: stats logged only, no HTTP calls to Slack/Loki, exit |
 | [05-force-notification](./sequence/05-force-notification.md) | Force notification: one test event sent to all notifiers, exit |
 | [06-daemon-loop](./sequence/06-daemon-loop.md) | Daemon mode: ticker loop, run on each tick and on SIGTERM/SIGINT exit |
+| [07-connect-failure-notification](./sequence/07-connect-failure-notification.md) | Connection failed: connect_failure event sent to notifiers (notify-on-connect-failure or force-notification), then exit |
 
 ## Terminal demo (VHS)
 

@@ -6,7 +6,7 @@ We support the **latest release** and the current development branch with securi
 
 | Version | Supported          |
 | ------- | ------------------ |
-| Latest release (e.g. 0.1.x) | :white_check_mark: |
+| Latest release (e.g. 0.2.x) | :white_check_mark: |
 | Older releases | :x: |
 
 When a vulnerability is fixed, we release a new patch version. Please upgrade to the latest release to receive security fixes.

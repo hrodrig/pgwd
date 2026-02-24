@@ -7,6 +7,8 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 - **What it is:** Go CLI that monitors PostgreSQL connection counts (total, active, idle, stale) and notifies via Slack and/or Loki when configured thresholds are exceeded.
 - **Entrypoint:** `cmd/pgwd/main.go`. Packages: `internal/config`, `internal/postgres`, `internal/notify` (Slack, Loki).
 - **Config:** CLI flags and env vars (`PGWD_*`). No config file yet. CLI overrides env.
+- **Kubernetes:** Optional `-kube-postgres namespace/svc/name` (or `pod/name`) runs `kubectl port-forward` and connects to localhost; URL password `DISCOVER_MY_PASSWORD` reads password from pod env. Requires `kubectl` in PATH (pgwd checks at startup and exits with a clear error if missing). See `internal/kube`.
+- **Connect failure:** `-notify-on-connect-failure` or `-force-notification` send an event to notifiers when Postgres connection fails (infrastructure alert or validation). Senders are built before connecting so the alert can be sent on failure.
 
 ## Setup and build
 
@@ -25,12 +27,12 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 
 - **Language:** English only. Code, comments, commit messages, docs, and variable/function names must be in English (see `.cursor/rules/language-english.mdc`).
 - **Go:** Standard Go style. Use `gofmt`/`goimports` if available. Module path: `github.com/hrodrig/pgwd`.
-- **Version:** Canonical version lives in the `VERSION` file (e.g. `0.1.6`). Makefile and Docker build use it; keep README badges and `go.mod` in sync when versions change (see `.cursor/rules/readme-badges-version.mdc`).
+- **Version:** Canonical version lives in the `VERSION` file (e.g. `0.2.0`). Makefile and Docker build use it; keep README badges and `go.mod` in sync when versions change (see `.cursor/rules/readme-badges-version.mdc`).
 
 ## Git flow
 
 - **Branches:** Work on `develop`. `main` is production and is only updated from `develop` at release time (see `.cursor/rules/git-flow.mdc`).
-- **Releases:** Before releasing: ensure **all tests pass** (`make test` or `go test ./...`). Then merge `develop` → `main`, and on `main`: create annotated tag (e.g. `git tag -a v0.1.6 -m "Release 0.1.6"`), push tag, run `make release` (requires goreleaser). Do not commit features directly to `main`.
+- **Releases:** Before releasing: ensure **all tests pass** (`make test` or `go test ./...`). Then merge `develop` → `main`, and on `main`: create annotated tag (e.g. `git tag -a v0.2.0 -m "Release 0.2.0"`), push tag, run `make release` (requires goreleaser). Do not commit features directly to `main`. See `.cursor/rules/release-tests.mdc`.
 - **Versioning:** Semantic versioning (MAJOR.MINOR.PATCH) for tags.
 
 ## Docker
@@ -45,6 +47,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 - `internal/config/` — config from env and CLI.
 - `internal/postgres/` — pool, stats, stale count, max_connections.
 - `internal/notify/` — Slack and Loki senders, event type.
+- `internal/kube/` — Kubernetes port-forward, pod resolution, password discovery; `RequireKubectl()` at startup when `-kube-postgres` is set.
 - `docs/` — sequence diagrams (Mermaid), VHS demo tape.
 - `contrib/systemd/` — systemd units (daemon, timer, one-shot).
 
