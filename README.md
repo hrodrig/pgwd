@@ -183,7 +183,7 @@ PGWD_DB_URL="postgres://postgres:secret@localhost:5432/mydb" \
 
 # Password from pod env (POSTGRES_PASSWORD)
 PGWD_DB_URL="postgres://postgres:DISCOVER_MY_PASSWORD@localhost:5432/mydb" \
-  pgwd -kube-postgres default/svc/postgres -- -dry-run
+  pgwd -kube-postgres default/svc/postgres -dry-run
 ```
 
 ---
@@ -247,7 +247,7 @@ make install
 # Custom install path: GOBIN=~/bin make install  (default is $HOME/go/bin)
 ```
 
-**Release (GitHub):** From branch `main`, after tagging (e.g. `git tag v0.2.0`), run `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
+**Release (GitHub):** From branch `main`, after tagging (e.g. `git tag v0.2.1`), run `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
 
 ## Testing
 
@@ -371,7 +371,7 @@ Same placeholders as Slack. Timestamp is the time of the push. You can query in 
 **Published image (each release):** Multi-arch images (linux/amd64, linux/arm64) are published to [GitHub Container Registry](https://github.com/hrodrig/pgwd/pkgs/container/pgwd) as `ghcr.io/hrodrig/pgwd`. Use a version tag or `latest`:
 
 ```bash
-docker pull ghcr.io/hrodrig/pgwd:v0.2.0
+docker pull ghcr.io/hrodrig/pgwd:v0.2.1
 # or
 docker pull ghcr.io/hrodrig/pgwd:latest
 ```
@@ -397,13 +397,13 @@ This runs `docker build` with `--build-arg VERSION=...`, `--build-arg COMMIT=...
 
 **Validate the image**
 
-Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.2.0`), or `pgwd` if you built locally with `make docker-build`:
+Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.2.1`), or `pgwd` if you built locally with `make docker-build`:
 
 ```bash
 # Help (no DB needed)
 docker run --rm ghcr.io/hrodrig/pgwd:latest -h
 
-# Version (should show e.g. pgwd v0.2.0 (commit ..., built ...))
+# Version (should show e.g. pgwd v0.2.1 (commit ..., built ...))
 docker run --rm ghcr.io/hrodrig/pgwd:latest --version
 
 # Expect "missing database URL" (validates startup path)
