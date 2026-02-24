@@ -1,6 +1,6 @@
 # pgwd — Postgres Watch Dog
 
-[![Version](https://img.shields.io/badge/version-0.2.0-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.2.1-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

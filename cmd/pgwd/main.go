@@ -117,12 +117,12 @@ func main() {
 			}
 			password, err = kube.GetPasswordFromPod(ctx, namespace, podName, cfg.KubePasswordContainer, cfg.KubePasswordVar)
 			if err != nil {
-				log.Fatalf("kube get password: %v", err)
+				log.Fatal("kube: could not get password from pod (check namespace, pod name, container, and env var)")
 			}
 		}
 		finalURL, err := kube.ReplaceDBURLForKube(cfg.DBURL, password, cfg.KubeLocalPort)
 		if err != nil {
-			log.Fatalf("kube DB URL: %v", err)
+			log.Fatal("kube: failed to build DB URL (check -db-url format)")
 		}
 		cfg.DBURL = finalURL
 		cleanup, err := kube.StartPortForward(ctx, namespace, resource, cfg.KubeLocalPort)
@@ -181,7 +181,7 @@ func main() {
 				Stats:          postgres.ConnectionStats{},
 				Threshold:      "connect_failure",
 				ThresholdValue: 0,
-				Message:        fmt.Sprintf("pgwd could not connect to Postgres. Error: %v. Check database URL, connectivity, credentials, or infrastructure.", err),
+				Message:        "pgwd could not connect to Postgres. Check database URL, connectivity, credentials, or infrastructure.",
 				Cluster:        runCluster,
 				Client:         runClient,
 				Namespace:      runNamespace,
@@ -193,7 +193,7 @@ func main() {
 				}
 			}
 		}
-		log.Fatalf("postgres connect: %v", err)
+		log.Fatal("postgres connect failed (check database URL, connectivity, and credentials)")
 	}
 	defer pool.Close()
 

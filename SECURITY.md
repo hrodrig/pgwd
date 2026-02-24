@@ -9,7 +9,7 @@ We support the **latest release** and the current development branch with securi
 | Latest release (e.g. 0.2.x) | :white_check_mark: |
 | Older releases | :x: |
 
-When a vulnerability is fixed, we release a new patch version. Please upgrade to the latest release to receive security fixes.
+When a vulnerability is fixed, we release a new patch version. **0.2.1** addresses CodeQL "Clear-text logging of sensitive information" (no credentials or connection details in log or notification messages). Please upgrade to the latest release to receive security fixes.
 
 ## Reporting a Vulnerability
 
