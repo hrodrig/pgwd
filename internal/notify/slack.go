@@ -64,8 +64,8 @@ func (s *Slack) Send(ctx context.Context, ev Event) error {
 	body := map[string]any{
 		"attachments": []map[string]any{
 			{
-				"color":  color,
-				"text":   b.String(),
+				"color":    color,
+				"text":     b.String(),
 				"fallback": ev.Message,
 			},
 		},

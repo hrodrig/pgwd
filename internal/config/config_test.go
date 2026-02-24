@@ -113,27 +113,27 @@ func TestHasAnyNotifier(t *testing.T) {
 
 func TestOverrideWith(t *testing.T) {
 	c := Config{
-		DBURL:           "postgres://old",
-		ThresholdTotal:  10,
-		SlackWebhook:    "https://old",
+		DBURL:                   "postgres://old",
+		ThresholdTotal:          10,
+		SlackWebhook:            "https://old",
 		DefaultThresholdPercent: 80,
 	}
 	db := "postgres://new"
 	total := 20
 	percent := 90
 	c.OverrideWith(struct {
-		DBURL           *string
-		ThresholdTotal  *int
-		ThresholdActive *int
-		ThresholdIdle   *int
-		StaleAge        *int
-		ThresholdStale  *int
-		SlackWebhook    *string
-		LokiURL         *string
-		LokiLabels      *string
-		Interval               *int
-		DryRun                 *bool
-		ForceNotification      *bool
+		DBURL                   *string
+		ThresholdTotal          *int
+		ThresholdActive         *int
+		ThresholdIdle           *int
+		StaleAge                *int
+		ThresholdStale          *int
+		SlackWebhook            *string
+		LokiURL                 *string
+		LokiLabels              *string
+		Interval                *int
+		DryRun                  *bool
+		ForceNotification       *bool
 		DefaultThresholdPercent *int
 	}{
 		DBURL: &db, ThresholdTotal: &total, DefaultThresholdPercent: &percent,

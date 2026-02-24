@@ -29,3 +29,5 @@
 !contrib/**
 !docs/
 !docs/***
+!.github/
+!.github/**
