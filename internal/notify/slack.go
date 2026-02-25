@@ -47,7 +47,13 @@ func (s *Slack) Send(ctx context.Context, ev Event) error {
 	if ev.Namespace != "" {
 		b.WriteString(fmt.Sprintf("• *Namespace*: %s\n", ev.Namespace))
 	}
-	connLine := fmt.Sprintf("• *Connections*: total=%d, active=%d, idle=%d", ev.Stats.Total, ev.Stats.Active, ev.Stats.Idle)
+	connLine := fmt.Sprintf("• *Connections*: total=%d active=%d idle=%d", ev.Stats.Total, ev.Stats.Active, ev.Stats.Idle)
+	if ev.MaxConnections > 0 {
+		connLine += fmt.Sprintf(" max_connections=%d", ev.MaxConnections)
+		if ev.MaxConnectionsIsOverride {
+			connLine += " (test override)"
+		}
+	}
 	if ev.Threshold == "test" {
 		connLine += " (delivery check)"
 	} else if ev.Threshold == "connect_failure" {

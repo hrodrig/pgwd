@@ -12,6 +12,10 @@ type Event struct {
 	Threshold      string // e.g. "total", "active", "idle"
 	ThresholdValue int
 	Message        string
+	// MaxConnections is the server max_connections (0 = unknown, e.g. connect_failure).
+	MaxConnections int
+	// MaxConnectionsIsOverride is true when MaxConnections came from -test-max-connections (test override), so total can exceed it.
+	MaxConnectionsIsOverride bool
 	// Optional context for Slack (health-check style): cluster, client (host/service/pod), namespace, database.
 	Cluster   string
 	Client    string

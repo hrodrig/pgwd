@@ -40,6 +40,8 @@ type Config struct {
 	ForceNotification       bool // send a test notification regardless of thresholds (to validate delivery/format)
 	NotifyOnConnectFailure  bool // when Postgres connection fails, send an alert to notifiers (infrastructure alert)
 	DefaultThresholdPercent int  // when threshold-total/active are 0, set to this % of max_connections (1-100, default 80)
+	// TestMaxConnections: if > 0, use instead of server max_connections for defaults and display (for testing alerts).
+	TestMaxConnections int
 }
 
 func env(key, def string) string {
@@ -89,6 +91,7 @@ func FromEnv() Config {
 		ForceNotification:       envBool("FORCE_NOTIFICATION", false),
 		NotifyOnConnectFailure:  envBool("NOTIFY_ON_CONNECT_FAILURE", false),
 		DefaultThresholdPercent: envInt("DEFAULT_THRESHOLD_PERCENT", 80),
+		TestMaxConnections:       envInt("TEST_MAX_CONNECTIONS", 0),
 	}
 }
 
