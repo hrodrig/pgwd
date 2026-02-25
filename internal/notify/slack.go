@@ -47,8 +47,15 @@ func (s *Slack) Send(ctx context.Context, ev Event) error {
 	if ev.Namespace != "" {
 		b.WriteString(fmt.Sprintf("• *Namespace*: %s\n", ev.Namespace))
 	}
-	b.WriteString(fmt.Sprintf("• *Connections*: total=%d, active=%d, idle=%d (limit %s=%d)",
-		ev.Stats.Total, ev.Stats.Active, ev.Stats.Idle, ev.Threshold, ev.ThresholdValue))
+	connLine := fmt.Sprintf("• *Connections*: total=%d, active=%d, idle=%d", ev.Stats.Total, ev.Stats.Active, ev.Stats.Idle)
+	if ev.Threshold == "test" {
+		connLine += " (delivery check)"
+	} else if ev.Threshold == "connect_failure" {
+		connLine += " (connection failed)"
+	} else {
+		connLine += fmt.Sprintf(" (limit %s=%d)", ev.Threshold, ev.ThresholdValue)
+	}
+	b.WriteString(connLine)
 
 	// Attachment color = vertical bar in Slack: green (OK), red (error), yellow (others)
 	var color string
