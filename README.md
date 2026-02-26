@@ -195,6 +195,71 @@ Cron runs with a **minimal environment** (e.g. `PATH=/usr/bin:/bin`). Two things
 
    Here `>>` appends stdout to the file and `2>&1` sends stderr to the same place.
 
+### Example: multiple services and heartbeat via bash + cron
+
+You can run pgwd for several Postgres instances (e.g. one per Kubernetes service) from a single cron schedule: use a bash script that sets `KUBECONFIG`, `PGWD_SLACK_WEBHOOK`, and `PATH`, then invokes pgwd once per service with distinct **`-kube-local-port`** values so port-forwards do not clash. Add a second script that runs **`-force-notification`** on a schedule (e.g. every 2 hours) as a “still alive” heartbeat.
+
+**Check script** (e.g. `~/bin/pgwd-cron.sh`): runs every 5 minutes, checks all services, alerts only when thresholds are exceeded.
+
+```bash
+#!/bin/bash
+mkdir -p ~/log
+export KUBECONFIG=/path/to/your/kubeconfig
+export PGWD_SLACK_WEBHOOK="https://hooks.slack.com/services/..."
+export PATH="/usr/local/bin:$PATH"
+PGWD=${PGWD:-/usr/local/bin/pgwd}
+
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) checking postgres-a"
+$PGWD -kube-postgres mynamespace/svc/postgres-a \
+  -kube-local-port 15432 \
+  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@postgres-a:15432/db_a'
+
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) checking postgres-b"
+$PGWD -kube-postgres mynamespace/svc/postgres-b \
+  -kube-local-port 15433 \
+  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@postgres-b:15433/db_b'
+
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) checking postgres-c"
+$PGWD -kube-postgres mynamespace/svc/postgres-c \
+  -kube-local-port 15434 \
+  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@postgres-c:15434/db_c'
+
+exit 0
+```
+
+**Heartbeat script** (e.g. `~/bin/pgwd-heartbeat.sh`): runs every 2 hours, sends a test notification per service so you know the pipeline is up. Use different local ports (e.g. 25432…) so they do not conflict with the check script if both run close together.
+
+```bash
+#!/bin/bash
+mkdir -p ~/log
+export KUBECONFIG=/path/to/your/kubeconfig
+export PGWD_SLACK_WEBHOOK="https://hooks.slack.com/services/..."
+export PATH="/usr/local/bin:$PATH"
+PGWD=${PGWD:-/usr/local/bin/pgwd}
+
+$PGWD -kube-postgres mynamespace/svc/postgres-a \
+  -kube-local-port 25432 \
+  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@postgres-a:25432/db_a' \
+  -force-notification
+
+$PGWD -kube-postgres mynamespace/svc/postgres-b \
+  -kube-local-port 25433 \
+  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@postgres-b:25433/db_b' \
+  -force-notification
+
+exit 0
+```
+
+**Crontab** (`crontab -e`): run checks every 5 minutes and heartbeat every 2 hours; append output to one log file.
+
+```
+PATH=/usr/bin:/bin
+*/5 * * * * /bin/bash -l -c '~/bin/pgwd-cron.sh >> ~/log/pgwd.log 2>&1'
+0 */2 * * * /bin/bash -l -c '~/bin/pgwd-heartbeat.sh >> ~/log/pgwd.log 2>&1'
+```
+
+Adjust `KUBECONFIG`, webhook URL, namespace, service names, database names, and `PGWD` path to your environment. If a pod uses a different env var for the password, add **`-kube-password-var VARNAME`** (and **`-kube-password-container`** if the var is in another container). The `echo` lines in the check script make it easy to see which service produced an error in the log.
+
 ---
 
 ## Kubernetes
