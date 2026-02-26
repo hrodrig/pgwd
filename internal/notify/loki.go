@@ -44,10 +44,20 @@ func (l *Loki) Send(ctx context.Context, ev Event) error {
 	}
 	labels["threshold"] = ev.Threshold
 
-	line := fmt.Sprintf(
-		"pgwd threshold exceeded: %s | total=%d active=%d idle=%d (limit %s=%d)",
-		ev.Message, ev.Stats.Total, ev.Stats.Active, ev.Stats.Idle, ev.Threshold, ev.ThresholdValue,
-	)
+	line := fmt.Sprintf("pgwd: %s | total=%d active=%d idle=%d", ev.Message, ev.Stats.Total, ev.Stats.Active, ev.Stats.Idle)
+	if ev.MaxConnections > 0 {
+		line += fmt.Sprintf(" max_connections=%d", ev.MaxConnections)
+		if ev.MaxConnectionsIsOverride {
+			line += " (test override)"
+		}
+	}
+	if ev.Threshold == "test" {
+		line += " (delivery check)"
+	} else if ev.Threshold == "connect_failure" {
+		line += " (connection failed)"
+	} else {
+		line += fmt.Sprintf(" (limit %s=%d)", ev.Threshold, ev.ThresholdValue)
+	}
 	ts := strconv.FormatInt(time.Now().UnixNano(), 10)
 	body := lokiPushBody{
 		Streams: []lokiStream{{

@@ -68,6 +68,7 @@ func main() {
 	flag.StringVar(&cfg.Cluster, "cluster", cfg.Cluster, "Cluster name for notifications (PGWD_CLUSTER); when -kube-postgres is set, detected from kubeconfig if unset")
 	flag.StringVar(&cfg.Client, "client", cfg.Client, "Client/service/pod name for notifications (PGWD_CLIENT); when -kube-postgres is set, derived from resource (e.g. svc/name) if unset")
 	flag.BoolVar(&cfg.NotifyOnConnectFailure, "notify-on-connect-failure", cfg.NotifyOnConnectFailure, "Send an alert to notifiers when Postgres connection fails (infrastructure alert) (PGWD_NOTIFY_ON_CONNECT_FAILURE)")
+	flag.IntVar(&cfg.TestMaxConnections, "test-max-connections", cfg.TestMaxConnections, "Override server max_connections for defaults and display (for testing alerts; 0 = use server) (PGWD_TEST_MAX_CONNECTIONS)")
 	flag.Parse()
 
 	if *showVersion {
@@ -117,12 +118,12 @@ func main() {
 			}
 			password, err = kube.GetPasswordFromPod(ctx, namespace, podName, cfg.KubePasswordContainer, cfg.KubePasswordVar)
 			if err != nil {
-				log.Fatalf("kube get password: %v", err)
+				log.Fatal("kube: could not get password from pod (check namespace, pod name, container, and env var)")
 			}
 		}
 		finalURL, err := kube.ReplaceDBURLForKube(cfg.DBURL, password, cfg.KubeLocalPort)
 		if err != nil {
-			log.Fatalf("kube DB URL: %v", err)
+			log.Fatal("kube: failed to build DB URL (check -db-url format)")
 		}
 		cfg.DBURL = finalURL
 		cleanup, err := kube.StartPortForward(ctx, namespace, resource, cfg.KubeLocalPort)
@@ -181,7 +182,7 @@ func main() {
 				Stats:          postgres.ConnectionStats{},
 				Threshold:      "connect_failure",
 				ThresholdValue: 0,
-				Message:        fmt.Sprintf("pgwd could not connect to Postgres. Error: %v. Check database URL, connectivity, credentials, or infrastructure.", err),
+				Message:        "pgwd could not connect to Postgres. Check database URL, connectivity, credentials, or infrastructure.",
 				Cluster:        runCluster,
 				Client:         runClient,
 				Namespace:      runNamespace,
@@ -193,11 +194,11 @@ func main() {
 				}
 			}
 		}
-		log.Fatalf("postgres connect: %v", err)
+		log.Fatal("postgres connect failed (check database URL, connectivity, and credentials)")
 	}
 	defer pool.Close()
 
-	// Apply sensible defaults from server max_connections when thresholds are not set (0)
+	// Apply sensible defaults from server max_connections (or override) when thresholds are not set (0)
 	percent := cfg.DefaultThresholdPercent
 	if percent < 1 {
 		percent = 1
@@ -205,8 +206,12 @@ func main() {
 	if percent > 100 {
 		percent = 100
 	}
-	if maxConn, err := postgres.MaxConnections(ctx, pool); err == nil && maxConn > 0 {
-		defaultThreshold := (maxConn * percent) / 100
+	maxConnForDefaults, _ := postgres.MaxConnections(ctx, pool)
+	if cfg.TestMaxConnections > 0 {
+		maxConnForDefaults = cfg.TestMaxConnections
+	}
+	if maxConnForDefaults > 0 {
+		defaultThreshold := (maxConnForDefaults * percent) / 100
 		if defaultThreshold < 1 {
 			defaultThreshold = 1
 		}
@@ -227,9 +232,12 @@ func main() {
 			log.Printf("stats: %v", err)
 			return
 		}
+		maxConn, _ := postgres.MaxConnections(ctx, pool)
+		if cfg.TestMaxConnections > 0 {
+			maxConn = cfg.TestMaxConnections
+		}
 
 		if cfg.DryRun {
-			maxConn, _ := postgres.MaxConnections(ctx, pool)
 			if maxConn > 0 {
 				log.Printf("total=%d active=%d idle=%d max_connections=%d", stats.Total, stats.Active, stats.Idle, maxConn)
 			} else {
@@ -244,63 +252,73 @@ func main() {
 				log.Printf("stale count: %v", err)
 			} else if staleCount >= cfg.ThresholdStale {
 				events = append(events, notify.Event{
-					Stats:          stats,
-					Threshold:      "stale",
-					ThresholdValue: cfg.ThresholdStale,
-					Message:        fmt.Sprintf("Stale connections (open > %ds): %d >= %d", cfg.StaleAge, staleCount, cfg.ThresholdStale),
-					Cluster:        runCluster,
-					Client:         runClient,
-					Namespace:      runNamespace,
-					Database:       runDatabase,
+					Stats:                    stats,
+					Threshold:                "stale",
+					ThresholdValue:           cfg.ThresholdStale,
+					Message:                  fmt.Sprintf("Stale connections (open > %ds): %d >= %d", cfg.StaleAge, staleCount, cfg.ThresholdStale),
+					MaxConnections:           maxConn,
+					MaxConnectionsIsOverride: cfg.TestMaxConnections > 0,
+					Cluster:                  runCluster,
+					Client:                   runClient,
+					Namespace:                runNamespace,
+					Database:                 runDatabase,
 				})
 			}
 		}
 		if cfg.ThresholdTotal > 0 && stats.Total >= cfg.ThresholdTotal {
 			events = append(events, notify.Event{
-				Stats:          stats,
-				Threshold:      "total",
-				ThresholdValue: cfg.ThresholdTotal,
-				Message:        fmt.Sprintf("Total connections %d >= %d", stats.Total, cfg.ThresholdTotal),
-				Cluster:        runCluster,
-				Client:         runClient,
-				Namespace:      runNamespace,
-				Database:       runDatabase,
+				Stats:                    stats,
+				Threshold:                "total",
+				ThresholdValue:           cfg.ThresholdTotal,
+				Message:                  fmt.Sprintf("Total connections %d >= %d", stats.Total, cfg.ThresholdTotal),
+				MaxConnections:           maxConn,
+				MaxConnectionsIsOverride: cfg.TestMaxConnections > 0,
+				Cluster:                  runCluster,
+				Client:                   runClient,
+				Namespace:                runNamespace,
+				Database:                 runDatabase,
 			})
 		}
 		if cfg.ThresholdActive > 0 && stats.Active >= cfg.ThresholdActive {
 			events = append(events, notify.Event{
-				Stats:          stats,
-				Threshold:      "active",
-				ThresholdValue: cfg.ThresholdActive,
-				Message:        fmt.Sprintf("Active connections %d >= %d", stats.Active, cfg.ThresholdActive),
-				Cluster:        runCluster,
-				Client:         runClient,
-				Namespace:      runNamespace,
-				Database:       runDatabase,
+				Stats:                    stats,
+				Threshold:                "active",
+				ThresholdValue:           cfg.ThresholdActive,
+				Message:                  fmt.Sprintf("Active connections %d >= %d", stats.Active, cfg.ThresholdActive),
+				MaxConnections:           maxConn,
+				MaxConnectionsIsOverride: cfg.TestMaxConnections > 0,
+				Cluster:                  runCluster,
+				Client:                   runClient,
+				Namespace:                runNamespace,
+				Database:                 runDatabase,
 			})
 		}
 		if cfg.ThresholdIdle > 0 && stats.Idle >= cfg.ThresholdIdle {
 			events = append(events, notify.Event{
-				Stats:          stats,
-				Threshold:      "idle",
-				ThresholdValue: cfg.ThresholdIdle,
-				Message:        fmt.Sprintf("Idle connections %d >= %d", stats.Idle, cfg.ThresholdIdle),
-				Cluster:        runCluster,
-				Client:         runClient,
-				Namespace:      runNamespace,
-				Database:       runDatabase,
+				Stats:                    stats,
+				Threshold:                "idle",
+				ThresholdValue:           cfg.ThresholdIdle,
+				Message:                  fmt.Sprintf("Idle connections %d >= %d", stats.Idle, cfg.ThresholdIdle),
+				MaxConnections:           maxConn,
+				MaxConnectionsIsOverride: cfg.TestMaxConnections > 0,
+				Cluster:                  runCluster,
+				Client:                   runClient,
+				Namespace:                runNamespace,
+				Database:                 runDatabase,
 			})
 		}
 		if cfg.ForceNotification {
 			events = append(events, notify.Event{
-				Stats:          stats,
-				Threshold:      "test",
-				ThresholdValue: 0,
-				Message:        "Test notification — delivery check (force-notification).",
-				Cluster:        runCluster,
-				Client:         runClient,
-				Namespace:      runNamespace,
-				Database:       runDatabase,
+				Stats:                    stats,
+				Threshold:                "test",
+				ThresholdValue:           0,
+				Message:                  "Test notification — delivery check (force-notification).",
+				MaxConnections:           maxConn,
+				MaxConnectionsIsOverride: cfg.TestMaxConnections > 0,
+				Cluster:                  runCluster,
+				Client:                   runClient,
+				Namespace:                runNamespace,
+				Database:                 runDatabase,
 			})
 		}
 
