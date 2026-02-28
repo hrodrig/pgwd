@@ -34,5 +34,7 @@
 !tools/**
 !docs/
 !docs/***
+!testing/
+!testing/**
 !.github/
 !.github/**

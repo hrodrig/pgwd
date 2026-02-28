@@ -20,6 +20,8 @@ services:
       POSTGRES_DB: pgwd
     ports:
       - "5432:5432"
+    volumes:
+      - ./init-pgwd-app.sql:/docker-entrypoint-initdb.d/init-pgwd-app.sql
     # From host: MAX_CONNECTIONS=50 docker compose -f testing/compose.yaml up -d
     command: ["postgres", "-c", "max_connections=${MAX_CONNECTIONS:-20}"]
     healthcheck:
@@ -28,14 +30,15 @@ services:
       timeout: 5s
       retries: 5
 
-  # One container = one long-lived connection. Scale to add more connections and test pgwd thresholds.
+  # One container = one long-lived connection. Uses pgwd_app (non-superuser) so
+  # superuser_reserved_connections (3) stay free for admin (psql -U pgwd from inside).
   # Examples: 1 client (default), or: docker compose -f testing/compose.yaml up -d --scale client=10
   client:
     image: postgres:16-alpine
     environment:
       PGHOST: postgres
       PGPASSWORD: pgwd
-      PGUSER: pgwd
+      PGUSER: pgwd_app
       PGDATABASE: pgwd
     depends_on:
       postgres:
