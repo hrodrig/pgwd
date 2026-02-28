@@ -50,6 +50,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 - `internal/kube/` — Kubernetes port-forward, pod resolution, password discovery; `RequireKubectl()` at startup when `-kube-postgres` is set.
 - `docs/` — sequence diagrams (Mermaid), VHS demo tape.
 - `contrib/systemd/` — systemd units (daemon, timer, one-shot).
+- `tools/` — scripts for scanning before merging to main: `tools/scan.sh` (govulncheck, optional Grype). See `tools/README.md`. CI runs govulncheck in the Security workflow.
 
 ## Other instructions
 

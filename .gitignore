@@ -30,6 +30,8 @@
 !internal/**
 !contrib/
 !contrib/**
+!tools/
+!tools/**
 !docs/
 !docs/***
 !.github/

@@ -8,7 +8,8 @@ alwaysApply: true
 Before creating a release (tag and `make release`):
 
 - Run **`make test`** or **`go test ./...`** and ensure all tests pass.
+- Run **`./tools/scan.sh`** (or ensure the **Security** workflow has passed on the branch you are releasing from). Fix or acknowledge any reported vulnerabilities before merging to main and releasing.
 - Fix any failing test before tagging or running `make release`.
-- Do not push a release tag if the test suite is red.
+- Do not push a release tag if the test suite or security scan is red.
 
 Releases are made only from the `main` branch.

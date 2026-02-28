@@ -1,0 +1,54 @@
+# Security scans before merging to main: run on PR/push to develop and main.
+# Fix or acknowledge any reported vulnerabilities before merging develop → main.
+
+name: Security
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  govulncheck:
+    name: Go vulnerabilities
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+  grype:
+    name: Grype (container image)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          push: false
+          tags: pgwd:scan
+          file: ./Dockerfile
+
+      - name: Install Grype
+        run: |
+          curl -sSfL https://get.anchore.io/grype | sh -s -- -b /usr/local/bin
+
+      - name: Run Grype on image
+        run: grype pgwd:scan --fail-on high,critical
+        continue-on-error: true
