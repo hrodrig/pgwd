@@ -19,3 +19,25 @@ jobs:
 
       - name: Run tests
         run: go test -v ./...
+
+  lint:
+    name: gofmt + gocyclo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Check gofmt
+        run: |
+          unformatted=$(gofmt -s -l .)
+          if [ -n "$unformatted" ]; then echo "Files not formatted with gofmt -s:"; echo "$unformatted"; exit 1; fi
+
+      - name: Install gocyclo
+        run: go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+
+      - name: Run gocyclo
+        run: gocyclo -over 14 .

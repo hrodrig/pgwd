@@ -40,13 +40,25 @@ install:
 test:
 	go test ./...
 
+# Lint: gofmt + gocyclo (run during development; CI runs this too)
+lint:
+	@echo "Checking gofmt -s..."
+	@unformatted=$$(gofmt -s -l .); [ -z "$$unformatted" ] || { echo "Files not formatted (run make lint-fix):"; echo "$$unformatted"; exit 1; }
+	@echo "Checking gocyclo (complexity <= 14)..."
+	@command -v gocyclo >/dev/null 2>&1 || go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+	@gocyclo -over 14 .
+
+# Fix formatting only (gofmt -s -w); re-run make lint to verify gocyclo
+lint-fix:
+	gofmt -s -w .
+
 # Docker image with version/commit/builddate from VERSION and git (run from repo root)
 docker-build:
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILDDATE=$(BUILDDATE) -t pgwd .
 
 # --- Release (requires goreleaser: brew install goreleaser) ---
 # Release: only from main. Merge develop → main, update VERSION, then: git tag v0.1.0 && make release
-.PHONY: release snapshot docker-build
+.PHONY: release snapshot docker-build lint lint-fix
 release:
 	@branch=$$(git branch --show-current 2>/dev/null); \
 	if [ "$$branch" != "main" ]; then \

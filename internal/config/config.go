@@ -91,7 +91,7 @@ func FromEnv() Config {
 		ForceNotification:       envBool("FORCE_NOTIFICATION", false),
 		NotifyOnConnectFailure:  envBool("NOTIFY_ON_CONNECT_FAILURE", false),
 		DefaultThresholdPercent: envInt("DEFAULT_THRESHOLD_PERCENT", 80),
-		TestMaxConnections:       envInt("TEST_MAX_CONNECTIONS", 0),
+		TestMaxConnections:      envInt("TEST_MAX_CONNECTIONS", 0),
 	}
 }
 
