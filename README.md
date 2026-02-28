@@ -1,6 +1,6 @@
 # pgwd — Postgres Watch Dog
 
-[![Version](https://img.shields.io/badge/version-0.2.2-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.2.3-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -344,7 +344,7 @@ make install
 # Custom install path: GOBIN=~/bin make install  (default is $HOME/go/bin)
 ```
 
-**Release (GitHub):** From branch `main`, after tagging (e.g. `git tag v0.2.2`), run `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
+**Release (GitHub):** From branch `main`, after tagging (e.g. `git tag v0.2.3`), run `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
 
 ## Testing
 
@@ -468,7 +468,7 @@ Same placeholders as Slack. Timestamp is the time of the push. You can query in 
 **Published image (each release):** Multi-arch images (linux/amd64, linux/arm64) are published to [GitHub Container Registry](https://github.com/hrodrig/pgwd/pkgs/container/pgwd) as `ghcr.io/hrodrig/pgwd`. Use a version tag or `latest`:
 
 ```bash
-docker pull ghcr.io/hrodrig/pgwd:v0.2.2
+docker pull ghcr.io/hrodrig/pgwd:v0.2.3
 # or
 docker pull ghcr.io/hrodrig/pgwd:latest
 ```
@@ -494,13 +494,13 @@ This runs `docker build` with `--build-arg VERSION=...`, `--build-arg COMMIT=...
 
 **Validate the image**
 
-Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.2.2`), or `pgwd` if you built locally with `make docker-build`:
+Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.2.3`), or `pgwd` if you built locally with `make docker-build`:
 
 ```bash
 # Help (no DB needed)
 docker run --rm ghcr.io/hrodrig/pgwd:latest -h
 
-# Version (should show e.g. pgwd v0.2.2 (commit ..., built ...))
+# Version (should show e.g. pgwd v0.2.3 (commit ..., built ...))
 docker run --rm ghcr.io/hrodrig/pgwd:latest --version
 
 # Expect "missing database URL" (validates startup path)

@@ -38,3 +38,6 @@
 !testing/**
 !.github/
 !.github/**
+# Never track macOS metadata
+.DS_Store
+**/.DS_Store

@@ -20,6 +20,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
+## [0.2.3] - 2026-02-28
+
+### Added
+
+- **Connect failure / too many clients:** Notify on any connection failure when notifiers are configured (no `-notify-on-connect-failure` required). Send even in dry-run. New event **too_many_clients** (Slack/Loki URGENT) when Postgres returns 53300. When `applyThresholdDefaults` fails (e.g. first query "too many clients"), notify then exit. Log "Sending notification…" before sending.
+- **testing:** Non-superuser **pgwd_app** for client containers (init script); reserved slots stay free for DBA (`psql -U pgwd`). README: recreate steps, production note and link to [PostgreSQL runtime-config-connection](https://www.postgresql.org/docs/current/runtime-config-connection.html) (`superuser_reserved_connections`). Whitelist `testing/` in .gitignore.
+- **make lint / lint-fix** (gofmt -s, gocyclo); CI runs lint; cursor rules updated.
+
+### Changed
+
+- **Docs/diagram 07:** Connect failure always notifies when a notifier is configured; `-notify-on-connect-failure` documented as legacy.
+- **README/AGENTS:** Connect failure behaviour; troubleshooting for "no thresholds set" and notify-on-connect-failure.
+
+---
+
 ## [0.2.2] - 2026-02-26
 
 ### Added
@@ -104,7 +119,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/hrodrig/pgwd/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/hrodrig/pgwd/compare/v0.2.0...v0.2.2
 [0.2.1]: https://github.com/hrodrig/pgwd/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/hrodrig/pgwd/compare/v0.1.7...v0.2.0
