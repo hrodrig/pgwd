@@ -1,6 +1,6 @@
 # pgwd — Postgres Watch Dog
 
-[![Version](https://img.shields.io/badge/version-0.2.2-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.2.3-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -11,7 +11,7 @@
 
 Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via **Slack** and/or **Loki** when configured thresholds are exceeded. It can also alert on **stale connections** (connections that stay open and never close).
 
-**Documentation:** [Sequence diagrams](docs/README.md#sequence-diagrams) (Mermaid) for each use case and terminal demo (recorded with [VHS](https://github.com/charmbracelet/vhs)) — see [docs/](docs/README.md).
+**Documentation:** [Sequence diagrams](docs/README.md#sequence-diagrams) (Mermaid) for each use case, [audited against the code](docs/sequence/AUDIT.md), and terminal demo (recorded with [VHS](https://github.com/charmbracelet/vhs)) — see [docs/](docs/README.md). **Scanning** before release (govulncheck, Grype): [tools/README.md](tools/README.md).
 
 ![Terminal demo](docs/demo.gif)
 
@@ -160,12 +160,12 @@ pgwd -db-url "postgres://..." -loki-url "http://localhost:3100/loki/api/v1/push"
 | **Long-running watcher** | Daemon with `-interval 60` (or 120). Run under systemd/supervisor; stop with SIGTERM. |
 | **Detect connection leaks** | Use `stale-age` + `threshold-stale` (e.g. 600 and 1). Alert when any connection stays open longer than 10 min. |
 | **Pre-production test** | `-dry-run` and low thresholds to see current counts without sending alerts. |
-| **Validate notifications** | `-force-notification` with Slack/Loki: sends one test message regardless of thresholds (or, if the connection to Postgres fails, sends a connect-failure alert). Use one-shot to confirm delivery, format, and how messages look. |
+| **Validate notifications** | `-force-notification` with Slack/Loki: sends one test message regardless of thresholds. Use one-shot to confirm delivery, format, and how messages look. (If the connection to Postgres fails, pgwd always sends a connect-failure alert when a notifier is configured.) |
 | **Test alerts without low max_connections** | Use `-test-max-connections N` (e.g. 20) with `-force-notification` or low thresholds: thresholds and messages use N as “max_connections”, while stats stay real. Notifications show “(test override)” so total can exceed N. |
 | **Zero config (use defaults)** | Only set `-db-url` and a notifier; total and active thresholds default to `default-threshold-percent` (default 80%) of server `max_connections`. Use `-default-threshold-percent` to change (e.g. 70 or 90). |
 | **Multiple environments** | Set `PGWD_*` in env per environment; override `-db-url` or `-loki-labels` per deploy. |
 | **Postgres in Kubernetes** | Use `-kube-postgres namespace/svc/name` (or `namespace/pod/name`). pgwd runs `kubectl port-forward` and connects to localhost. Optionally put `DISCOVER_MY_PASSWORD` in the URL to read the password from the pod's env (e.g. `POSTGRES_PASSWORD`). Requires `kubectl` in PATH. |
-| **Alert when Postgres is unreachable** | Use `-notify-on-connect-failure` with a notifier (Slack/Loki). If the connection to Postgres fails, pgwd sends an alert before exiting so you know the infrastructure or DB may be down. |
+| **Alert when Postgres is unreachable** | If you configure a notifier (Slack/Loki), pgwd **always** sends an alert when the connection fails (e.g. refused, timeout, or "too many clients"). No extra flag needed. |
 
 ### Running from cron
 
@@ -194,6 +194,71 @@ Cron runs with a **minimal environment** (e.g. `PATH=/usr/bin:/bin`). Two things
    ```
 
    Here `>>` appends stdout to the file and `2>&1` sends stderr to the same place.
+
+### Example: multiple services and heartbeat via bash + cron
+
+You can run pgwd for several Postgres instances (e.g. one per Kubernetes service) from a single cron schedule: use a bash script that sets `KUBECONFIG`, `PGWD_SLACK_WEBHOOK`, and `PATH`, then invokes pgwd once per service with distinct **`-kube-local-port`** values so port-forwards do not clash. Add a second script that runs **`-force-notification`** on a schedule (e.g. every 2 hours) as a “still alive” heartbeat.
+
+**Check script** (e.g. `~/bin/pgwd-cron.sh`): runs every 5 minutes, checks all services, alerts only when thresholds are exceeded.
+
+```bash
+#!/bin/bash
+mkdir -p ~/log
+export KUBECONFIG=/path/to/your/kubeconfig
+export PGWD_SLACK_WEBHOOK="https://hooks.slack.com/services/..."
+export PATH="/usr/local/bin:$PATH"
+PGWD=${PGWD:-/usr/local/bin/pgwd}
+
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) checking postgres-a"
+$PGWD -kube-postgres mynamespace/svc/postgres-a \
+  -kube-local-port 15432 \
+  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@postgres-a:15432/db_a'
+
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) checking postgres-b"
+$PGWD -kube-postgres mynamespace/svc/postgres-b \
+  -kube-local-port 15433 \
+  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@postgres-b:15433/db_b'
+
+echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) checking postgres-c"
+$PGWD -kube-postgres mynamespace/svc/postgres-c \
+  -kube-local-port 15434 \
+  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@postgres-c:15434/db_c'
+
+exit 0
+```
+
+**Heartbeat script** (e.g. `~/bin/pgwd-heartbeat.sh`): runs every 2 hours, sends a test notification per service so you know the pipeline is up. Use different local ports (e.g. 25432…) so they do not conflict with the check script if both run close together.
+
+```bash
+#!/bin/bash
+mkdir -p ~/log
+export KUBECONFIG=/path/to/your/kubeconfig
+export PGWD_SLACK_WEBHOOK="https://hooks.slack.com/services/..."
+export PATH="/usr/local/bin:$PATH"
+PGWD=${PGWD:-/usr/local/bin/pgwd}
+
+$PGWD -kube-postgres mynamespace/svc/postgres-a \
+  -kube-local-port 25432 \
+  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@postgres-a:25432/db_a' \
+  -force-notification
+
+$PGWD -kube-postgres mynamespace/svc/postgres-b \
+  -kube-local-port 25433 \
+  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@postgres-b:25433/db_b' \
+  -force-notification
+
+exit 0
+```
+
+**Crontab** (`crontab -e`): run checks every 5 minutes and heartbeat every 2 hours; append output to one log file.
+
+```
+PATH=/usr/bin:/bin
+*/5 * * * * /bin/bash -l -c '~/bin/pgwd-cron.sh >> ~/log/pgwd.log 2>&1'
+0 */2 * * * /bin/bash -l -c '~/bin/pgwd-heartbeat.sh >> ~/log/pgwd.log 2>&1'
+```
+
+Adjust `KUBECONFIG`, webhook URL, namespace, service names, database names, and `PGWD` path to your environment. If a pod uses a different env var for the password, add **`-kube-password-var VARNAME`** (and **`-kube-password-container`** if the var is in another container). The `echo` lines in the check script make it easy to see which service produced an error in the log.
 
 ---
 
@@ -242,8 +307,8 @@ All parameters can be set via **CLI** or **environment variables** with prefix `
 | `-loki-labels` | `PGWD_LOKI_LABELS` | Loki labels, e.g. `job=pgwd,env=prod` |
 | `-interval` | `PGWD_INTERVAL` | Run every N seconds; 0 = run once |
 | `-dry-run` | `PGWD_DRY_RUN` | Only print stats, do not send notifications |
-| `-force-notification` | `PGWD_FORCE_NOTIFICATION` | Always send at least one notification: test event when connected, or connect-failure alert when connection fails (to validate delivery, format, and channel). Requires at least one notifier. |
-| `-notify-on-connect-failure` | `PGWD_NOTIFY_ON_CONNECT_FAILURE` | When Postgres connection fails, send an alert to all notifiers (e.g. "could not connect; check infrastructure"). Requires at least one notifier. |
+| `-force-notification` | `PGWD_FORCE_NOTIFICATION` | Always send at least one notification: test event when connected (to validate delivery, format, and channel). Requires at least one notifier. (Connection failure is always notified when a notifier is configured, with or without this flag.) |
+| `-notify-on-connect-failure` | `PGWD_NOTIFY_ON_CONNECT_FAILURE` | Legacy: connection failure is **always** notified when a notifier is configured; this flag is no longer required. Kept for backward compatibility; if set, still requires at least one notifier at startup. |
 | `-default-threshold-percent` | `PGWD_DEFAULT_THRESHOLD_PERCENT` | When total/active threshold are 0, set them to this % of max_connections (1–100). Default: 80 |
 | `-test-max-connections` | `PGWD_TEST_MAX_CONNECTIONS` | Override server `max_connections` for threshold defaults and display (testing only). When set, defaults and notifications use this value instead of the server’s; stats (total/active/idle) remain real. Notifications show “(test override)” so you can simulate e.g. a low limit and trigger alerts without a real low max_connections. |
 
@@ -279,7 +344,7 @@ make install
 # Custom install path: GOBIN=~/bin make install  (default is $HOME/go/bin)
 ```
 
-**Release (GitHub):** From branch `main`, after tagging (e.g. `git tag v0.2.2`), run `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
+**Release (GitHub):** From branch `main`, after tagging (e.g. `git tag v0.2.3`), run `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
 
 ## Testing
 
@@ -386,10 +451,10 @@ Same placeholders as Slack. Timestamp is the time of the push. You can query in 
 | Symptom | What to check |
 |--------|----------------|
 | **"missing database URL"** | Set `PGWD_DB_URL` or `-db-url`. The URL must be a valid [PostgreSQL connection string](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING). |
-| **"at least one of: threshold..."** | You need a threshold, or `-dry-run`, or `-force-notification`. If you set only `-db-url` and a notifier, pgwd tries to default total/active to 80% of `max_connections` after connecting; this error means connect failed before defaults could be applied, or the server did not return `max_connections`. |
+| **"no thresholds set and could not default from server..."** | pgwd could not read `max_connections` from the server (error or 0). Set `-threshold-total` and/or `-threshold-active` explicitly, or use `-dry-run` or `-force-notification`. With a normal Postgres, only `-db-url` and a notifier should be enough (defaults to 80% of `max_connections`). |
 | **"no notifier configured"** | Set `PGWD_SLACK_WEBHOOK` or `PGWD_LOKI_URL` (or use `-dry-run` to skip notifications). |
 | **"force-notification requires at least one notifier"** | Use `-force-notification` together with `-slack-webhook` and/or `-loki-url`. |
-| **"notify-on-connect-failure requires at least one notifier"** | Set `-notify-on-connect-failure` together with `-slack-webhook` and/or `-loki-url`. |
+| **"notify-on-connect-failure requires at least one notifier"** | You set `-notify-on-connect-failure` but have no notifier. Add `-slack-webhook` and/or `-loki-url`. (Connect failure is always notified when a notifier is configured; the flag is optional.) |
 | **"kubectl not found in PATH"** | When using `-kube-postgres`, ensure `kubectl` is installed and on your `PATH` (e.g. `which kubectl`). pgwd exits with this message before attempting port-forward or password discovery. |
 | **"when using threshold-stale, stale-age must be > 0"** | Set `-stale-age N` (e.g. 600) when using `-threshold-stale`. |
 | **Slack/Loki not receiving alerts** | Run once with `-force-notification` to send a test message. Check webhook URL, network/firewall, and that the app can reach Slack/Loki. |
@@ -403,7 +468,7 @@ Same placeholders as Slack. Timestamp is the time of the push. You can query in 
 **Published image (each release):** Multi-arch images (linux/amd64, linux/arm64) are published to [GitHub Container Registry](https://github.com/hrodrig/pgwd/pkgs/container/pgwd) as `ghcr.io/hrodrig/pgwd`. Use a version tag or `latest`:
 
 ```bash
-docker pull ghcr.io/hrodrig/pgwd:v0.2.2
+docker pull ghcr.io/hrodrig/pgwd:v0.2.3
 # or
 docker pull ghcr.io/hrodrig/pgwd:latest
 ```
@@ -429,13 +494,13 @@ This runs `docker build` with `--build-arg VERSION=...`, `--build-arg COMMIT=...
 
 **Validate the image**
 
-Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.2.2`), or `pgwd` if you built locally with `make docker-build`:
+Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.2.3`), or `pgwd` if you built locally with `make docker-build`:
 
 ```bash
 # Help (no DB needed)
 docker run --rm ghcr.io/hrodrig/pgwd:latest -h
 
-# Version (should show e.g. pgwd v0.2.2 (commit ..., built ...))
+# Version (should show e.g. pgwd v0.2.3 (commit ..., built ...))
 docker run --rm ghcr.io/hrodrig/pgwd:latest --version
 
 # Expect "missing database URL" (validates startup path)

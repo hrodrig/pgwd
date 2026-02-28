@@ -5,10 +5,12 @@ alwaysApply: true
 
 # Release: tests must pass
 
-Before creating a release (tag and `make release`):
+Before merging to `main` or creating a release (tag and `make release`):
 
+- Run **`make lint`** (checks gofmt -s and gocyclo -over 14). If it fails on **formatting**: run **`make lint-fix`** then `make lint` again. If it fails on **complexity** (gocyclo): refactor the reported functions so complexity stays ≤ 14. Go Report Card and CI run the same checks.
 - Run **`make test`** or **`go test ./...`** and ensure all tests pass.
+- Run **`./tools/scan.sh`** (or ensure the **Security** workflow has passed on the branch you are releasing from). Fix or acknowledge any reported vulnerabilities before merging to main and releasing.
 - Fix any failing test before tagging or running `make release`.
-- Do not push a release tag if the test suite is red.
+- Do not push a release tag if the test suite or security scan is red.
 
 Releases are made only from the `main` branch.

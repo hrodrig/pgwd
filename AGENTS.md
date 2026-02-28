@@ -8,7 +8,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 - **Entrypoint:** `cmd/pgwd/main.go`. Packages: `internal/config`, `internal/postgres`, `internal/notify` (Slack, Loki).
 - **Config:** CLI flags and env vars (`PGWD_*`). No config file yet. CLI overrides env.
 - **Kubernetes:** Optional `-kube-postgres namespace/svc/name` (or `pod/name`) runs `kubectl port-forward` and connects to localhost; URL password `DISCOVER_MY_PASSWORD` reads password from pod env. Requires `kubectl` in PATH (pgwd checks at startup and exits with a clear error if missing). See `internal/kube`.
-- **Connect failure:** `-notify-on-connect-failure` or `-force-notification` send an event to notifiers when Postgres connection fails (infrastructure alert or validation). Senders are built before connecting so the alert can be sent on failure.
+- **Connect failure:** When Postgres connection fails, pgwd always sends a `connect_failure` (or `too_many_clients` if the error is "too many clients already") event to all notifiers if any are configured and not `-dry-run`. No extra flag is required. Senders are built before connecting so the alert can be sent on failure.
 
 ## Setup and build
 
@@ -50,8 +50,10 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 - `internal/kube/` — Kubernetes port-forward, pod resolution, password discovery; `RequireKubectl()` at startup when `-kube-postgres` is set.
 - `docs/` — sequence diagrams (Mermaid), VHS demo tape.
 - `contrib/systemd/` — systemd units (daemon, timer, one-shot).
+- `tools/` — scripts for scanning before merging to main: `tools/scan.sh` (govulncheck, optional Grype). See `tools/README.md`. CI runs govulncheck in the Security workflow.
 
 ## Other instructions
 
 - **README:** Must keep badges (Release, Go version, License) and explicit link to Releases; see `.cursor/rules/readme-badges-version.mdc`.
+- **CHANGELOG:** Update `CHANGELOG.md` when adding notable user-facing changes (under `[Unreleased]`) and when preparing a release (move items into the new version section; align with the plan release scope). See `.cursor/rules/changelog.mdc`.
 - When adding dependencies, run `go mod tidy` and ensure tests still pass.

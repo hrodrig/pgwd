@@ -55,6 +55,8 @@ func (l *Loki) Send(ctx context.Context, ev Event) error {
 		line += " (delivery check)"
 	} else if ev.Threshold == "connect_failure" {
 		line += " (connection failed)"
+	} else if ev.Threshold == "too_many_clients" {
+		line += " (too many clients — DB saturated)"
 	} else {
 		line += fmt.Sprintf(" (limit %s=%d)", ev.Threshold, ev.ThresholdValue)
 	}

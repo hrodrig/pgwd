@@ -1,0 +1,28 @@
+---
+description: When adding or editing Mermaid diagrams, validate rendering and avoid backticks inside diagram content
+globs: docs/**/*.md
+alwaysApply: false
+---
+
+# Mermaid diagrams — add/edit and validate
+
+## When you add or edit a diagram
+
+1. **Validate visualization** after every change: ensure the diagram renders correctly. Use one of:
+   - GitHub preview (commit and view the file on GitHub, or use Preview in the editor).
+   - [Mermaid Live Editor](https://mermaid.live) (paste the diagram block).
+   - VS Code / Cursor extension that renders Mermaid in Markdown preview.
+
+2. **Do not use backticks inside Mermaid content.** Backticks (`` ` ``) in labels, participant names, node text, or note text can break Mermaid rendering in many viewers. Use plain text or, when you need special characters, Mermaid's quoted strings (e.g. double quotes around the label). Prefer simple identifiers and short labels.
+
+3. **Avoid semicolons (`;`) inside message/label text.** In sequence diagrams, `;` is a statement separator in Mermaid; it can make the parser split the line and then fail (e.g. "Parse error on line N: expecting arrow, got NEWLINE"). Use a comma or "and" instead.
+
+4. **Keep the fence format** as `` ```mermaid `` at the start and `` ``` `` at the end; only the *content inside* the block should avoid backticks.
+
+## Diagram vs code
+
+When you change code that affects a documented sequence (startup, `run()`, connect-failure, dry-run, force-notification, daemon loop), update the corresponding diagram under `docs/sequence/` so it still matches the implementation. Optionally re-check with the audit notes in `docs/sequence/AUDIT.md`.
+
+## File scope
+
+This applies to any Markdown file under `docs/` that contains Mermaid diagrams (e.g. `docs/sequence/*.md`, `docs/README.md`).

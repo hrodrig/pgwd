@@ -13,6 +13,9 @@
 !AGENTS.md
 !README.md
 !SECURITY.md
+!CONTRIBUTING.md
+!CODE_OF_CONDUCT.md
+!CHANGELOG.md
 !VERSION
 !LICENSE
 !Makefile
@@ -27,7 +30,14 @@
 !internal/**
 !contrib/
 !contrib/**
+!tools/
+!tools/**
 !docs/
 !docs/***
+!testing/
+!testing/**
 !.github/
 !.github/**
+# Never track macOS metadata
+.DS_Store
+**/.DS_Store

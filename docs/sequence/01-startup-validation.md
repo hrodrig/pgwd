@@ -27,7 +27,7 @@ sequenceDiagram
         pgwd->>Kube: port-forward (background)
         pgwd->>pgwd: replace DB URL (localhost, port)
     end
-    pgwd->>pgwd: compute run context (cluster, client, namespace from kube/config; database from DB URL path)
+    pgwd->>pgwd: compute run context (cluster, client, namespace from kube/config, database from DB URL path)
     pgwd->>pgwd: build senders (Slack, Loki from config)
     pgwd->>Postgres: Pool(ctx, dbURL)
     alt connect error
