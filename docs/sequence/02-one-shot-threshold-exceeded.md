@@ -18,7 +18,7 @@ sequenceDiagram
     end
     pgwd->>pgwd: compare stats to thresholds
     Note over pgwd: e.g. total >= thresholdTotal → event
-    pgwd->>pgwd: build events[] (total, active, idle, stale as needed; each event includes run context: time, client, database, cluster, namespace, connections)
+    pgwd->>pgwd: "build events (total, active, idle, stale as needed, each with run context: time, client, database, cluster, namespace, connections)"
     loop for each event
         alt Slack configured
             pgwd->>Slack: Send(ctx, event)

@@ -14,6 +14,8 @@ Sequence diagrams for main use cases (Mermaid format). View in any Markdown view
 | [06-daemon-loop](./sequence/06-daemon-loop.md) | Daemon mode: ticker loop, run on each tick and on SIGTERM/SIGINT exit |
 | [07-connect-failure-notification](./sequence/07-connect-failure-notification.md) | Connection failed: connect_failure event sent to notifiers (notify-on-connect-failure or force-notification), then exit |
 
+Diagrams are audited against the code; see [AUDIT.md](./sequence/AUDIT.md) for the mapping and when to re-audit.
+
 ## Terminal demo (VHS)
 
 A [VHS](https://github.com/charmbracelet/vhs) tape records a short terminal demo of pgwd (help, version, optional dry-run).

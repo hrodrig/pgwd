@@ -11,7 +11,7 @@
 
 Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via **Slack** and/or **Loki** when configured thresholds are exceeded. It can also alert on **stale connections** (connections that stay open and never close).
 
-**Documentation:** [Sequence diagrams](docs/README.md#sequence-diagrams) (Mermaid) for each use case and terminal demo (recorded with [VHS](https://github.com/charmbracelet/vhs)) — see [docs/](docs/README.md).
+**Documentation:** [Sequence diagrams](docs/README.md#sequence-diagrams) (Mermaid) for each use case, [audited against the code](docs/sequence/AUDIT.md), and terminal demo (recorded with [VHS](https://github.com/charmbracelet/vhs)) — see [docs/](docs/README.md).
 
 ![Terminal demo](docs/demo.gif)
 

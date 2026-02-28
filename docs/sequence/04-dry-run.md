@@ -10,8 +10,8 @@ sequenceDiagram
 
     User->>pgwd: pgwd -dry-run -db-url ... (-interval 0)
     pgwd->>Postgres: Stats(ctx, pool)
-    Postgres-->>pgwd: total, active, idle
-    pgwd->>User: log: total=N active=N idle=N
+    Postgres-->>pgwd: total, active, idle (and max_connections when available)
+    pgwd->>User: log total=N active=N idle=N, max_connections=N when available
     pgwd->>pgwd: build events (if any threshold exceeded)
     loop for each event
         pgwd->>User: log: [dry-run] would send: <message>

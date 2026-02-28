@@ -13,12 +13,12 @@ sequenceDiagram
     Note over pgwd: validations, build senders (before Pool)
     pgwd->>Postgres: Pool(ctx, dbURL)
     Postgres-->>pgwd: error (e.g. connection refused, timeout)
-    pgwd->>pgwd: build connect_failure event (message + run context: cluster, client, namespace, database when available)
+    pgwd->>pgwd: build connect_failure event (message + run context (cluster, client, namespace, database when available))
     loop for each sender (Slack, Loki)
         pgwd->>Slack: Send(ctx, connect_failure event)
         Slack-->>pgwd: (ok or error log)
     end
-    pgwd->>User: log.Fatalf("postgres connect: %v"), exit 1
+    pgwd->>User: log.Fatal("postgres connect failed..."), exit 1
 ```
 
 **Slack:** connect_failure is sent with attachment color `danger` (red bar). Threshold-exceeded events use `warning` (yellow bar).

@@ -1,0 +1,23 @@
+---
+description: When and how to update CHANGELOG.md; align with PLAN release scope
+globs: CHANGELOG.md
+alwaysApply: false
+---
+
+# Changelog updates
+
+## When to update CHANGELOG.md
+
+1. **Before or at release time:** Add or finalize the section for the new version (e.g. `[0.2.3]`). Move items from `[Unreleased]` into that version section, then leave `[Unreleased]` for the next cycle.
+2. **When adding notable, user-facing changes:** Add entries under `[Unreleased]` (Added / Changed / Fixed / etc.). Do not list every small refactor or internal tweak; focus on what users or operators care about (flags, behavior, docs, breaking changes).
+3. **When the plan (PLAN) is updated with release scope:** The project keeps release scope and history in the internal PLAN (e.g. `cursor-plans/pgwd/PLAN.md`). When cutting a release, CHANGELOG version sections should align with or be derived from the PLAN bullets for that version so the two stay in sync.
+
+## Format
+
+- Use [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) style: `[Unreleased]`, `[Version] - YYYY-MM-DD`, and sections like **Added**, **Changed**, **Fixed**, **Removed**, **Security**.
+- Keep comparison links at the bottom (`[Unreleased]: ...`, `[x.y.z]: ...`).
+- Write in English; entries should be clear and concise.
+
+## Scope
+
+This rule applies when editing `CHANGELOG.md` or when planning a release (so CHANGELOG and VERSION/README are updated together).

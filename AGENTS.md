@@ -54,4 +54,5 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 ## Other instructions
 
 - **README:** Must keep badges (Release, Go version, License) and explicit link to Releases; see `.cursor/rules/readme-badges-version.mdc`.
+- **CHANGELOG:** Update `CHANGELOG.md` when adding notable user-facing changes (under `[Unreleased]`) and when preparing a release (move items into the new version section; align with PLAN release scope). See `.cursor/rules/changelog.mdc`.
 - When adding dependencies, run `go mod tidy` and ensure tests still pass.
