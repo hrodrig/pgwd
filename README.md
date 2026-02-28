@@ -160,12 +160,12 @@ pgwd -db-url "postgres://..." -loki-url "http://localhost:3100/loki/api/v1/push"
 | **Long-running watcher** | Daemon with `-interval 60` (or 120). Run under systemd/supervisor; stop with SIGTERM. |
 | **Detect connection leaks** | Use `stale-age` + `threshold-stale` (e.g. 600 and 1). Alert when any connection stays open longer than 10 min. |
 | **Pre-production test** | `-dry-run` and low thresholds to see current counts without sending alerts. |
-| **Validate notifications** | `-force-notification` with Slack/Loki: sends one test message regardless of thresholds (or, if the connection to Postgres fails, sends a connect-failure alert). Use one-shot to confirm delivery, format, and how messages look. |
+| **Validate notifications** | `-force-notification` with Slack/Loki: sends one test message regardless of thresholds. Use one-shot to confirm delivery, format, and how messages look. (If the connection to Postgres fails, pgwd always sends a connect-failure alert when a notifier is configured.) |
 | **Test alerts without low max_connections** | Use `-test-max-connections N` (e.g. 20) with `-force-notification` or low thresholds: thresholds and messages use N as “max_connections”, while stats stay real. Notifications show “(test override)” so total can exceed N. |
 | **Zero config (use defaults)** | Only set `-db-url` and a notifier; total and active thresholds default to `default-threshold-percent` (default 80%) of server `max_connections`. Use `-default-threshold-percent` to change (e.g. 70 or 90). |
 | **Multiple environments** | Set `PGWD_*` in env per environment; override `-db-url` or `-loki-labels` per deploy. |
 | **Postgres in Kubernetes** | Use `-kube-postgres namespace/svc/name` (or `namespace/pod/name`). pgwd runs `kubectl port-forward` and connects to localhost. Optionally put `DISCOVER_MY_PASSWORD` in the URL to read the password from the pod's env (e.g. `POSTGRES_PASSWORD`). Requires `kubectl` in PATH. |
-| **Alert when Postgres is unreachable** | Use `-notify-on-connect-failure` with a notifier (Slack/Loki). If the connection to Postgres fails, pgwd sends an alert before exiting so you know the infrastructure or DB may be down. |
+| **Alert when Postgres is unreachable** | If you configure a notifier (Slack/Loki), pgwd **always** sends an alert when the connection fails (e.g. refused, timeout, or "too many clients"). No extra flag needed. |
 
 ### Running from cron
 
@@ -307,8 +307,8 @@ All parameters can be set via **CLI** or **environment variables** with prefix `
 | `-loki-labels` | `PGWD_LOKI_LABELS` | Loki labels, e.g. `job=pgwd,env=prod` |
 | `-interval` | `PGWD_INTERVAL` | Run every N seconds; 0 = run once |
 | `-dry-run` | `PGWD_DRY_RUN` | Only print stats, do not send notifications |
-| `-force-notification` | `PGWD_FORCE_NOTIFICATION` | Always send at least one notification: test event when connected, or connect-failure alert when connection fails (to validate delivery, format, and channel). Requires at least one notifier. |
-| `-notify-on-connect-failure` | `PGWD_NOTIFY_ON_CONNECT_FAILURE` | When Postgres connection fails, send an alert to all notifiers (e.g. "could not connect; check infrastructure"). Requires at least one notifier. |
+| `-force-notification` | `PGWD_FORCE_NOTIFICATION` | Always send at least one notification: test event when connected (to validate delivery, format, and channel). Requires at least one notifier. (Connection failure is always notified when a notifier is configured, with or without this flag.) |
+| `-notify-on-connect-failure` | `PGWD_NOTIFY_ON_CONNECT_FAILURE` | Legacy: connection failure is **always** notified when a notifier is configured; this flag is no longer required. Kept for backward compatibility; if set, still requires at least one notifier at startup. |
 | `-default-threshold-percent` | `PGWD_DEFAULT_THRESHOLD_PERCENT` | When total/active threshold are 0, set them to this % of max_connections (1–100). Default: 80 |
 | `-test-max-connections` | `PGWD_TEST_MAX_CONNECTIONS` | Override server `max_connections` for threshold defaults and display (testing only). When set, defaults and notifications use this value instead of the server’s; stats (total/active/idle) remain real. Notifications show “(test override)” so you can simulate e.g. a low limit and trigger alerts without a real low max_connections. |
 
@@ -451,10 +451,10 @@ Same placeholders as Slack. Timestamp is the time of the push. You can query in 
 | Symptom | What to check |
 |--------|----------------|
 | **"missing database URL"** | Set `PGWD_DB_URL` or `-db-url`. The URL must be a valid [PostgreSQL connection string](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING). |
-| **"at least one of: threshold..."** | You need a threshold, or `-dry-run`, or `-force-notification`. If you set only `-db-url` and a notifier, pgwd tries to default total/active to 80% of `max_connections` after connecting; this error means connect failed before defaults could be applied, or the server did not return `max_connections`. |
+| **"no thresholds set and could not default from server..."** | pgwd could not read `max_connections` from the server (error or 0). Set `-threshold-total` and/or `-threshold-active` explicitly, or use `-dry-run` or `-force-notification`. With a normal Postgres, only `-db-url` and a notifier should be enough (defaults to 80% of `max_connections`). |
 | **"no notifier configured"** | Set `PGWD_SLACK_WEBHOOK` or `PGWD_LOKI_URL` (or use `-dry-run` to skip notifications). |
 | **"force-notification requires at least one notifier"** | Use `-force-notification` together with `-slack-webhook` and/or `-loki-url`. |
-| **"notify-on-connect-failure requires at least one notifier"** | Set `-notify-on-connect-failure` together with `-slack-webhook` and/or `-loki-url`. |
+| **"notify-on-connect-failure requires at least one notifier"** | You set `-notify-on-connect-failure` but have no notifier. Add `-slack-webhook` and/or `-loki-url`. (Connect failure is always notified when a notifier is configured; the flag is optional.) |
 | **"kubectl not found in PATH"** | When using `-kube-postgres`, ensure `kubectl` is installed and on your `PATH` (e.g. `which kubectl`). pgwd exits with this message before attempting port-forward or password discovery. |
 | **"when using threshold-stale, stale-age must be > 0"** | Set `-stale-age N` (e.g. 600) when using `-threshold-stale`. |
 | **Slack/Loki not receiving alerts** | Run once with `-force-notification` to send a test message. Check webhook URL, network/firewall, and that the app can reach Slack/Loki. |

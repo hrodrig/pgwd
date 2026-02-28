@@ -1,6 +1,6 @@
 # Sequence: Connection failure — send alert and exit
 
-When Postgres connection fails and `-notify-on-connect-failure` or `-force-notification` is set (with at least one notifier), pgwd sends a connect-failure event to Slack and/or Loki before exiting. Use this to get an infrastructure alert when the database is unreachable.
+When Postgres connection fails and at least one notifier (Slack and/or Loki) is configured, pgwd **always** sends a connect-failure event (or `too_many_clients` if the error is "too many clients already") to all notifiers before exiting. No extra flag is required. Use this to get an infrastructure alert when the database is unreachable.
 
 ```mermaid
 sequenceDiagram
@@ -9,7 +9,7 @@ sequenceDiagram
     participant Postgres
     participant Slack as Slack/Loki
 
-    User->>pgwd: pgwd -notify-on-connect-failure (or -force-notification) -db-url ... -slack-webhook ...
+    User->>pgwd: pgwd -db-url ... -slack-webhook ... (or -loki-url)
     Note over pgwd: validations, build senders (before Pool)
     pgwd->>Postgres: Pool(ctx, dbURL)
     Postgres-->>pgwd: error (e.g. connection refused, timeout)

@@ -1,0 +1,43 @@
+# Postgres for local testing and integration tests (PGWD_TEST_DB_URL).
+# Optional: override max_connections and number of client containers.
+#
+# Usage (from repo root):
+#   docker compose -f testing/compose.yaml up -d
+#   export PGWD_TEST_DB_URL="postgres://pgwd:pgwd@localhost:5432/pgwd?sslmode=disable"
+#   go test ./internal/postgres/... -v
+#
+# With more server connections and several clients (to test thresholds):
+#   MAX_CONNECTIONS=50 CLIENTS=10 docker compose -f testing/compose.yaml up -d
+#
+#   docker compose -f testing/compose.yaml down
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pgwd
+      POSTGRES_PASSWORD: pgwd
+      POSTGRES_DB: pgwd
+    ports:
+      - "5432:5432"
+    # From host: MAX_CONNECTIONS=50 docker compose -f testing/compose.yaml up -d
+    command: ["postgres", "-c", "max_connections=${MAX_CONNECTIONS:-20}"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pgwd -d pgwd"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+
+  # One container = one long-lived connection. Scale to add more connections and test pgwd thresholds.
+  # Examples: 1 client (default), or: docker compose -f testing/compose.yaml up -d --scale client=10
+  client:
+    image: postgres:16-alpine
+    environment:
+      PGHOST: postgres
+      PGPASSWORD: pgwd
+      PGUSER: pgwd
+      PGDATABASE: pgwd
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["sh", "-c", "while true; do psql -c 'SELECT pg_sleep(3600)'; done"]
