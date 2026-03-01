@@ -1,3 +1,7 @@
+// Package main is the entry point for pgwd (Postgres Watch Dog), a Go CLI that
+// checks PostgreSQL connection counts (active/idle) and notifies via Slack and/or
+// Loki when thresholds are exceeded. It can also alert on stale connections.
+// See the README and github.com/hrodrig/pgwd for usage and install.
 package main
 
 import (
