@@ -36,9 +36,26 @@ build-windows:
 install:
 	go install $(LDFLAGS) ./cmd/pgwd
 
-# Run tests
+# Run tests (unit tests; integration tests are skipped without PGWD_TEST_* env vars)
 test:
 	go test ./...
+
+# Integration tests: require Docker. Start Postgres and Loki, run tests, then stop.
+# Use before release to validate Postgres and Loki integration.
+test-integration:
+	@echo "Starting Postgres..."
+	@docker compose -f testing/compose.yaml up -d --scale client=0
+	@echo "Starting Loki..."
+	@docker compose -f testing/compose-loki.yaml up -d
+	@echo "Waiting for services (Postgres ~3s, Loki ~25s)..."
+	@sleep 25
+	@echo "Running integration tests..."
+	@PGWD_TEST_DB_URL="postgres://pgwd:pgwd@localhost:5432/pgwd?sslmode=disable" \
+	 PGWD_TEST_LOKI_URL="http://localhost:3100/loki/api/v1/push" \
+	 go test ./internal/postgres/... ./internal/notify/... -v -count=1 -run 'TestPool_Integration|TestStats_Integration|TestMaxConnections_Integration|TestStaleCount_Integration|TestLoki_Integration$$' || (docker compose -f testing/compose.yaml down; docker compose -f testing/compose-loki.yaml down; exit 1)
+	@docker compose -f testing/compose.yaml down
+	@docker compose -f testing/compose-loki.yaml down
+	@echo "Integration tests passed."
 
 # Lint: gofmt + gocyclo (run during development; CI runs this too)
 lint:
@@ -64,7 +81,7 @@ docker-scan:
 
 # --- Release (requires goreleaser: brew install goreleaser) ---
 # Release: only from main. Merge develop → main, update VERSION, then: git tag v0.1.0 && make release
-.PHONY: release snapshot docker-build docker-scan lint lint-fix
+.PHONY: release snapshot docker-build docker-scan lint lint-fix test-integration
 release:
 	@branch=$$(git branch --show-current 2>/dev/null); \
 	if [ "$$branch" != "main" ]; then \

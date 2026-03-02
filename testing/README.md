@@ -48,4 +48,43 @@ Stop:
 docker compose -f testing/compose.yaml down
 ```
 
+---
+
+## Loki (compose-loki.yaml)
+
+Separate compose for the Loki stack. Used to validate that pgwd notifications are correctly formatted when pushed to Loki (for Grafana alerting).
+
+**Start Loki** (from repo root):
+
+```bash
+docker compose -f testing/compose-loki.yaml up -d
+```
+
+Loki may take ~20 seconds to become ready. Check: `curl http://localhost:3100/ready` (should return `ready`).
+
+**Run Loki integration test** (validates push + query + log format):
+
+```bash
+export PGWD_TEST_LOKI_URL="http://localhost:3100/loki/api/v1/push"
+go test ./internal/notify/... -v -run TestLoki_Integration$
+```
+
+**Show payload sent and response received** (for debugging / Grafana alert rules):
+
+```bash
+export PGWD_TEST_LOKI_URL="http://localhost:3100/loki/api/v1/push"
+export PGWD_TEST_LOKI_VERBOSE=1
+go test ./internal/notify/... -v -run TestLoki_Integration_ShowPayload
+```
+
+Without `PGWD_TEST_LOKI_URL` the tests are skipped.
+
+**Stop Loki:**
+
+```bash
+docker compose -f testing/compose-loki.yaml down
+```
+
+---
+
 **Production:** Use a non-superuser role for application connections so `superuser_reserved_connections` (default 3) stays available for DBA/admin access when the instance is saturated. See [PostgreSQL: Connection and Authentication](https://www.postgresql.org/docs/current/runtime-config-connection.html) (`superuser_reserved_connections`).

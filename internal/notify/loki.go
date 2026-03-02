@@ -28,13 +28,8 @@ type lokiStream struct {
 	Values [][]string        `json:"values"` // [[nanosecond_timestamp, line], ...]
 }
 
-// Send pushes a log line to Loki.
-func (l *Loki) Send(ctx context.Context, ev Event) error {
-	client := l.Client
-	if client == nil {
-		client = http.DefaultClient
-	}
-
+// PushPayload returns the JSON body that Send posts to Loki. Useful for debugging and tests.
+func (l *Loki) PushPayload(ev Event) ([]byte, error) {
 	labels := make(map[string]string)
 	for k, v := range l.Labels {
 		labels[k] = v
@@ -67,7 +62,17 @@ func (l *Loki) Send(ctx context.Context, ev Event) error {
 			Values: [][]string{{ts, line}},
 		}},
 	}
-	raw, err := json.Marshal(body)
+	return json.Marshal(body)
+}
+
+// Send pushes a log line to Loki.
+func (l *Loki) Send(ctx context.Context, ev Event) error {
+	client := l.Client
+	if client == nil {
+		client = http.DefaultClient
+	}
+
+	raw, err := l.PushPayload(ev)
 	if err != nil {
 		return err
 	}

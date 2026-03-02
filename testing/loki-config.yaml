@@ -1,0 +1,30 @@
+# Minimal Loki config for testing (push + query). Single binary, in-memory ring.
+# Usage: docker compose -f testing/compose-loki.yaml up -d
+# Push: http://localhost:3100/loki/api/v1/push
+# Query: http://localhost:3100/loki/api/v1/query_range?query={job="pgwd"}
+
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  path_prefix: /tmp/loki
+  ring:
+    kvstore:
+      store: inmemory
+  replication_factor: 1
+  storage:
+    filesystem:
+      chunks_directory: /tmp/loki/chunks
+      rules_directory: /tmp/loki/rules
+
+schema_config:
+  configs:
+    - from: 2020-10-24
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v11
+      index:
+        prefix: index_
+        period: 24h
