@@ -13,6 +13,14 @@ import (
 
 const discoverPasswordPlaceholder = "DISCOVER_MY_PASSWORD"
 
+// contextArgs returns kubectl args to select the given context; empty slice if kubeContext is empty.
+func contextArgs(kubeContext string) []string {
+	if kubeContext == "" {
+		return nil
+	}
+	return []string{"--context", kubeContext}
+}
+
 // RequireKubectl returns an error if kubectl is not found in PATH. Call this when -kube-postgres is set so the user gets a clear message before any other kube step.
 func RequireKubectl() error {
 	_, err := exec.LookPath("kubectl")
@@ -22,13 +30,14 @@ func RequireKubectl() error {
 	return nil
 }
 
-// ClusterName returns the current context's cluster name from kubeconfig (e.g. for Slack notifications). Empty string on error or when not set.
-func ClusterName(ctx context.Context) string {
+// ClusterName returns the current (or given) context's cluster name from kubeconfig (e.g. for Slack notifications). Empty string on error or when not set. kubeContext empty = current context.
+func ClusterName(ctx context.Context, kubeContext string) string {
 	kubectl, err := exec.LookPath("kubectl")
 	if err != nil {
 		return ""
 	}
-	cmd := exec.CommandContext(ctx, kubectl, "config", "view", "--minify", "-o", "jsonpath={.clusters[0].name}")
+	args := append(contextArgs(kubeContext), "config", "view", "--minify", "-o", "jsonpath={.clusters[0].name}")
+	cmd := exec.CommandContext(ctx, kubectl, args...)
 	out, err := cmd.Output()
 	if err != nil || len(out) == 0 {
 		return ""
@@ -54,7 +63,7 @@ func ParseKubePostgres(s string) (namespace, resource string, err error) {
 }
 
 // ResolvePod returns the pod name. If resource is "pod/name", returns name. If "svc/name", looks up a pod via endpoints or service selector.
-func ResolvePod(ctx context.Context, namespace, resource string) (string, error) {
+func ResolvePod(ctx context.Context, kubeContext, namespace, resource string) (string, error) {
 	if strings.HasPrefix(resource, "pod/") {
 		return strings.TrimPrefix(resource, "pod/"), nil
 	}
@@ -67,13 +76,15 @@ func ResolvePod(ctx context.Context, namespace, resource string) (string, error)
 		return "", fmt.Errorf("kubectl not found in PATH: %w", err)
 	}
 	// Try endpoints first: get first address targetRef name
-	cmd := exec.CommandContext(ctx, kubectl, "get", "endpoints", "-n", namespace, svcName, "-o", "jsonpath={.subsets[0].addresses[0].targetRef.name}")
+	args := append(contextArgs(kubeContext), "get", "endpoints", "-n", namespace, svcName, "-o", "jsonpath={.subsets[0].addresses[0].targetRef.name}")
+	cmd := exec.CommandContext(ctx, kubectl, args...)
 	out, err := cmd.Output()
 	if err == nil && len(out) > 0 {
 		return strings.TrimSpace(string(out)), nil
 	}
 	// Fallback: get service selector, then get first pod
-	cmd = exec.CommandContext(ctx, kubectl, "get", "svc", "-n", namespace, svcName, "-o", "go-template={{range $k,$v := .spec.selector}}{{$k}}={{$v}},{{end}}")
+	args = append(contextArgs(kubeContext), "get", "svc", "-n", namespace, svcName, "-o", "go-template={{range $k,$v := .spec.selector}}{{$k}}={{$v}},{{end}}")
+	cmd = exec.CommandContext(ctx, kubectl, args...)
 	out, err = cmd.Output()
 	if err != nil || len(out) == 0 {
 		return "", fmt.Errorf("could not get pod from service %s (no endpoints or selector): %w", svcName, err)
@@ -82,7 +93,8 @@ func ResolvePod(ctx context.Context, namespace, resource string) (string, error)
 	if selector == "" {
 		return "", fmt.Errorf("service %s has no selector", svcName)
 	}
-	cmd = exec.CommandContext(ctx, kubectl, "get", "pods", "-n", namespace, "-l", selector, "-o", "jsonpath={.items[0].metadata.name}")
+	args = append(contextArgs(kubeContext), "get", "pods", "-n", namespace, "-l", selector, "-o", "jsonpath={.items[0].metadata.name}")
+	cmd = exec.CommandContext(ctx, kubectl, args...)
 	out, err = cmd.Output()
 	if err != nil || len(out) == 0 {
 		return "", fmt.Errorf("no pods found for service %s (selector %s)", svcName, selector)
@@ -91,12 +103,12 @@ func ResolvePod(ctx context.Context, namespace, resource string) (string, error)
 }
 
 // GetPasswordFromPod reads the given env var (and PGPASSWORD as fallback) from the pod's container.
-func GetPasswordFromPod(ctx context.Context, namespace, podName, container, envVar string) (string, error) {
+func GetPasswordFromPod(ctx context.Context, kubeContext, namespace, podName, container, envVar string) (string, error) {
 	kubectl, err := exec.LookPath("kubectl")
 	if err != nil {
 		return "", fmt.Errorf("kubectl not found in PATH: %w", err)
 	}
-	args := []string{"exec", "-n", namespace, podName}
+	args := append(contextArgs(kubeContext), "exec", "-n", namespace, podName)
 	if container != "" {
 		args = append(args, "-c", container)
 	}
@@ -107,20 +119,21 @@ func GetPasswordFromPod(ctx context.Context, namespace, podName, container, envV
 		return strings.TrimSpace(string(out)), nil
 	}
 	if envVar != "PGPASSWORD" {
-		return GetPasswordFromPod(ctx, namespace, podName, container, "PGPASSWORD")
+		return GetPasswordFromPod(ctx, kubeContext, namespace, podName, container, "PGPASSWORD")
 	}
 	return "", fmt.Errorf("could not find %s or PGPASSWORD in pod %s", envVar, podName)
 }
 
 // StartPortForward runs kubectl port-forward in the background and waits for the local port to be listening.
 // Returns a cleanup function that kills the port-forward process. Call it on exit.
-func StartPortForward(ctx context.Context, namespace, resource string, localPort int) (cleanup func(), err error) {
+func StartPortForward(ctx context.Context, kubeContext, namespace, resource string, localPort int) (cleanup func(), err error) {
 	kubectl, err := exec.LookPath("kubectl")
 	if err != nil {
 		return nil, fmt.Errorf("kubectl not found in PATH: %w", err)
 	}
 	addr := fmt.Sprintf("%d:5432", localPort)
-	cmd := exec.CommandContext(ctx, kubectl, "port-forward", "-n", namespace, resource, addr)
+	args := append(contextArgs(kubeContext), "port-forward", "-n", namespace, resource, addr)
+	cmd := exec.CommandContext(ctx, kubectl, args...)
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	if err := cmd.Start(); err != nil {

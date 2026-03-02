@@ -13,6 +13,7 @@ type Config struct {
 
 	// Kubernetes: connect to Postgres via kubectl port-forward (optional)
 	KubePostgres          string // e.g. "default/svc/postgres" or "default/pod/postgres-0"
+	KubeContext           string // kubectl context to use (empty = current context)
 	KubeLocalPort         int    // local port for port-forward (default 5432)
 	KubePasswordVar       string // pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD)
 	KubePasswordContainer string // container name in pod if not default
@@ -73,6 +74,7 @@ func FromEnv() Config {
 	return Config{
 		DBURL:                   env("DB_URL", ""),
 		KubePostgres:            env("KUBE_POSTGRES", ""),
+		KubeContext:             env("KUBE_CONTEXT", ""),
 		KubeLocalPort:           envInt("KUBE_LOCAL_PORT", 5432),
 		KubePasswordVar:         env("KUBE_PASSWORD_VAR", "POSTGRES_PASSWORD"),
 		KubePasswordContainer:   env("KUBE_PASSWORD_CONTAINER", ""),

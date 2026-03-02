@@ -16,3 +16,7 @@ Thank you for your interest in contributing.
 ## Questions
 
 If you're unsure, open an issue with the "Question" label or describe your idea in a new issue so we can discuss it.
+
+## Resources
+
+New to open source? [Open Source Guides](https://opensource.guide/) has guides on how to contribute and best practices for maintainers and contributors.

@@ -1,3 +1,7 @@
+// Package main is the entry point for pgwd (Postgres Watch Dog), a Go CLI that
+// checks PostgreSQL connection counts (active/idle) and notifies via Slack and/or
+// Loki when thresholds are exceeded. It can also alert on stale connections.
+// See the README and github.com/hrodrig/pgwd for usage and install.
 package main
 
 import (
@@ -62,6 +66,7 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.BoolVar(&cfg.ForceNotification, "force-notification", cfg.ForceNotification, "Always send a test notification to validate delivery/format (PGWD_FORCE_NOTIFICATION)")
 	flag.IntVar(&cfg.DefaultThresholdPercent, "default-threshold-percent", cfg.DefaultThresholdPercent, "When total/active threshold are 0, set to this % of max_connections (1-100, default 80) (PGWD_DEFAULT_THRESHOLD_PERCENT)")
 	flag.StringVar(&cfg.KubePostgres, "kube-postgres", cfg.KubePostgres, "Connect via kubectl port-forward: namespace/type/name (e.g. default/svc/postgres) (PGWD_KUBE_POSTGRES)")
+	flag.StringVar(&cfg.KubeContext, "kube-context", cfg.KubeContext, "Kubectl context to use (empty = current context) (PGWD_KUBE_CONTEXT)")
 	flag.IntVar(&cfg.KubeLocalPort, "kube-local-port", cfg.KubeLocalPort, "Local port for kube port-forward (default 5432) (PGWD_KUBE_LOCAL_PORT)")
 	flag.StringVar(&cfg.KubePasswordVar, "kube-password-var", cfg.KubePasswordVar, "Pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD) (PGWD_KUBE_PASSWORD_VAR)")
 	flag.StringVar(&cfg.KubePasswordContainer, "kube-password-container", cfg.KubePasswordContainer, "Container name in pod for password discovery (PGWD_KUBE_PASSWORD_CONTAINER)")
@@ -110,11 +115,11 @@ func setupKube(ctx context.Context, cfg *config.Config) {
 	}
 	password := ""
 	if kube.URLContainsDiscoverPassword(cfg.DBURL) {
-		podName, err := kube.ResolvePod(ctx, namespace, resource)
+		podName, err := kube.ResolvePod(ctx, cfg.KubeContext, namespace, resource)
 		if err != nil {
 			log.Fatalf("kube resolve pod: %v", err)
 		}
-		password, err = kube.GetPasswordFromPod(ctx, namespace, podName, cfg.KubePasswordContainer, cfg.KubePasswordVar)
+		password, err = kube.GetPasswordFromPod(ctx, cfg.KubeContext, namespace, podName, cfg.KubePasswordContainer, cfg.KubePasswordVar)
 		if err != nil {
 			log.Fatal("kube: could not get password from pod (check namespace, pod name, container, and env var)")
 		}
@@ -124,7 +129,7 @@ func setupKube(ctx context.Context, cfg *config.Config) {
 		log.Fatal("kube: failed to build DB URL (check -db-url format)")
 	}
 	cfg.DBURL = finalURL
-	cleanup, err := kube.StartPortForward(ctx, namespace, resource, cfg.KubeLocalPort)
+	cleanup, err := kube.StartPortForward(ctx, cfg.KubeContext, namespace, resource, cfg.KubeLocalPort)
 	if err != nil {
 		log.Fatalf("kube port-forward: %v", err)
 	}
@@ -135,7 +140,7 @@ func runContextStrings(ctx context.Context, cfg *config.Config) (cluster, client
 	if cfg.Cluster != "" {
 		cluster = cfg.Cluster
 	} else if cfg.KubePostgres != "" {
-		cluster = kube.ClusterName(ctx)
+		cluster = kube.ClusterName(ctx, cfg.KubeContext)
 	}
 	if cfg.Client != "" {
 		client = cfg.Client
