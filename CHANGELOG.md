@@ -20,6 +20,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
+## [0.2.4] - 2026-03-02
+
+### Added
+
+- **Kubernetes context:** **-kube-context** (`PGWD_KUBE_CONTEXT`) to select which kubeconfig context to use when you have multiple (e.g. dev, staging, prod). All kubectl operations (port-forward, pod resolution, password discovery, cluster name) use that context. README: parameters table and "Multiple contexts" in Kubernetes section.
+- **Makefile:** **docker-scan** target — build image as `pgwd:scan`, run Grype with `--fail-on high`. Requires Docker and Grype on PATH.
+- **Release tests:** `.cursor/rules/release-tests.mdc` — **make docker-scan** added to pre-release checklist.
+
+---
+
 ## [0.2.3] - 2026-02-28
 
 ### Added

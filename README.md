@@ -1,6 +1,6 @@
 # pgwd — Postgres Watch Dog
 
-[![Version](https://img.shields.io/badge/version-0.2.3-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.2.4-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -273,6 +273,7 @@ When Postgres runs inside a Kubernetes cluster, use **`-kube-postgres`** so pgwd
 - Set **`PGWD_DB_URL`** with host **`localhost`** and the same port as **`-kube-local-port`** (default 5432). Example: `postgres://user:pass@localhost:5432/mydb`.
 - **Password from the pod:** If the URL password is the literal **`DISCOVER_MY_PASSWORD`**, pgwd reads the password from the Postgres pod's environment (`POSTGRES_PASSWORD` by default, or `PGPASSWORD`). Use **`-kube-password-var`** to choose the env var and **`-kube-password-container`** if the Postgres container is not the default.
 - **Requires:** `kubectl` in PATH and a valid kubeconfig. pgwd checks for `kubectl` before any kube step and exits with a clear error if it is missing. pgwd starts the port-forward, connects, and stops it on exit. **When running from cron**, set PATH so `kubectl` is findable (see [Running from cron](#running-from-cron) above).
+- **Multiple contexts:** If your kubeconfig has several contexts (e.g. dev, staging, prod), use **`-kube-context`** (or `PGWD_KUBE_CONTEXT`) to select which cluster to use. All kubectl operations (port-forward, pod resolution, password discovery, cluster name) use that context.
 
 ```bash
 # With password in URL
@@ -294,6 +295,7 @@ All parameters can be set via **CLI** or **environment variables** with prefix `
 |-----|-----|-------------|
 | `-db-url` | `PGWD_DB_URL` | PostgreSQL connection URL (required). With `-kube-postgres`, use host localhost and port matching `-kube-local-port`. |
 | `-kube-postgres` | `PGWD_KUBE_POSTGRES` | Connect via kubectl port-forward: `namespace/type/name` (e.g. `default/svc/postgres`). Requires kubectl in PATH. |
+| `-kube-context` | `PGWD_KUBE_CONTEXT` | Kubectl context to use (empty = current context). Use when you have multiple contexts in kubeconfig and want to target a specific cluster. |
 | `-kube-local-port` | `PGWD_KUBE_LOCAL_PORT` | Local port for port-forward (default 5432). Use different ports to run multiple pgwd against different Postgres in the cluster. |
 | `-kube-password-var` | `PGWD_KUBE_PASSWORD_VAR` | Pod env var name when URL password is `DISCOVER_MY_PASSWORD` (default `POSTGRES_PASSWORD`). |
 | `-kube-password-container` | `PGWD_KUBE_PASSWORD_CONTAINER` | Container name in pod for password discovery (default: primary container). |
@@ -346,7 +348,7 @@ make install
 # Custom install path: GOBIN=~/bin make install  (default is $HOME/go/bin)
 ```
 
-**Release (GitHub):** From branch `main`, after tagging (e.g. `git tag v0.2.3`), run `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
+**Release (GitHub):** From branch `main`, after tagging (e.g. `git tag v0.2.4`), run `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
 
 ## Testing
 
@@ -470,7 +472,7 @@ Same placeholders as Slack. Timestamp is the time of the push. You can query in 
 **Published image (each release):** Multi-arch images (linux/amd64, linux/arm64) are published to [GitHub Container Registry](https://github.com/hrodrig/pgwd/pkgs/container/pgwd) as `ghcr.io/hrodrig/pgwd`. Use a version tag or `latest`:
 
 ```bash
-docker pull ghcr.io/hrodrig/pgwd:v0.2.3
+docker pull ghcr.io/hrodrig/pgwd:v0.2.4
 # or
 docker pull ghcr.io/hrodrig/pgwd:latest
 ```
@@ -496,13 +498,13 @@ This runs `docker build` with `--build-arg VERSION=...`, `--build-arg COMMIT=...
 
 **Validate the image**
 
-Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.2.3`), or `pgwd` if you built locally with `make docker-build`:
+Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.2.4`), or `pgwd` if you built locally with `make docker-build`:
 
 ```bash
 # Help (no DB needed)
 docker run --rm ghcr.io/hrodrig/pgwd:latest -h
 
-# Version (should show e.g. pgwd v0.2.3 (commit ..., built ...))
+# Version (should show e.g. pgwd v0.2.4 (commit ..., built ...))
 docker run --rm ghcr.io/hrodrig/pgwd:latest --version
 
 # Expect "missing database URL" (validates startup path)

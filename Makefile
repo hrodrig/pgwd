@@ -56,9 +56,15 @@ lint-fix:
 docker-build:
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILDDATE=$(BUILDDATE) -t pgwd .
 
+# Build image as pgwd:scan and run Grype (--fail-on high). Requires: docker, grype on PATH.
+docker-scan:
+	@command -v grype >/dev/null 2>&1 || { echo "grype not found; install with: brew install grype or https://github.com/anchore/grype#installation"; exit 1; }
+	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILDDATE=$(BUILDDATE) -t pgwd:scan .
+	grype pgwd:scan --fail-on high
+
 # --- Release (requires goreleaser: brew install goreleaser) ---
 # Release: only from main. Merge develop → main, update VERSION, then: git tag v0.1.0 && make release
-.PHONY: release snapshot docker-build lint lint-fix
+.PHONY: release snapshot docker-build docker-scan lint lint-fix
 release:
 	@branch=$$(git branch --show-current 2>/dev/null); \
 	if [ "$$branch" != "main" ]; then \
