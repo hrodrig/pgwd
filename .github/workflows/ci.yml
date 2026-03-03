@@ -37,6 +37,32 @@ jobs:
       - name: Run integration tests
         run: make test-integration
 
+  test-e2e-kube:
+    name: E2E (kind + kube-postgres)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install kind
+        run: |
+          curl -Lo ./kind "https://kind.sigs.k8s.io/dl/v0.24.0/kind-linux-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+          chmod +x ./kind
+          sudo mv ./kind /usr/local/bin/kind
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/kubectl
+
+      - name: Run e2e kube test
+        run: make test-e2e-kube
+
   lint:
     name: gofmt + gocyclo
     runs-on: ubuntu-latest

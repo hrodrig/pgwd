@@ -153,4 +153,24 @@ curl -s "http://localhost:3100/loki/api/v1/query_range?query={app=\"pgwd\",names
 
 ---
 
+## E2E Kubernetes (kind)
+
+Validates pgwd with `-kube-postgres` against a real cluster. Creates a kind cluster, deploys Postgres, runs `pgwd -dry-run`, then destroys the cluster.
+
+**Requires:** kind, kubectl, docker.
+
+```bash
+make test-e2e-kube
+```
+
+Or run the script directly (from repo root):
+
+```bash
+testing/scripts/test-e2e-kube.sh
+```
+
+Override cluster name: `PGWD_E2E_CLUSTER=my-cluster make test-e2e-kube`
+
+---
+
 **Production:** Use a non-superuser role for application connections so `superuser_reserved_connections` (default 3) stays available for DBA/admin access when the instance is saturated. See [PostgreSQL: Connection and Authentication](https://www.postgresql.org/docs/current/runtime-config-connection.html) (`superuser_reserved_connections`).
