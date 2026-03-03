@@ -301,8 +301,8 @@ All parameters can be set via **CLI** or **environment variables** with prefix `
 | `-kube-password-container` | `PGWD_KUBE_PASSWORD_CONTAINER` | Container name in pod for password discovery (default: primary container). |
 | `-cluster` | `PGWD_CLUSTER` | Cluster name shown in Slack/Loki (health-check style). When using `-kube-postgres`, detected from kubeconfig if unset. |
 | `-client` | `PGWD_CLIENT` | Client/service/pod name shown in Slack (e.g. VM or service name). When using `-kube-postgres`, derived from resource (e.g. `svc/name`) if unset; otherwise hostname. |
-| `-threshold-total` | `PGWD_THRESHOLD_TOTAL` | Alert when total connections ≥ N (default: default-threshold-percent of max_connections if 0) |
-| `-threshold-active` | `PGWD_THRESHOLD_ACTIVE` | Alert when active connections ≥ N (default: default-threshold-percent of max_connections if 0) |
+| `-threshold-total` | `PGWD_THRESHOLD_TOTAL` | Alert when total connections ≥ N. **Deprecated:** use `-threshold-levels`; will be removed in v1.0.0. |
+| `-threshold-active` | `PGWD_THRESHOLD_ACTIVE` | Alert when active connections ≥ N. **Deprecated:** use `-threshold-levels`; will be removed in v1.0.0. |
 | `-threshold-idle` | `PGWD_THRESHOLD_IDLE` | Alert when idle connections ≥ N |
 | `-stale-age` | `PGWD_STALE_AGE` | Consider connection stale if open longer than N seconds (requires `-threshold-stale`) |
 | `-threshold-stale` | `PGWD_THRESHOLD_STALE` | Alert when stale connections (open > stale-age) ≥ N |

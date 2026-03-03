@@ -6,6 +6,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+### Deprecated
+
+- **`-threshold-total` and `-threshold-active`:** Marked as deprecated; use `-threshold-levels` instead (e.g. `-threshold-levels 75,85,95`). Will be removed in v1.0.0. A warning is printed to stderr when these flags are used.
+
 ### Added
 
 - **docs:** Sequence diagrams audit ([docs/sequence/AUDIT.md](docs/sequence/AUDIT.md)) mapping each diagram step to code; README and docs/README link to it.

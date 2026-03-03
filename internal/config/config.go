@@ -27,8 +27,8 @@ type Config struct {
 	Client  string
 
 	// Thresholds (0 = disabled)
-	ThresholdTotal  int
-	ThresholdActive int
+	ThresholdTotal  int // Deprecated: use ThresholdLevels; will be removed in v1.0.0
+	ThresholdActive int // Deprecated: use ThresholdLevels; will be removed in v1.0.0
 	ThresholdIdle   int
 	StaleAge        int // seconds; connections open longer than this are "stale"
 	ThresholdStale  int // alert when count of stale connections >= this

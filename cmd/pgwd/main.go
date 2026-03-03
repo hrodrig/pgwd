@@ -53,8 +53,8 @@ func handleVersion() {
 func parseFlags(cfg *config.Config) (showVersion bool) {
 	showVersionFlag := flag.Bool("version", false, "print version and exit")
 	flag.StringVar(&cfg.DBURL, "db-url", cfg.DBURL, "PostgreSQL connection URL (PGWD_DB_URL)")
-	flag.IntVar(&cfg.ThresholdTotal, "threshold-total", cfg.ThresholdTotal, "Alert when total connections >= N (PGWD_THRESHOLD_TOTAL)")
-	flag.IntVar(&cfg.ThresholdActive, "threshold-active", cfg.ThresholdActive, "Alert when active connections >= N (PGWD_THRESHOLD_ACTIVE)")
+	flag.IntVar(&cfg.ThresholdTotal, "threshold-total", cfg.ThresholdTotal, "Alert when total connections >= N (PGWD_THRESHOLD_TOTAL). Deprecated: use -threshold-levels; will be removed in v1.0.0.")
+	flag.IntVar(&cfg.ThresholdActive, "threshold-active", cfg.ThresholdActive, "Alert when active connections >= N (PGWD_THRESHOLD_ACTIVE). Deprecated: use -threshold-levels; will be removed in v1.0.0.")
 	flag.IntVar(&cfg.ThresholdIdle, "threshold-idle", cfg.ThresholdIdle, "Alert when idle connections >= N (PGWD_THRESHOLD_IDLE)")
 	flag.IntVar(&cfg.StaleAge, "stale-age", cfg.StaleAge, "Consider connection stale if open longer than N seconds (PGWD_STALE_AGE)")
 	flag.IntVar(&cfg.ThresholdStale, "threshold-stale", cfg.ThresholdStale, "Alert when stale connections (open > stale-age) >= N (PGWD_THRESHOLD_STALE)")
@@ -79,10 +79,17 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	return *showVersionFlag
 }
 
+func warnDeprecatedThresholds(cfg *config.Config) {
+	if cfg.ThresholdTotal > 0 || cfg.ThresholdActive > 0 {
+		fmt.Fprintln(os.Stderr, "pgwd: -threshold-total and -threshold-active are deprecated and will be removed in v1.0.0; use -threshold-levels instead (e.g. -threshold-levels 75,85,95)")
+	}
+}
+
 func validateConfig(cfg *config.Config) {
 	if cfg.DBURL == "" {
 		log.Fatal("missing database URL: set PGWD_DB_URL or -db-url")
 	}
+	warnDeprecatedThresholds(cfg)
 	if cfg.ThresholdStale > 0 && cfg.StaleAge <= 0 {
 		log.Fatal("when using threshold-stale, stale-age must be > 0 (PGWD_STALE_AGE or -stale-age)")
 	}
