@@ -86,9 +86,19 @@ docker-scan:
 	grype pgwd:scan --fail-on high
 
 # --- Release (requires goreleaser: brew install goreleaser) ---
-# Release: only from main. Merge develop → main, update VERSION, then: git tag v0.1.0 && make release
+# release-check: MANDATORY before release. Runs lint, test, test-integration, docker-scan. All must pass.
+.PHONY: release-check
+release-check:
+	@echo "Running release checks (lint, test, test-integration, docker-scan)..."
+	@$(MAKE) lint
+	@$(MAKE) test
+	@$(MAKE) test-integration
+	@$(MAKE) docker-scan
+	@echo "All release checks passed."
+
+# Release: only from main. Requires release-check to pass. Merge develop → main, update VERSION, then: git tag v0.1.0 && make release
 .PHONY: release snapshot docker-build docker-scan lint lint-fix test-integration
-release:
+release: release-check
 	@branch=$$(git branch --show-current 2>/dev/null); \
 	if [ "$$branch" != "main" ]; then \
 	  echo "Error: release only from main (current: $$branch). Merge and checkout main first."; \

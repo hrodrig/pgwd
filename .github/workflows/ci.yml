@@ -20,8 +20,22 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Run tests
+      - name: Run unit tests
         run: go test -v ./...
+
+  test-integration:
+    name: Integration (Postgres + Loki)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run integration tests
+        run: make test-integration
 
   lint:
     name: gofmt + gocyclo

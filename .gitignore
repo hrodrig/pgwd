@@ -38,6 +38,10 @@
 !testing/**
 !.github/
 !.github/**
+# CodeQL local run (database and results; do not commit)
+codeql-db/
+codeql-results.sarif
+
 # Never track macOS metadata
 .DS_Store
 **/.DS_Store

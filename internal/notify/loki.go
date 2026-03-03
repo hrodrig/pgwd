@@ -38,7 +38,7 @@ func (l *Loki) PushPayload(ev Event) ([]byte, error) {
 		labels["app"] = "pgwd"
 	}
 	labels["threshold"] = ev.Threshold
-	labels["level"] = thresholdToLevel(ev.Threshold)
+	labels["level"] = eventLevel(ev)
 	if ev.Namespace != "" {
 		labels["namespace"] = ev.Namespace
 	}
@@ -94,6 +94,14 @@ func (l *Loki) Send(ctx context.Context, ev Event) error {
 		return fmt.Errorf("loki push returned %s", resp.Status)
 	}
 	return nil
+}
+
+// eventLevel returns the severity level for Loki labels. Uses ev.Level when set, else derives from threshold.
+func eventLevel(ev Event) string {
+	if ev.Level != "" {
+		return ev.Level
+	}
+	return thresholdToLevel(ev.Threshold)
 }
 
 // thresholdToLevel maps threshold to severity level for Loki labels (attention, alert, danger).

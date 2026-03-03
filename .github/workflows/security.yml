@@ -54,4 +54,3 @@ jobs:
 
       - name: Run Grype on image
         run: grype pgwd:scan --fail-on high,critical
-        continue-on-error: true

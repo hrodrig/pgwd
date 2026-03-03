@@ -6,6 +6,9 @@ import (
 	"strings"
 )
 
+// DefaultThresholdLevels is the default comma-separated percentages for 3-tier alerts (MySQL-style).
+const DefaultThresholdLevels = "75,85,95"
+
 // Config holds all pgwd settings from CLI and env (PGWD_*).
 type Config struct {
 	// Database
@@ -38,9 +41,10 @@ type Config struct {
 	// Behavior
 	Interval                int // seconds; 0 = run once
 	DryRun                  bool
-	ForceNotification       bool // send a test notification regardless of thresholds (to validate delivery/format)
-	NotifyOnConnectFailure  bool // when Postgres connection fails, send an alert to notifiers (infrastructure alert)
-	DefaultThresholdPercent int  // when threshold-total/active are 0, set to this % of max_connections (1-100, default 80)
+	ForceNotification       bool   // send a test notification regardless of thresholds (to validate delivery/format)
+	NotifyOnConnectFailure  bool   // when Postgres connection fails, send an alert to notifiers (infrastructure alert)
+	DefaultThresholdPercent int    // when threshold-total/active are set, used for the one left at 0 (1-100, default 80)
+	ThresholdLevels         string // comma-separated percentages for 3-tier alerts, e.g. "75,85,95" (attention/alert/danger). Used when both total and active are 0.
 	// TestMaxConnections: if > 0, use instead of server max_connections for defaults and display (for testing alerts).
 	TestMaxConnections int
 }
@@ -93,6 +97,7 @@ func FromEnv() Config {
 		ForceNotification:       envBool("FORCE_NOTIFICATION", false),
 		NotifyOnConnectFailure:  envBool("NOTIFY_ON_CONNECT_FAILURE", false),
 		DefaultThresholdPercent: envInt("DEFAULT_THRESHOLD_PERCENT", 80),
+		ThresholdLevels:         env("THRESHOLD_LEVELS", DefaultThresholdLevels),
 		TestMaxConnections:      envInt("TEST_MAX_CONNECTIONS", 0),
 	}
 }
@@ -113,52 +118,97 @@ func (c *Config) OverrideWith(overrides struct {
 	DryRun                  *bool
 	ForceNotification       *bool
 	DefaultThresholdPercent *int
+	ThresholdLevels         *string
 }) {
-	if overrides.DBURL != nil {
-		c.DBURL = *overrides.DBURL
+	c.applyOverridesThresholds(overrides.DBURL, overrides.ThresholdTotal, overrides.ThresholdActive, overrides.ThresholdIdle, overrides.StaleAge, overrides.ThresholdStale)
+	c.applyOverridesNotifiers(overrides.SlackWebhook, overrides.LokiURL, overrides.LokiLabels)
+	c.applyOverridesBehaviour(overrides.Interval, overrides.DryRun, overrides.ForceNotification, overrides.DefaultThresholdPercent, overrides.ThresholdLevels)
+}
+
+func (c *Config) applyOverridesThresholds(dbURL *string, total, active, idle, staleAge, stale *int) {
+	if dbURL != nil {
+		c.DBURL = *dbURL
 	}
-	if overrides.ThresholdTotal != nil {
-		c.ThresholdTotal = *overrides.ThresholdTotal
+	if total != nil {
+		c.ThresholdTotal = *total
 	}
-	if overrides.ThresholdActive != nil {
-		c.ThresholdActive = *overrides.ThresholdActive
+	if active != nil {
+		c.ThresholdActive = *active
 	}
-	if overrides.ThresholdIdle != nil {
-		c.ThresholdIdle = *overrides.ThresholdIdle
+	if idle != nil {
+		c.ThresholdIdle = *idle
 	}
-	if overrides.StaleAge != nil {
-		c.StaleAge = *overrides.StaleAge
+	if staleAge != nil {
+		c.StaleAge = *staleAge
 	}
-	if overrides.ThresholdStale != nil {
-		c.ThresholdStale = *overrides.ThresholdStale
-	}
-	if overrides.SlackWebhook != nil {
-		c.SlackWebhook = *overrides.SlackWebhook
-	}
-	if overrides.LokiURL != nil {
-		c.LokiURL = *overrides.LokiURL
-	}
-	if overrides.LokiLabels != nil {
-		c.LokiLabels = *overrides.LokiLabels
-	}
-	if overrides.Interval != nil {
-		c.Interval = *overrides.Interval
-	}
-	if overrides.DryRun != nil {
-		c.DryRun = *overrides.DryRun
-	}
-	if overrides.ForceNotification != nil {
-		c.ForceNotification = *overrides.ForceNotification
-	}
-	if overrides.DefaultThresholdPercent != nil {
-		c.DefaultThresholdPercent = *overrides.DefaultThresholdPercent
+	if stale != nil {
+		c.ThresholdStale = *stale
 	}
 }
 
-// HasAnyThreshold returns true if at least one threshold is set.
+func (c *Config) applyOverridesNotifiers(slack, lokiURL, lokiLabels *string) {
+	if slack != nil {
+		c.SlackWebhook = *slack
+	}
+	if lokiURL != nil {
+		c.LokiURL = *lokiURL
+	}
+	if lokiLabels != nil {
+		c.LokiLabels = *lokiLabels
+	}
+}
+
+func (c *Config) applyOverridesBehaviour(interval *int, dryRun, force *bool, percent *int, levels *string) {
+	if interval != nil {
+		c.Interval = *interval
+	}
+	if dryRun != nil {
+		c.DryRun = *dryRun
+	}
+	if force != nil {
+		c.ForceNotification = *force
+	}
+	if percent != nil {
+		c.DefaultThresholdPercent = *percent
+	}
+	if levels != nil {
+		c.ThresholdLevels = *levels
+	}
+}
+
+// ParseThresholdLevels parses "75,85,95" into [75, 85, 95]. Returns nil if empty or invalid.
+// Each value must be 1-100 and in ascending order.
+func ParseThresholdLevels(s string) []int {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	var out []int
+	for _, part := range strings.Split(s, ",") {
+		n, err := strconv.Atoi(strings.TrimSpace(part))
+		if err != nil || n < 1 || n > 100 {
+			return nil
+		}
+		if len(out) > 0 && n <= out[len(out)-1] {
+			return nil
+		}
+		out = append(out, n)
+	}
+	if len(out) < 3 {
+		return nil
+	}
+	return out
+}
+
+// UsesLevelMode returns true when both threshold-total and threshold-active are 0 and ThresholdLevels is valid (3+ percentages).
+func (c *Config) UsesLevelMode() bool {
+	return c.ThresholdTotal == 0 && c.ThresholdActive == 0 && len(ParseThresholdLevels(c.ThresholdLevels)) >= 3
+}
+
+// HasAnyThreshold returns true if at least one threshold is set or level mode is active.
 func (c *Config) HasAnyThreshold() bool {
 	return c.ThresholdTotal > 0 || c.ThresholdActive > 0 || c.ThresholdIdle > 0 ||
-		c.ThresholdStale > 0
+		c.ThresholdStale > 0 || c.UsesLevelMode()
 }
 
 // HasAnyNotifier returns true if Slack or Loki is configured.

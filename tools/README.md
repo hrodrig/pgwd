@@ -8,9 +8,44 @@ Scripts and guidance for running security and quality scans **before merging to 
 
 | Tool | Purpose | When |
 |------|---------|------|
+| **CodeQL** | Static analysis — security and quality queries | CI (`.github/workflows/codeql.yml`); local with bundle |
 | **govulncheck** | Go vulnerability DB — finds known vulns in Go module dependencies | Local (`tools/scan.sh`), CI on PR/push to develop |
 | **Grype** | Vulnerability scanner (SBOM or container image) | Optional: local or CI; run against built image or Syft-generated SBOM |
 | **SonarQube / SonarCloud** | Code quality and security (optional) | If you have a project configured; run in CI or locally with `sonar-scanner` |
+
+## CodeQL (local with bundle)
+
+If you downloaded the CodeQL CLI bundle (e.g. `codeql-bundle-osx64.tar.gz` for macOS):
+
+**1. Extract and add to PATH:**
+
+```bash
+cd ~
+tar -xzf codeql-bundle-osx64.tar.gz
+# The bundle extracts to a folder named "codeql"; the executable is at codeql/codeql
+export PATH="$HOME/codeql:$PATH"
+# Add to ~/.zshrc for persistence
+# echo "export PATH=\"\$HOME/codeql:\$PATH\"" >> ~/.zshrc
+# source ~/.zshrc
+codeql --version   # verify
+```
+
+**2. Create database and analyze (from repo root):**
+
+```bash
+cd /path/to/pgwd
+codeql database create codeql-db --language=go --command="go build ./..."
+codeql database analyze codeql-db --format=sarif-latest --output=codeql-results.sarif
+```
+
+`codeql-db/` and `codeql-results.sarif` are in `.gitignore`; do not commit them.
+
+**3. View results:**
+- **VS Code:** [SARIF Viewer](https://marketplace.visualstudio.com/items?itemName=MS-SarifVSCode.sarif-viewer) (Microsoft) — squiggles, Results panel, filters. The CodeQL extension runs queries; it does not display SARIF files.
+- **Cursor:** Uses Open VSX; SARIF Viewer may not be available. Use `jq '.runs[].results' codeql-results.sarif` to inspect results.
+- **GitHub:** No web UI to upload SARIF. CI uploads automatically. For local runs, use `codeql github upload-results --sarif=... --repository=... --ref=... --commit=... --github-auth-stdin` (token needs `security_events` scope).
+
+**CI:** CodeQL runs automatically on push/PR to `main` and `develop` (`.github/workflows/codeql.yml`). Results appear in the repo's **Security** tab → Code scanning alerts.
 
 ## Install Grype locally (macOS)
 
@@ -63,6 +98,7 @@ CI does the same: builds the image and runs `grype pgwd:scan --fail-on high,crit
 
 ## CI
 
+- **CodeQL** workflow: runs on push/PR to `main` and `develop`. Static analysis for Go; results in Security → Code scanning.
 - **Security** workflow: runs on push/PR to `main` and `develop`. Jobs: **govulncheck** (Go deps), **Grype** (builds image, scans it with `--fail-on high,critical`).
 
 ## Adding SonarQube

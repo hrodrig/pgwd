@@ -33,7 +33,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 ## Git flow
 
 - **Branches:** Work on `develop`. `main` is production and is only updated from `develop` at release time (see `.cursor/rules/git-flow.mdc`).
-- **Releases:** Before releasing: ensure **all tests pass** (`make test`) and **integration tests pass** (`make test-integration`). Then merge `develop` → `main`, and on `main`: create annotated tag (e.g. `git tag -a v0.2.0 -m "Release 0.2.0"`), push tag, run `make release` (requires goreleaser). Do not commit features directly to `main`. See `.cursor/rules/release-tests.mdc`.
+- **Releases:** Before releasing: run **`make release-check`** (lint, test, test-integration, docker-scan). All must pass — they are MANDATORY. Then merge `develop` → `main`, and on `main`: create annotated tag (e.g. `git tag -a v0.2.0 -m "Release 0.2.0"`), push tag, run `make release` (requires goreleaser). `make release` runs `release-check` first. Do not commit features directly to `main`. See `.cursor/rules/release-tests.mdc`.
 - **Versioning:** Semantic versioning (MAJOR.MINOR.PATCH) for tags.
 
 ## Docker

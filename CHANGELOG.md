@@ -20,6 +20,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
+## [0.3.0] - 2026-03-03
+
+### Added
+
+- **3-tier alert levels:** **`-threshold-levels`** (`PGWD_THRESHOLD_LEVELS`): when both `threshold-total` and `threshold-active` are 0, use comma-separated percentages (default 75,85,95). Levels: **attention** (1st), **alert** (2nd), **danger** (3rd). Only the highest breached level fires. MySQL-style thresholds.
+- **Slack:** Level-specific colors (yellow/orange/red) and emojis (large_yellow_circle, large_orange_circle, red_circle) for attention/alert/danger.
+- **Loki:** `level` label derived from percentage when available (attention/alert/danger).
+- **Config:** `ParseThresholdLevels`, `UsesLevelMode`; `DefaultThresholdLevels` constant.
+
+### Changed
+
+- **Default behaviour:** When both total and active thresholds are 0, pgwd now uses 3-tier level mode (75,85,95%) instead of a single default-threshold-percent. Use `-threshold-total` or `-threshold-active` to keep the previous single-threshold behaviour.
+- **Explicit thresholds:** When using `threshold-total` or `threshold-active`, Level is now computed from the actual percentage for correct Slack/Loki colors (attention/alert/danger).
+- **default-threshold-percent:** Now only applies when one of total/active is set (ignored in level mode).
+
+---
+
 ## [0.2.4] - 2026-03-02
 
 ### Added
@@ -129,7 +146,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/hrodrig/pgwd/compare/v0.2.4...v0.3.0
+[0.2.4]: https://github.com/hrodrig/pgwd/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/hrodrig/pgwd/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/hrodrig/pgwd/compare/v0.2.0...v0.2.2
 [0.2.1]: https://github.com/hrodrig/pgwd/compare/v0.2.0...v0.2.1

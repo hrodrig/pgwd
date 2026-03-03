@@ -1,18 +1,19 @@
 ---
-description: All tests must pass before release
+description: Lint, tests, and scans are MANDATORY before release
 alwaysApply: true
 ---
 
-# Release: tests must pass
+# Release: MANDATORY checks (all must pass)
 
-Before merging to `main` or creating a release (tag and `make release`):
+Before merging to `main` or creating a release (tag and `make release`), run **`make release-check`**. It runs (in order):
 
-- Run **`make lint`** (checks gofmt -s and gocyclo -over 14). If it fails on **formatting**: run **`make lint-fix`** then `make lint` again. If it fails on **complexity** (gocyclo): refactor the reported functions so complexity stays ≤ 14. Go Report Card and CI run the same checks.
-- Run **`make test`** or **`go test ./...`** and ensure all tests pass.
-- Run **`make test-integration`** (requires Docker). Starts Postgres and Loki via compose, runs integration tests, then stops. Must pass before release.
-- Run **`./tools/scan.sh`** (or ensure the **Security** workflow has passed on the branch you are releasing from). Fix or acknowledge any reported vulnerabilities before merging to main and releasing.
-- Run **`make docker-scan`** (builds image as `pgwd:scan` and runs Grype with `--fail-on high`). Requires Docker and Grype on PATH. Fix or acknowledge any high/critical findings before release.
-- Fix any failing test before tagging or running `make release`.
-- Do not push a release tag if the test suite or security scan is red.
+1. **`make lint`** — gofmt -s and gocyclo -over 14. If formatting fails: `make lint-fix` then retry. If complexity fails: refactor so functions stay ≤ 14.
+2. **`make test`** — unit tests.
+3. **`make test-integration`** — Postgres + Loki via Docker compose. Requires Docker.
+4. **`make docker-scan`** — builds image, runs Grype with `--fail-on high`. Requires Docker and Grype on PATH.
+
+**These are NOT optional.** `make release` depends on `release-check`; if any step fails, the release is blocked.
+
+CI runs lint and tests. The Security workflow runs govulncheck and Grype on the image; both must pass (no `continue-on-error`). Do not push a release tag if CI or Security is red.
 
 Releases are made only from the `main` branch.
