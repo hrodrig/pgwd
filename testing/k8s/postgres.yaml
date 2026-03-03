@@ -1,0 +1,54 @@
+# Postgres for pgwd e2e test (kind cluster).
+# Same credentials as testing/compose.yaml: pgwd/pgwd/pgwd
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pgwd-e2e
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: pgwd-e2e
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - name: POSTGRES_USER
+              value: pgwd
+            - name: POSTGRES_PASSWORD
+              value: pgwd
+            - name: POSTGRES_DB
+              value: pgwd
+          ports:
+            - containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "pgwd", "-d", "pgwd"]
+            initialDelaySeconds: 5
+            periodSeconds: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: pgwd-e2e
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

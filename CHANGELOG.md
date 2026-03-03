@@ -20,6 +20,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
+## [0.3.6] - 2026-03-03
+
+### Fixed
+
+- **kube port-forward:** setupKube had `defer cleanup()` inside it; in Go defer runs when the enclosing function returns, so the port-forward was killed as soon as setupKube returned. Now setupKube returns the cleanup function and main defers it. Regression introduced in v0.2.4 refactor; v0.2.2 worked correctly.
+
+### Added
+
+- **-validate-k8s-access** (`PGWD_VALIDATE_K8S_ACCESS`): validate kubectl connectivity and list pods, then exit. Use `-kube-context` to select context. Useful before running pgwd with `-kube-postgres`.
+- **E2E kube test:** `make test-e2e-kube` — creates kind cluster, deploys Postgres, runs `pgwd -validate-k8s-access` and `pgwd -kube-postgres -dry-run`, then destroys cluster. Requires kind, kubectl, Docker. `testing/k8s/postgres.yaml`, `testing/scripts/test-e2e-kube.sh`.
+- **CI:** `test-e2e-kube` job in GitHub Actions.
+- **release-check:** `test-e2e-kube` added to pre-release checklist.
+
+### Deprecated
+
+- **`-threshold-total` and `-threshold-active`:** use `-threshold-levels` instead (e.g. `-threshold-levels 75,85,95`). Will be removed in v1.0.0. A warning is printed to stderr when these flags are used.
+
+---
+
 ## [0.3.1] - 2026-03-03
 
 ### Fixed
@@ -159,7 +178,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.3.6...HEAD
+[0.3.6]: https://github.com/hrodrig/pgwd/compare/v0.3.1...v0.3.6
 [0.3.1]: https://github.com/hrodrig/pgwd/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/hrodrig/pgwd/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/hrodrig/pgwd/compare/v0.2.3...v0.2.4

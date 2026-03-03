@@ -53,8 +53,8 @@ func handleVersion() {
 func parseFlags(cfg *config.Config) (showVersion bool) {
 	showVersionFlag := flag.Bool("version", false, "print version and exit")
 	flag.StringVar(&cfg.DBURL, "db-url", cfg.DBURL, "PostgreSQL connection URL (PGWD_DB_URL)")
-	flag.IntVar(&cfg.ThresholdTotal, "threshold-total", cfg.ThresholdTotal, "Alert when total connections >= N (PGWD_THRESHOLD_TOTAL)")
-	flag.IntVar(&cfg.ThresholdActive, "threshold-active", cfg.ThresholdActive, "Alert when active connections >= N (PGWD_THRESHOLD_ACTIVE)")
+	flag.IntVar(&cfg.ThresholdTotal, "threshold-total", cfg.ThresholdTotal, "Alert when total connections >= N (PGWD_THRESHOLD_TOTAL). Deprecated: use -threshold-levels; will be removed in v1.0.0.")
+	flag.IntVar(&cfg.ThresholdActive, "threshold-active", cfg.ThresholdActive, "Alert when active connections >= N (PGWD_THRESHOLD_ACTIVE). Deprecated: use -threshold-levels; will be removed in v1.0.0.")
 	flag.IntVar(&cfg.ThresholdIdle, "threshold-idle", cfg.ThresholdIdle, "Alert when idle connections >= N (PGWD_THRESHOLD_IDLE)")
 	flag.IntVar(&cfg.StaleAge, "stale-age", cfg.StaleAge, "Consider connection stale if open longer than N seconds (PGWD_STALE_AGE)")
 	flag.IntVar(&cfg.ThresholdStale, "threshold-stale", cfg.ThresholdStale, "Alert when stale connections (open > stale-age) >= N (PGWD_THRESHOLD_STALE)")
@@ -75,14 +75,22 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.StringVar(&cfg.Client, "client", cfg.Client, "Client/service/pod name for notifications (PGWD_CLIENT); when -kube-postgres is set, derived from resource (e.g. svc/name) if unset")
 	flag.BoolVar(&cfg.NotifyOnConnectFailure, "notify-on-connect-failure", cfg.NotifyOnConnectFailure, "Send an alert to notifiers when Postgres connection fails (infrastructure alert) (PGWD_NOTIFY_ON_CONNECT_FAILURE)")
 	flag.IntVar(&cfg.TestMaxConnections, "test-max-connections", cfg.TestMaxConnections, "Override server max_connections for defaults and display (for testing alerts; 0 = use server) (PGWD_TEST_MAX_CONNECTIONS)")
+	flag.BoolVar(&cfg.ValidateK8sAccess, "validate-k8s-access", cfg.ValidateK8sAccess, "Validate kubectl connectivity and list pods, then exit. Use -kube-context to select context. (PGWD_VALIDATE_K8S_ACCESS)")
 	flag.Parse()
 	return *showVersionFlag
+}
+
+func warnDeprecatedThresholds(cfg *config.Config) {
+	if cfg.ThresholdTotal > 0 || cfg.ThresholdActive > 0 {
+		fmt.Fprintln(os.Stderr, "pgwd: -threshold-total and -threshold-active are deprecated and will be removed in v1.0.0; use -threshold-levels instead (e.g. -threshold-levels 75,85,95)")
+	}
 }
 
 func validateConfig(cfg *config.Config) {
 	if cfg.DBURL == "" {
 		log.Fatal("missing database URL: set PGWD_DB_URL or -db-url")
 	}
+	warnDeprecatedThresholds(cfg)
 	if cfg.ThresholdStale > 0 && cfg.StaleAge <= 0 {
 		log.Fatal("when using threshold-stale, stale-age must be > 0 (PGWD_STALE_AGE or -stale-age)")
 	}
@@ -100,9 +108,11 @@ func validateConfig(cfg *config.Config) {
 	}
 }
 
-func setupKube(ctx context.Context, cfg *config.Config) {
+// setupKube starts port-forward and updates cfg.DBURL when -kube-postgres is set.
+// Returns a cleanup function that must be called on exit (e.g. defer in main).
+func setupKube(ctx context.Context, cfg *config.Config) (cleanup func()) {
 	if cfg.KubePostgres == "" {
-		return
+		return func() {}
 	}
 	if err := kube.RequireKubectl(); err != nil {
 		log.Fatalf("kube-postgres: %v", err)
@@ -130,11 +140,11 @@ func setupKube(ctx context.Context, cfg *config.Config) {
 		log.Fatal("kube: failed to build DB URL (check -db-url format)")
 	}
 	cfg.DBURL = finalURL
-	cleanup, err := kube.StartPortForward(ctx, cfg.KubeContext, namespace, resource, cfg.KubeLocalPort)
+	cleanup, err = kube.StartPortForward(ctx, cfg.KubeContext, namespace, resource, cfg.KubeLocalPort)
 	if err != nil {
 		log.Fatalf("kube port-forward: %v", err)
 	}
-	defer cleanup()
+	return cleanup
 }
 
 func runContextStrings(ctx context.Context, cfg *config.Config) (cluster, client, namespace, database string) {
@@ -458,12 +468,21 @@ func main() {
 		printVersion()
 		os.Exit(0)
 	}
+	if cfg.ValidateK8sAccess {
+		ctx := context.Background()
+		if err := kube.ValidateKubernetesAccess(ctx, cfg.KubeContext); err != nil {
+			log.Fatalf("validate-k8s-access: %v", err)
+		}
+		os.Exit(0)
+	}
 	validateConfig(&cfg)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	setupKube(ctx, &cfg)
+	kubeCleanup := setupKube(ctx, &cfg)
+	defer kubeCleanup()
+
 	runCluster, runClient, runNamespace, runDatabase := runContextStrings(ctx, &cfg)
 	senders := buildSenders(&cfg)
 

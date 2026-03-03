@@ -40,6 +40,14 @@ install:
 test:
 	go test ./...
 
+# E2E kube test: create kind cluster, deploy Postgres, run pgwd -kube-postgres -dry-run, destroy cluster.
+# Requires: kind, kubectl, docker. Use before release to validate -kube-postgres path.
+test-e2e-kube:
+	@command -v kind >/dev/null 2>&1 || { echo "kind not found; install with: brew install kind or https://kind.sigs.k8s.io/docs/user/quick-start/#installation"; exit 1; }
+	@command -v kubectl >/dev/null 2>&1 || { echo "kubectl not found; install with: brew install kubectl"; exit 1; }
+	@chmod +x testing/scripts/test-e2e-kube.sh
+	@testing/scripts/test-e2e-kube.sh
+
 # Integration tests: require Docker. Start Postgres and Loki, run tests, then stop.
 # Use before release to validate Postgres and Loki integration.
 test-integration:
@@ -86,13 +94,14 @@ docker-scan:
 	grype pgwd:scan --fail-on high
 
 # --- Release (requires goreleaser: brew install goreleaser) ---
-# release-check: MANDATORY before release. Runs lint, test, test-integration, docker-scan. All must pass.
+# release-check: MANDATORY before release. Runs lint, test, test-integration, test-e2e-kube, docker-scan. All must pass.
 .PHONY: release-check
 release-check:
-	@echo "Running release checks (lint, test, test-integration, docker-scan)..."
+	@echo "Running release checks (lint, test, test-integration, test-e2e-kube, docker-scan)..."
 	@$(MAKE) lint
 	@$(MAKE) test
 	@$(MAKE) test-integration
+	@$(MAKE) test-e2e-kube
 	@$(MAKE) docker-scan
 	@echo "All release checks passed."
 
