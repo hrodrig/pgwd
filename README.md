@@ -197,6 +197,33 @@ Cron runs with a **minimal environment** (e.g. `PATH=/usr/bin:/bin`). Two things
 
    Here `>>` appends stdout to the file and `2>&1` sends stderr to the same place.
 
+3. **Log rotation:** When redirecting to a file, it grows indefinitely. Use logrotate to avoid filling disk. Example `/etc/logrotate.d/pgwd`:
+
+   For `/var/log/pgwd.log`:
+
+   ```
+   /var/log/pgwd.log {
+       daily
+       rotate 7
+       compress
+       missingok
+       notifempty
+   }
+   ```
+
+   For `/home/username/log/pgwd-cron.log` (logs in user home): add `su username groupname` so logrotate runs as the file owner (avoids "insecure permissions" error). Use the same user and group that runs pgwd (e.g. the cron user).
+
+   ```
+   /home/username/log/pgwd-cron.log {
+       daily
+       rotate 7
+       compress
+       missingok
+       notifempty
+       su username groupname
+   }
+   ```
+
 ### Example: multiple services and heartbeat via bash + cron
 
 You can run pgwd for several Postgres instances (e.g. one per Kubernetes service) from a single cron schedule: use a bash script that sets `KUBECONFIG`, `PGWD_SLACK_WEBHOOK`, and `PATH`, then invokes pgwd once per service with distinct **`-kube-local-port`** values so port-forwards do not clash. Add a second script that runs **`-force-notification`** on a schedule (e.g. every 2 hours) as a “still alive” heartbeat.
