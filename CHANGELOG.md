@@ -20,6 +20,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
+## [0.3.1] - 2026-03-03
+
+### Fixed
+
+- **Dockerfile:** Replace `COPY . .` with explicit `COPY cmd/` and `COPY internal/` to avoid CopyIgnoredFile warning when using whitelist `.dockerignore`.
+- **Security workflow:** Use `--fail-on high` (single value) instead of `high,critical`; Grype 0.109+ accepts one severity only.
+
+### Changed
+
+- **tools/README:** Update Grype examples to match workflow.
+
+---
+
 ## [0.3.0] - 2026-03-03
 
 ### Added
@@ -146,7 +159,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/hrodrig/pgwd/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/hrodrig/pgwd/compare/v0.2.4...v0.3.0
 [0.2.4]: https://github.com/hrodrig/pgwd/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/hrodrig/pgwd/compare/v0.2.2...v0.2.3

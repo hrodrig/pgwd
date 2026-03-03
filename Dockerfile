@@ -5,7 +5,8 @@ ARG BUILDDATE=unknown
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
-COPY . .
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
 RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildDate=${BUILDDATE}" -o /pgwd ./cmd/pgwd
 
 # Minimal runtime: only ca-certificates for HTTPS (Slack/Loki). wget and nc are BusyBox applets

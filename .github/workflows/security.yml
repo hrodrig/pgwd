@@ -53,4 +53,4 @@ jobs:
           curl -sSfL https://get.anchore.io/grype | sh -s -- -b /usr/local/bin
 
       - name: Run Grype on image
-        run: grype pgwd:scan --fail-on high,critical
+        run: grype pgwd:scan --fail-on high
