@@ -75,6 +75,7 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.StringVar(&cfg.Client, "client", cfg.Client, "Client/service/pod name for notifications (PGWD_CLIENT); when -kube-postgres is set, derived from resource (e.g. svc/name) if unset")
 	flag.BoolVar(&cfg.NotifyOnConnectFailure, "notify-on-connect-failure", cfg.NotifyOnConnectFailure, "Send an alert to notifiers when Postgres connection fails (infrastructure alert) (PGWD_NOTIFY_ON_CONNECT_FAILURE)")
 	flag.IntVar(&cfg.TestMaxConnections, "test-max-connections", cfg.TestMaxConnections, "Override server max_connections for defaults and display (for testing alerts; 0 = use server) (PGWD_TEST_MAX_CONNECTIONS)")
+	flag.BoolVar(&cfg.ValidateK8sAccess, "validate-k8s-access", cfg.ValidateK8sAccess, "Validate kubectl connectivity and list pods, then exit. Use -kube-context to select context. (PGWD_VALIDATE_K8S_ACCESS)")
 	flag.Parse()
 	return *showVersionFlag
 }
@@ -465,6 +466,13 @@ func main() {
 	cfg := config.FromEnv()
 	if parseFlags(&cfg) {
 		printVersion()
+		os.Exit(0)
+	}
+	if cfg.ValidateK8sAccess {
+		ctx := context.Background()
+		if err := kube.ValidateKubernetesAccess(ctx, cfg.KubeContext); err != nil {
+			log.Fatalf("validate-k8s-access: %v", err)
+		}
 		os.Exit(0)
 	}
 	validateConfig(&cfg)

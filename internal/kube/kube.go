@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -26,6 +27,23 @@ func RequireKubectl() error {
 	_, err := exec.LookPath("kubectl")
 	if err != nil {
 		return fmt.Errorf("kubectl not found in PATH (required for -kube-postgres): %w", err)
+	}
+	return nil
+}
+
+// ValidateKubernetesAccess checks kubectl is in PATH, runs kubectl get pods -A (with optional context),
+// and streams output to stdout. Returns error if kubectl fails or the cluster is unreachable.
+func ValidateKubernetesAccess(ctx context.Context, kubeContext string) error {
+	kubectl, err := exec.LookPath("kubectl")
+	if err != nil {
+		return fmt.Errorf("kubectl not found in PATH: %w", err)
+	}
+	args := append(contextArgs(kubeContext), "get", "pods", "-A")
+	cmd := exec.CommandContext(ctx, kubectl, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("kubectl get pods failed: %w", err)
 	}
 	return nil
 }

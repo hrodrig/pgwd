@@ -47,6 +47,8 @@ type Config struct {
 	ThresholdLevels         string // comma-separated percentages for 3-tier alerts, e.g. "75,85,95" (attention/alert/danger). Used when both total and active are 0.
 	// TestMaxConnections: if > 0, use instead of server max_connections for defaults and display (for testing alerts).
 	TestMaxConnections int
+	// ValidateK8sAccess: if true, validate kubectl connectivity and list pods, then exit. Uses KubeContext if set.
+	ValidateK8sAccess bool
 }
 
 func env(key, def string) string {
@@ -99,6 +101,7 @@ func FromEnv() Config {
 		DefaultThresholdPercent: envInt("DEFAULT_THRESHOLD_PERCENT", 80),
 		ThresholdLevels:         env("THRESHOLD_LEVELS", DefaultThresholdLevels),
 		TestMaxConnections:      envInt("TEST_MAX_CONNECTIONS", 0),
+		ValidateK8sAccess:       envBool("VALIDATE_K8S_ACCESS", false),
 	}
 }
 

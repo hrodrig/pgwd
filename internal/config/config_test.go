@@ -22,7 +22,7 @@ func TestFromEnv_Defaults(t *testing.T) {
 	prefixes := []string{"PGWD_DB_URL", "PGWD_KUBE_POSTGRES", "PGWD_KUBE_LOCAL_PORT", "PGWD_KUBE_PASSWORD_VAR", "PGWD_KUBE_PASSWORD_CONTAINER",
 		"PGWD_THRESHOLD_TOTAL", "PGWD_THRESHOLD_ACTIVE", "PGWD_THRESHOLD_IDLE",
 		"PGWD_STALE_AGE", "PGWD_THRESHOLD_STALE", "PGWD_SLACK_WEBHOOK", "PGWD_LOKI_URL", "PGWD_LOKI_LABELS",
-		"PGWD_INTERVAL", "PGWD_DRY_RUN", "PGWD_FORCE_NOTIFICATION", "PGWD_NOTIFY_ON_CONNECT_FAILURE", "PGWD_DEFAULT_THRESHOLD_PERCENT"}
+		"PGWD_INTERVAL", "PGWD_DRY_RUN", "PGWD_FORCE_NOTIFICATION", "PGWD_NOTIFY_ON_CONNECT_FAILURE", "PGWD_DEFAULT_THRESHOLD_PERCENT", "PGWD_VALIDATE_K8S_ACCESS"}
 	for _, p := range prefixes {
 		os.Unsetenv(p)
 	}
@@ -39,8 +39,16 @@ func TestFromEnv_Defaults(t *testing.T) {
 	if cfg.DefaultThresholdPercent != 80 {
 		t.Errorf("DefaultThresholdPercent default: got %d", cfg.DefaultThresholdPercent)
 	}
-	if cfg.DryRun || cfg.ForceNotification || cfg.NotifyOnConnectFailure {
-		t.Errorf("DryRun=%v ForceNotification=%v NotifyOnConnectFailure=%v", cfg.DryRun, cfg.ForceNotification, cfg.NotifyOnConnectFailure)
+	if cfg.DryRun || cfg.ForceNotification || cfg.NotifyOnConnectFailure || cfg.ValidateK8sAccess {
+		t.Errorf("DryRun=%v ForceNotification=%v NotifyOnConnectFailure=%v ValidateK8sAccess=%v", cfg.DryRun, cfg.ForceNotification, cfg.NotifyOnConnectFailure, cfg.ValidateK8sAccess)
+	}
+}
+
+func TestFromEnv_ValidateK8sAccess(t *testing.T) {
+	defer setEnv("PGWD_VALIDATE_K8S_ACCESS", "true")()
+	cfg := FromEnv()
+	if !cfg.ValidateK8sAccess {
+		t.Error("ValidateK8sAccess: expected true when PGWD_VALIDATE_K8S_ACCESS=true")
 	}
 }
 
