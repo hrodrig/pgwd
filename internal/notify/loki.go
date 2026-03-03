@@ -14,7 +14,7 @@ import (
 // Loki sends log entries to Loki's push API.
 type Loki struct {
 	URL    string
-	Labels map[string]string // e.g. job=pgwd, level=warning
+	Labels map[string]string // e.g. app=pgwd, env=prod
 	Client *http.Client
 }
 
@@ -28,21 +28,20 @@ type lokiStream struct {
 	Values [][]string        `json:"values"` // [[nanosecond_timestamp, line], ...]
 }
 
-// Send pushes a log line to Loki.
-func (l *Loki) Send(ctx context.Context, ev Event) error {
-	client := l.Client
-	if client == nil {
-		client = http.DefaultClient
-	}
-
+// PushPayload returns the JSON body that Send posts to Loki. Useful for debugging and tests.
+func (l *Loki) PushPayload(ev Event) ([]byte, error) {
 	labels := make(map[string]string)
 	for k, v := range l.Labels {
 		labels[k] = v
 	}
-	if labels["job"] == "" {
-		labels["job"] = "pgwd"
+	if labels["app"] == "" {
+		labels["app"] = "pgwd"
 	}
 	labels["threshold"] = ev.Threshold
+	labels["level"] = eventLevel(ev)
+	if ev.Namespace != "" {
+		labels["namespace"] = ev.Namespace
+	}
 
 	line := fmt.Sprintf("pgwd: %s | total=%d active=%d idle=%d", ev.Message, ev.Stats.Total, ev.Stats.Active, ev.Stats.Idle)
 	if ev.MaxConnections > 0 {
@@ -67,7 +66,17 @@ func (l *Loki) Send(ctx context.Context, ev Event) error {
 			Values: [][]string{{ts, line}},
 		}},
 	}
-	raw, err := json.Marshal(body)
+	return json.Marshal(body)
+}
+
+// Send pushes a log line to Loki.
+func (l *Loki) Send(ctx context.Context, ev Event) error {
+	client := l.Client
+	if client == nil {
+		client = http.DefaultClient
+	}
+
+	raw, err := l.PushPayload(ev)
 	if err != nil {
 		return err
 	}
@@ -85,6 +94,28 @@ func (l *Loki) Send(ctx context.Context, ev Event) error {
 		return fmt.Errorf("loki push returned %s", resp.Status)
 	}
 	return nil
+}
+
+// eventLevel returns the severity level for Loki labels. Uses ev.Level when set, else derives from threshold.
+func eventLevel(ev Event) string {
+	if ev.Level != "" {
+		return ev.Level
+	}
+	return thresholdToLevel(ev.Threshold)
+}
+
+// thresholdToLevel maps threshold to severity level for Loki labels (attention, alert, danger).
+func thresholdToLevel(threshold string) string {
+	switch threshold {
+	case "too_many_clients", "connect_failure":
+		return "danger"
+	case "total", "active", "idle", "stale":
+		return "attention"
+	case "test":
+		return "attention"
+	default:
+		return "attention"
+	}
 }
 
 // ParseLokiLabels parses "k1=v1,k2=v2" into a map.

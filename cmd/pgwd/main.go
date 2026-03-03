@@ -60,11 +60,12 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.IntVar(&cfg.ThresholdStale, "threshold-stale", cfg.ThresholdStale, "Alert when stale connections (open > stale-age) >= N (PGWD_THRESHOLD_STALE)")
 	flag.StringVar(&cfg.SlackWebhook, "slack-webhook", cfg.SlackWebhook, "Slack Incoming Webhook URL (PGWD_SLACK_WEBHOOK)")
 	flag.StringVar(&cfg.LokiURL, "loki-url", cfg.LokiURL, "Loki push API URL, e.g. http://localhost:3100/loki/api/v1/push (PGWD_LOKI_URL)")
-	flag.StringVar(&cfg.LokiLabels, "loki-labels", cfg.LokiLabels, "Loki labels, e.g. job=pgwd,env=prod (PGWD_LOKI_LABELS)")
+	flag.StringVar(&cfg.LokiLabels, "loki-labels", cfg.LokiLabels, "Loki labels, e.g. app=pgwd,env=prod (PGWD_LOKI_LABELS)")
 	flag.IntVar(&cfg.Interval, "interval", cfg.Interval, "Run every N seconds; 0 = run once (PGWD_INTERVAL)")
 	flag.BoolVar(&cfg.DryRun, "dry-run", cfg.DryRun, "Only print, do not send notifications (PGWD_DRY_RUN)")
 	flag.BoolVar(&cfg.ForceNotification, "force-notification", cfg.ForceNotification, "Always send a test notification to validate delivery/format (PGWD_FORCE_NOTIFICATION)")
-	flag.IntVar(&cfg.DefaultThresholdPercent, "default-threshold-percent", cfg.DefaultThresholdPercent, "When total/active threshold are 0, set to this % of max_connections (1-100, default 80) (PGWD_DEFAULT_THRESHOLD_PERCENT)")
+	flag.IntVar(&cfg.DefaultThresholdPercent, "default-threshold-percent", cfg.DefaultThresholdPercent, "When one of total/active is 0, set it to this % of max_connections (1-100, default 80) (PGWD_DEFAULT_THRESHOLD_PERCENT)")
+	flag.StringVar(&cfg.ThresholdLevels, "threshold-levels", cfg.ThresholdLevels, "When both total and active are 0: comma-separated percentages for 3-tier alerts, e.g. 75,85,95 (attention/alert/danger). Only highest level fires. (PGWD_THRESHOLD_LEVELS)")
 	flag.StringVar(&cfg.KubePostgres, "kube-postgres", cfg.KubePostgres, "Connect via kubectl port-forward: namespace/type/name (e.g. default/svc/postgres) (PGWD_KUBE_POSTGRES)")
 	flag.StringVar(&cfg.KubeContext, "kube-context", cfg.KubeContext, "Kubectl context to use (empty = current context) (PGWD_KUBE_CONTEXT)")
 	flag.IntVar(&cfg.KubeLocalPort, "kube-local-port", cfg.KubeLocalPort, "Local port for kube port-forward (default 5432) (PGWD_KUBE_LOCAL_PORT)")
@@ -208,6 +209,20 @@ func notifyConnectFailure(ctx context.Context, senders []notify.Sender, cfg *con
 }
 
 func applyThresholdDefaults(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) error {
+	maxConn, maxConnErr := postgres.MaxConnections(ctx, pool)
+	if cfg.TestMaxConnections > 0 {
+		maxConn = cfg.TestMaxConnections
+	}
+	if !cfg.UsesLevelMode() && maxConn > 0 {
+		applySingleThresholdDefaults(cfg, maxConn)
+	}
+	if err := validateThresholdConfig(cfg, maxConn, maxConnErr); err != nil {
+		return err
+	}
+	return nil
+}
+
+func applySingleThresholdDefaults(cfg *config.Config, maxConn int) {
 	percent := cfg.DefaultThresholdPercent
 	if percent < 1 {
 		percent = 1
@@ -215,32 +230,65 @@ func applyThresholdDefaults(ctx context.Context, pool *pgxpool.Pool, cfg *config
 	if percent > 100 {
 		percent = 100
 	}
-	maxConnForDefaults, maxConnErr := postgres.MaxConnections(ctx, pool)
-	if cfg.TestMaxConnections > 0 {
-		maxConnForDefaults = cfg.TestMaxConnections
+	threshold := (maxConn * percent) / 100
+	if threshold < 1 {
+		threshold = 1
 	}
-	if maxConnForDefaults > 0 {
-		defaultThreshold := (maxConnForDefaults * percent) / 100
-		if defaultThreshold < 1 {
-			defaultThreshold = 1
-		}
-		if cfg.ThresholdTotal == 0 {
-			cfg.ThresholdTotal = defaultThreshold
-		}
-		if cfg.ThresholdActive == 0 {
-			cfg.ThresholdActive = defaultThreshold
-		}
+	if cfg.ThresholdTotal == 0 {
+		cfg.ThresholdTotal = threshold
 	}
-	if !cfg.HasAnyThreshold() && !cfg.DryRun && !cfg.ForceNotification {
+	if cfg.ThresholdActive == 0 {
+		cfg.ThresholdActive = threshold
+	}
+}
+
+func validateThresholdConfig(cfg *config.Config, maxConn int, maxConnErr error) error {
+	if cfg.UsesLevelMode() && maxConn == 0 {
 		if maxConnErr != nil {
-			return fmt.Errorf("no thresholds set and could not default from server (total/active default to default-threshold-percent of max_connections). Set -threshold-total and/or -threshold-active, or use -dry-run or -force-notification: %w", maxConnErr)
+			return fmt.Errorf("threshold-levels mode requires max_connections; could not read from server: %w", maxConnErr)
 		}
-		if maxConnForDefaults == 0 {
-			return fmt.Errorf("no thresholds set and could not default from server (server returned max_connections=0). Set -threshold-total and/or -threshold-active, or use -dry-run or -force-notification")
-		}
-		return fmt.Errorf("no thresholds set. Set -threshold-total and/or -threshold-active, or use -dry-run or -force-notification")
+		return fmt.Errorf("threshold-levels mode requires max_connections; server returned 0")
 	}
-	return nil
+	if cfg.HasAnyThreshold() || cfg.DryRun || cfg.ForceNotification {
+		return nil
+	}
+	if maxConnErr != nil {
+		return fmt.Errorf("no thresholds set and could not default from server (total/active default to default-threshold-percent of max_connections). Set -threshold-total and/or -threshold-active, or use -dry-run or -force-notification: %w", maxConnErr)
+	}
+	if maxConn == 0 {
+		return fmt.Errorf("no thresholds set and could not default from server (server returned max_connections=0). Set -threshold-total and/or -threshold-active, or use -dry-run or -force-notification")
+	}
+	return fmt.Errorf("no thresholds set. Set -threshold-total and/or -threshold-active, or use -dry-run or -force-notification")
+}
+
+// levelFromPercent returns 1, 2, or 3 when percent >= levels[0], levels[1], levels[2]; 0 otherwise.
+func levelFromPercent(percent int, levels []int) int {
+	for i := len(levels) - 1; i >= 0; i-- {
+		if percent >= levels[i] {
+			return i + 1
+		}
+	}
+	return 0
+}
+
+func levelToLabel(level int) string {
+	switch level {
+	case 1:
+		return "attention"
+	case 2:
+		return "alert"
+	case 3, 4, 5:
+		return "danger"
+	default:
+		return "attention"
+	}
+}
+
+func title(s string) string {
+	if s == "" {
+		return s
+	}
+	return strings.ToUpper(s[:1]) + s[1:]
 }
 
 func baseEvent(stats postgres.ConnectionStats, maxConn int, override bool, cluster, client, ns, db string) notify.Event {
@@ -255,28 +303,52 @@ func baseEvent(stats postgres.ConnectionStats, maxConn int, override bool, clust
 	}
 }
 
-func collectEvents(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, stats postgres.ConnectionStats, maxConn int, cluster, client, ns, db string) []notify.Event {
-	var events []notify.Event
-	override := cfg.TestMaxConnections > 0
-	ev := baseEvent(stats, maxConn, override, cluster, client, ns, db)
-
-	if cfg.ThresholdStale > 0 && cfg.StaleAge > 0 {
-		staleCount, err := postgres.StaleCount(ctx, pool, cfg.StaleAge)
-		if err != nil {
-			log.Printf("stale count: %v", err)
-		} else if staleCount >= cfg.ThresholdStale {
-			e := ev
-			e.Threshold = "stale"
-			e.ThresholdValue = cfg.ThresholdStale
-			e.Message = fmt.Sprintf("Stale connections (open > %ds): %d >= %d", cfg.StaleAge, staleCount, cfg.ThresholdStale)
-			events = append(events, e)
-		}
+func collectLevelModeEvent(ev notify.Event, cfg *config.Config, stats postgres.ConnectionStats, maxConn int) *notify.Event {
+	levels := config.ParseThresholdLevels(cfg.ThresholdLevels)
+	if len(levels) < 3 {
+		return nil
 	}
+	totalPercent := stats.Total * 100 / maxConn
+	activePercent := stats.Active * 100 / maxConn
+	totalLevel := levelFromPercent(totalPercent, levels)
+	activeLevel := levelFromPercent(activePercent, levels)
+	highestLevel := totalLevel
+	threshold := "total"
+	thresholdValue := 0
+	if activeLevel > totalLevel {
+		highestLevel = activeLevel
+		threshold = "active"
+		thresholdValue = (maxConn * levels[activeLevel-1]) / 100
+	} else if totalLevel > 0 {
+		thresholdValue = (maxConn * levels[totalLevel-1]) / 100
+	}
+	if highestLevel == 0 {
+		return nil
+	}
+	val := stats.Total
+	if threshold == "active" {
+		val = stats.Active
+	}
+	e := ev
+	e.Threshold = threshold
+	e.ThresholdValue = thresholdValue
+	e.Level = levelToLabel(highestLevel)
+	e.Message = fmt.Sprintf("%s connections %d >= %d (%d%% of max) — %s", title(threshold), val, thresholdValue, levels[highestLevel-1], e.Level)
+	return &e
+}
+
+func collectExplicitThresholdEvents(ev notify.Event, cfg *config.Config, stats postgres.ConnectionStats, maxConn int) []notify.Event {
+	var events []notify.Event
+	levels := config.ParseThresholdLevels(config.DefaultThresholdLevels)
+	addLevel := maxConn > 0 && len(levels) >= 3
 	if cfg.ThresholdTotal > 0 && stats.Total >= cfg.ThresholdTotal {
 		e := ev
 		e.Threshold = "total"
 		e.ThresholdValue = cfg.ThresholdTotal
 		e.Message = fmt.Sprintf("Total connections %d >= %d", stats.Total, cfg.ThresholdTotal)
+		if addLevel {
+			e.Level = levelToLabel(levelFromPercent(stats.Total*100/maxConn, levels))
+		}
 		events = append(events, e)
 	}
 	if cfg.ThresholdActive > 0 && stats.Active >= cfg.ThresholdActive {
@@ -284,7 +356,29 @@ func collectEvents(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, 
 		e.Threshold = "active"
 		e.ThresholdValue = cfg.ThresholdActive
 		e.Message = fmt.Sprintf("Active connections %d >= %d", stats.Active, cfg.ThresholdActive)
+		if addLevel {
+			e.Level = levelToLabel(levelFromPercent(stats.Active*100/maxConn, levels))
+		}
 		events = append(events, e)
+	}
+	return events
+}
+
+func collectEvents(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, stats postgres.ConnectionStats, maxConn int, cluster, client, ns, db string) []notify.Event {
+	var events []notify.Event
+	ev := baseEvent(stats, maxConn, cfg.TestMaxConnections > 0, cluster, client, ns, db)
+
+	if cfg.ThresholdStale > 0 && cfg.StaleAge > 0 {
+		if e := collectStaleEvent(ctx, pool, cfg, ev); e != nil {
+			events = append(events, *e)
+		}
+	}
+	if cfg.UsesLevelMode() && maxConn > 0 {
+		if e := collectLevelModeEvent(ev, cfg, stats, maxConn); e != nil {
+			events = append(events, *e)
+		}
+	} else {
+		events = append(events, collectExplicitThresholdEvents(ev, cfg, stats, maxConn)...)
 	}
 	if cfg.ThresholdIdle > 0 && stats.Idle >= cfg.ThresholdIdle {
 		e := ev
@@ -301,6 +395,22 @@ func collectEvents(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, 
 		events = append(events, e)
 	}
 	return events
+}
+
+func collectStaleEvent(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, ev notify.Event) *notify.Event {
+	staleCount, err := postgres.StaleCount(ctx, pool, cfg.StaleAge)
+	if err != nil {
+		log.Printf("stale count: %v", err)
+		return nil
+	}
+	if staleCount < cfg.ThresholdStale {
+		return nil
+	}
+	e := ev
+	e.Threshold = "stale"
+	e.ThresholdValue = cfg.ThresholdStale
+	e.Message = fmt.Sprintf("Stale connections (open > %ds): %d >= %d", cfg.StaleAge, staleCount, cfg.ThresholdStale)
+	return &e
 }
 
 func sendEvents(ctx context.Context, senders []notify.Sender, cfg *config.Config, events []notify.Event) {

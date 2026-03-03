@@ -26,7 +26,20 @@ func slackHeader(ev Event, ts string) string {
 	case "too_many_clients":
 		h = ":rotating_light: *pgwd* – URGENT: too many clients (DB saturated)\n"
 	default:
-		h = ":warning: *pgwd* – Threshold exceeded\n"
+		if ev.Level != "" {
+			switch ev.Level {
+			case "attention":
+				h = ":large_yellow_circle: *pgwd* – Attention\n"
+			case "alert":
+				h = ":large_orange_circle: *pgwd* – Alert\n"
+			case "danger":
+				h = ":red_circle: *pgwd* – Danger\n"
+			default:
+				h = ":warning: *pgwd* – Threshold exceeded\n"
+			}
+		} else {
+			h = ":warning: *pgwd* – Threshold exceeded\n"
+		}
 	}
 	h += "*" + ev.Message + "*\n"
 	h += fmt.Sprintf("• *Time*: %s\n", ts)
@@ -67,6 +80,16 @@ func slackConnLine(ev Event) string {
 }
 
 func slackColor(ev Event) string {
+	if ev.Level != "" {
+		switch ev.Level {
+		case "attention":
+			return "#FFD700" // yellow
+		case "alert":
+			return "#FF8C00" // orange
+		case "danger":
+			return "#CC0000" // red
+		}
+	}
 	switch ev.Threshold {
 	case "test":
 		return "good"

@@ -1,0 +1,20 @@
+# Loki stack for testing pgwd notifications. Use alongside compose.yaml (Postgres).
+#
+# Usage (from repo root):
+#   docker compose -f testing/compose.yaml up -d          # Postgres
+#   docker compose -f testing/compose-loki.yaml up -d     # Loki
+#   export PGWD_TEST_DB_URL="postgres://pgwd:pgwd@localhost:5432/pgwd?sslmode=disable"
+#   export PGWD_TEST_LOKI_URL="http://localhost:3100/loki/api/v1/push"
+#   go test ./internal/notify/... -v -run Loki
+#
+# Stop:
+#   docker compose -f testing/compose-loki.yaml down
+
+services:
+  loki:
+    image: grafana/loki:2.9.4
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki-config.yaml:/etc/loki/config.yaml:ro
+    command: ["-config.file=/etc/loki/config.yaml"]

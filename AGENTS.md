@@ -20,8 +20,9 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 ## Test commands
 
 - Run all tests: `make test` or `go test ./...`
-- Tests exist in `internal/config` and `internal/notify`. No tests in `cmd/pgwd` or `internal/postgres` (optional future: testcontainers or mocks).
-- Before committing or proposing changes, ensure `go test ./...` passes.
+- **Integration tests:** `make test-integration` (requires Docker). Starts Postgres and Loki via `testing/compose.yaml` and `testing/compose-loki.yaml`, runs integration tests, then stops. Must pass before release (see `.cursor/rules/release-tests.mdc`).
+- Tests exist in `internal/config`, `internal/notify` (unit + Loki integration), and `internal/postgres` (integration, requires `PGWD_TEST_DB_URL`).
+- Before committing or proposing changes, ensure `go test ./...` passes. Before release, also run `make test-integration`.
 
 ## Code style and conventions
 
@@ -32,7 +33,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 ## Git flow
 
 - **Branches:** Work on `develop`. `main` is production and is only updated from `develop` at release time (see `.cursor/rules/git-flow.mdc`).
-- **Releases:** Before releasing: ensure **all tests pass** (`make test` or `go test ./...`). Then merge `develop` → `main`, and on `main`: create annotated tag (e.g. `git tag -a v0.2.0 -m "Release 0.2.0"`), push tag, run `make release` (requires goreleaser). Do not commit features directly to `main`. See `.cursor/rules/release-tests.mdc`.
+- **Releases:** Before releasing: run **`make release-check`** (lint, test, test-integration, docker-scan). All must pass — they are MANDATORY. Then merge `develop` → `main`, and on `main`: create annotated tag (e.g. `git tag -a v0.2.0 -m "Release 0.2.0"`), push tag, run `make release` (requires goreleaser). `make release` runs `release-check` first. Do not commit features directly to `main`. See `.cursor/rules/release-tests.mdc`.
 - **Versioning:** Semantic versioning (MAJOR.MINOR.PATCH) for tags.
 
 ## Docker

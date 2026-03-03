@@ -12,6 +12,8 @@ type Event struct {
 	Threshold      string // e.g. "total", "active", "idle"
 	ThresholdValue int
 	Message        string
+	// Level is the severity for 3-tier alerts: "attention", "alert", "danger". When set, Loki and Slack use it. When empty, derived from threshold.
+	Level string
 	// MaxConnections is the server max_connections (0 = unknown, e.g. connect_failure).
 	MaxConnections int
 	// MaxConnectionsIsOverride is true when MaxConnections came from -test-max-connections (test override), so total can exceed it.

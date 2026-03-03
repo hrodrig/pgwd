@@ -1,6 +1,6 @@
 # pgwd — Postgres Watch Dog
 
-[![Version](https://img.shields.io/badge/version-0.2.4-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.3.0-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -25,12 +25,12 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 # See all options
 pgwd -h
 
-# Minimal: check once, alert to Slack (total/active default to 80% of server max_connections; change with -default-threshold-percent)
+# Minimal: check once, alert to Slack (3-tier levels 75/85/95% by default; or use -default-threshold-percent)
 pgwd -db-url "postgres://user:pass@localhost:5432/mydb" \
      -slack-webhook "https://hooks.slack.com/services/..."
 
-# Same but alert at 70% of max_connections
-pgwd -db-url "postgres://..." -slack-webhook "https://..." -default-threshold-percent 70
+# Custom 3-tier levels (default 75,85,95)
+pgwd -db-url "postgres://..." -slack-webhook "https://..." -threshold-levels 70,85,90
 
 # Or set an explicit threshold
 pgwd -db-url "postgres://user:pass@localhost:5432/mydb" \
@@ -124,7 +124,7 @@ pgwd -db-url "postgres://..." -threshold-total 80 -slack-webhook "https://hooks.
 # Loki only (optional labels)
 pgwd -db-url "postgres://..." -threshold-total 80 \
      -loki-url "http://localhost:3100/loki/api/v1/push" \
-     -loki-labels "job=pgwd,env=prod,db=myapp"
+     -loki-labels "app=pgwd,env=prod,db=myapp"
 
 # Slack and Loki (same event sent to both)
 pgwd -db-url "postgres://..." -threshold-total 80 \
@@ -164,7 +164,7 @@ pgwd -db-url "postgres://..." -loki-url "http://localhost:3100/loki/api/v1/push"
 | **Pre-production test** | `-dry-run` and low thresholds to see current counts without sending alerts. |
 | **Validate notifications** | `-force-notification` with Slack/Loki: sends one test message regardless of thresholds. Use one-shot to confirm delivery, format, and how messages look. (If the connection to Postgres fails, pgwd always sends a connect-failure alert when a notifier is configured.) |
 | **Test alerts without low max_connections** | Use `-test-max-connections N` (e.g. 20) with `-force-notification` or low thresholds: thresholds and messages use N as “max_connections”, while stats stay real. Notifications show “(test override)” so total can exceed N. |
-| **Zero config (use defaults)** | Only set `-db-url` and a notifier; total and active thresholds default to `default-threshold-percent` (default 80%) of server `max_connections`. Use `-default-threshold-percent` to change (e.g. 70 or 90). |
+| **Zero config (use defaults)** | Only set `-db-url` and a notifier; pgwd uses 3-tier levels (75,85,95%) by default. Use `-threshold-levels` to customize or `-default-threshold-percent` when using explicit thresholds. |
 | **Multiple environments** | Set `PGWD_*` in env per environment; override `-db-url` or `-loki-labels` per deploy. |
 | **Postgres in Kubernetes** | Use `-kube-postgres namespace/svc/name` (or `namespace/pod/name`). pgwd runs `kubectl port-forward` and connects to localhost. Optionally put `DISCOVER_MY_PASSWORD` in the URL to read the password from the pod's env (e.g. `POSTGRES_PASSWORD`). Requires `kubectl` in PATH. |
 | **Alert when Postgres is unreachable** | If you configure a notifier (Slack/Loki), pgwd **always** sends an alert when the connection fails (e.g. refused, timeout, or "too many clients"). No extra flag needed. |
@@ -308,17 +308,18 @@ All parameters can be set via **CLI** or **environment variables** with prefix `
 | `-threshold-stale` | `PGWD_THRESHOLD_STALE` | Alert when stale connections (open > stale-age) ≥ N |
 | `-slack-webhook` | `PGWD_SLACK_WEBHOOK` | Slack Incoming Webhook URL |
 | `-loki-url` | `PGWD_LOKI_URL` | Loki push API URL (e.g. `http://localhost:3100/loki/api/v1/push`) |
-| `-loki-labels` | `PGWD_LOKI_LABELS` | Loki labels, e.g. `job=pgwd,env=prod` |
+| `-loki-labels` | `PGWD_LOKI_LABELS` | Loki labels, e.g. `app=pgwd,env=prod` |
 | `-interval` | `PGWD_INTERVAL` | Run every N seconds; 0 = run once |
 | `-dry-run` | `PGWD_DRY_RUN` | Only print stats, do not send notifications |
 | `-force-notification` | `PGWD_FORCE_NOTIFICATION` | Always send at least one notification: test event when connected (to validate delivery, format, and channel). Requires at least one notifier. (Connection failure is always notified when a notifier is configured, with or without this flag.) |
 | `-notify-on-connect-failure` | `PGWD_NOTIFY_ON_CONNECT_FAILURE` | Legacy: connection failure is **always** notified when a notifier is configured; this flag is no longer required. Kept for backward compatibility; if set, still requires at least one notifier at startup. |
-| `-default-threshold-percent` | `PGWD_DEFAULT_THRESHOLD_PERCENT` | When total/active threshold are 0, set them to this % of max_connections (1–100). Default: 80 |
+| `-default-threshold-percent` | `PGWD_DEFAULT_THRESHOLD_PERCENT` | When one of total/active is 0, set it to this % of max_connections (1–100). Default: 80. Ignored when using threshold-levels mode. |
+| `-threshold-levels` | `PGWD_THRESHOLD_LEVELS` | When both total and active are 0: comma-separated percentages for 3-tier alerts (e.g. 75,85,95). Levels: attention (1st), alert (2nd), danger (3rd). Only highest breached level fires. Default: 75,85,95. |
 | `-test-max-connections` | `PGWD_TEST_MAX_CONNECTIONS` | Override server `max_connections` for threshold defaults and display (testing only). When set, defaults and notifications use this value instead of the server’s; stats (total/active/idle) remain real. Notifications show “(test override)” so you can simulate e.g. a low limit and trigger alerts without a real low max_connections. |
 
 **Stale connections:** A connection is "stale" if it has been open longer than `stale-age` seconds (based on `backend_start` in `pg_stat_activity`). Use this to detect leaks or connections that are never closed. When using `threshold-stale`, `stale-age` must be set and > 0.
 
-**Default thresholds:** If you do not set `threshold-total` or `threshold-active` (leave them 0), pgwd sets them to a **percentage of the server's `max_connections`** after connecting. The percentage is controlled by **`-default-threshold-percent`** / **`PGWD_DEFAULT_THRESHOLD_PERCENT`** (default **80**, range 1–100). Example: with `max_connections=100` and default percent 80, total and active thresholds become 80; with `-default-threshold-percent 70` they become 70. So you can run with only `-db-url` and a notifier and get alerts at your chosen percentage of the server limit. Idle and stale have no default (0 = disabled). Defaults are applied once at startup; the DB user must be able to read `max_connections` (any normal role can).
+**Default thresholds:** If you do not set `threshold-total` or `threshold-active` (leave both 0), pgwd uses **3-tier level mode** with **`-threshold-levels`** (default **75,85,95**). At 75% of max_connections → attention (yellow); at 85% → alert (orange); at 95% → danger (red). Only the highest breached level fires. Use `-threshold-levels 70,80,90` to customize. If you set one of total/active explicitly, the other defaults from **`-default-threshold-percent`** (default 80). Idle and stale have no default (0 = disabled). The DB user must be able to read `max_connections` (any normal role can).
 
 ## Install
 
@@ -348,7 +349,66 @@ make install
 # Custom install path: GOBIN=~/bin make install  (default is $HOME/go/bin)
 ```
 
-**Release (GitHub):** From branch `main`, after tagging (e.g. `git tag v0.2.4`), run `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
+**Release (GitHub):** See [Release steps](#release-steps) below for the full workflow. Quick: from `main`, `git tag v0.3.0`, `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
+
+### Release steps
+
+Example: releasing **v1.0.0**. Copy, adjust the version and token, then run.
+
+**1. Prerequisites** (install once):
+
+```bash
+brew install goreleaser grype
+# Docker: required for test-integration and docker-scan
+```
+
+**2. On `develop`** — ensure everything is committed and checks pass:
+
+```bash
+git checkout develop
+git pull origin develop
+
+# Mandatory checks (all must pass)
+make release-check
+# Runs: lint, test, test-integration, docker-scan
+```
+
+**3. Update version** — edit `VERSION` and `CHANGELOG.md`:
+
+```bash
+echo "1.0.0" > VERSION
+# Edit CHANGELOG.md: move [Unreleased] items into [1.0.0], update compare links
+git add VERSION CHANGELOG.md README.md  # README badge if needed
+git commit -m "Release 1.0.0"
+git push origin develop
+```
+
+**4. Merge to `main`** and tag:
+
+```bash
+git checkout main
+git pull origin main
+git merge develop
+git push origin main
+
+git tag -a v1.0.0 -m "Release 1.0.0"
+git push origin v1.0.0
+```
+
+**5. Publish release** — requires tokens:
+
+```bash
+export GITHUB_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+export HOMEBREW_TAP_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+make release
+```
+
+- **GITHUB_TOKEN:** `repo` scope — GitHub release, Docker push to ghcr.io.
+- **HOMEBREW_TAP_TOKEN:** `repo` scope — pushes the Homebrew cask to the tap (`hrodrig/homebrew-pgwd`). Can be the same token as `GITHUB_TOKEN`.
+
+Use a [Personal Access Token](https://github.com/settings/tokens) with `repo` scope. Before releasing, verify each token's **expiration date** and **scopes** at [github.com/settings/tokens](https://github.com/settings/tokens).
+
+**Snapshot (no publish):** `make snapshot` — outputs to `dist/` without pushing.
 
 ## Testing
 
@@ -401,7 +461,7 @@ Using **127.0.0.1** and host port **5433** avoids hitting a local Postgres on 54
 
 ## Requirements
 
-- At least one of: a threshold (`threshold-total`, `threshold-active`, `threshold-idle`, or `threshold-stale` with `stale-age`), `-dry-run`, or `-force-notification`. If you set only `-db-url` and a notifier, pgwd defaults total and active to `default-threshold-percent` (default 80) of `max_connections`.
+- At least one of: a threshold (`threshold-total`, `threshold-active`, `threshold-idle`, or `threshold-stale` with `stale-age`), `-dry-run`, or `-force-notification`. If you set only `-db-url` and a notifier, pgwd uses 3-tier levels (75,85,95%) of `max_connections`.
 - If not using `-dry-run`: at least one notifier (`slack-webhook` or `loki-url`). For `-force-notification`, a notifier is required.
 - For `threshold-stale`, `stale-age` must be set and greater than 0.
 
@@ -436,17 +496,19 @@ Connections: total=<Total>, active=<Active>, idle=<Idle> (limit <Threshold>=<Thr
 - `<Threshold>` is one of `total`, `active`, `idle`, `stale`, or `test` (for force-notification).
 - `<ThresholdValue>` is the configured limit that was exceeded (0 for `test`).
 
+**3-tier levels:** When using `-threshold-levels` (or when level is derived from percentage), Slack shows distinct colors and emojis: **attention** (yellow bar, yellow circle), **alert** (orange bar, orange circle), **danger** (red bar, red circle).
+
 ## Loki
 
-Set the Loki push endpoint URL (e.g. `http://loki:3100/loki/api/v1/push`). Optionally set `PGWD_LOKI_LABELS` for stream labels (e.g. `job=pgwd,env=prod`); default includes `job=pgwd`.
+Set the Loki push endpoint URL (e.g. `http://loki:3100/loki/api/v1/push`). Optionally set `PGWD_LOKI_LABELS` for stream labels (e.g. `app=pgwd,env=prod`); default includes `app=pgwd`.
 
-**Notification format:** Each alert is one log line in a stream. The stream has labels from `PGWD_LOKI_LABELS` plus `job=pgwd` (if not set) and `threshold=<total|active|idle|stale|test>`. The log line is:
+**Notification format:** Each alert is one log line in a stream. The stream has labels from `PGWD_LOKI_LABELS` plus `app=pgwd` (if not set), `threshold`, `level` (attention/alert/danger), and `namespace` (when using `-kube-postgres`). The log line is:
 
 ```
 pgwd threshold exceeded: <Message> | total=<Total> active=<Active> idle=<Idle> (limit <Threshold>=<ThresholdValue>)
 ```
 
-Same placeholders as Slack. Timestamp is the time of the push. You can query in Grafana or LogCLI by label (e.g. `{job="pgwd", threshold="total"}`).
+Same placeholders as Slack. Timestamp is the time of the push. You can query in Grafana or LogCLI by label (e.g. `{app="pgwd", threshold="total"}` or `{app="pgwd", level="danger"}`).
 
 ---
 
@@ -455,7 +517,7 @@ Same placeholders as Slack. Timestamp is the time of the push. You can query in 
 | Symptom | What to check |
 |--------|----------------|
 | **"missing database URL"** | Set `PGWD_DB_URL` or `-db-url`. The URL must be a valid [PostgreSQL connection string](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING). |
-| **"no thresholds set and could not default from server..."** | pgwd could not read `max_connections` from the server (error or 0). Set `-threshold-total` and/or `-threshold-active` explicitly, or use `-dry-run` or `-force-notification`. With a normal Postgres, only `-db-url` and a notifier should be enough (defaults to 80% of `max_connections`). |
+| **"no thresholds set and could not default from server..."** | pgwd could not read `max_connections` from the server (error or 0). Set `-threshold-total` and/or `-threshold-active` explicitly, or use `-dry-run` or `-force-notification`. With a normal Postgres, only `-db-url` and a notifier should be enough (defaults to 3-tier levels 75,85,95%). |
 | **"no notifier configured"** | Set `PGWD_SLACK_WEBHOOK` or `PGWD_LOKI_URL` (or use `-dry-run` to skip notifications). |
 | **"force-notification requires at least one notifier"** | Use `-force-notification` together with `-slack-webhook` and/or `-loki-url`. |
 | **"notify-on-connect-failure requires at least one notifier"** | You set `-notify-on-connect-failure` but have no notifier. Add `-slack-webhook` and/or `-loki-url`. (Connect failure is always notified when a notifier is configured; the flag is optional.) |
@@ -472,7 +534,7 @@ Same placeholders as Slack. Timestamp is the time of the push. You can query in 
 **Published image (each release):** Multi-arch images (linux/amd64, linux/arm64) are published to [GitHub Container Registry](https://github.com/hrodrig/pgwd/pkgs/container/pgwd) as `ghcr.io/hrodrig/pgwd`. Use a version tag or `latest`:
 
 ```bash
-docker pull ghcr.io/hrodrig/pgwd:v0.2.4
+docker pull ghcr.io/hrodrig/pgwd:v0.3.0
 # or
 docker pull ghcr.io/hrodrig/pgwd:latest
 ```
@@ -498,13 +560,13 @@ This runs `docker build` with `--build-arg VERSION=...`, `--build-arg COMMIT=...
 
 **Validate the image**
 
-Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.2.4`), or `pgwd` if you built locally with `make docker-build`:
+Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.3.0`), or `pgwd` if you built locally with `make docker-build`:
 
 ```bash
 # Help (no DB needed)
 docker run --rm ghcr.io/hrodrig/pgwd:latest -h
 
-# Version (should show e.g. pgwd v0.2.4 (commit ..., built ...))
+# Version (should show e.g. pgwd v0.3.0 (commit ..., built ...))
 docker run --rm ghcr.io/hrodrig/pgwd:latest --version
 
 # Expect "missing database URL" (validates startup path)

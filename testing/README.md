@@ -48,4 +48,109 @@ Stop:
 docker compose -f testing/compose.yaml down
 ```
 
+---
+
+## Loki (compose-loki.yaml)
+
+Separate compose for the Loki stack. Used to validate that pgwd notifications are correctly formatted when pushed to Loki (for Grafana alerting).
+
+**Start Loki** (from repo root):
+
+```bash
+docker compose -f testing/compose-loki.yaml up -d
+```
+
+Loki may take ~20 seconds to become ready. Check: `curl http://localhost:3100/ready` (should return `ready`).
+
+**Run Loki integration test** (validates push + query + log format):
+
+```bash
+export PGWD_TEST_LOKI_URL="http://localhost:3100/loki/api/v1/push"
+go test ./internal/notify/... -v -run TestLoki_Integration$
+```
+
+**Show payload sent and response received** (for debugging / Grafana alert rules):
+
+```bash
+export PGWD_TEST_LOKI_URL="http://localhost:3100/loki/api/v1/push"
+export PGWD_TEST_LOKI_VERBOSE=1
+go test ./internal/notify/... -v -run TestLoki_Integration_ShowPayload
+```
+
+Without `PGWD_TEST_LOKI_URL` the tests are skipped.
+
+**Stop Loki:**
+
+```bash
+docker compose -f testing/compose-loki.yaml down
+```
+
+### Loki payload reference (for Grafana alerts and jq)
+
+**Request** (POST `http://localhost:3100/loki/api/v1/push`):
+
+```json
+{
+  "streams": [
+    {
+      "stream": {
+        "app": "pgwd",
+        "threshold": "total",
+        "level": "attention",
+        "env": "prod",
+        "namespace": "mydb"
+      },
+      "values": [
+        ["1730500000000000000", "pgwd: Total connections 16 >= 16 | total=16 active=8 idle=8 max_connections=20 (limit total=16)"]
+      ]
+    }
+  ]
+}
+```
+
+Labels: `app` (default pgwd), `threshold`, `level` (attention/alert/danger), `namespace` (when in K8s). Level mapping: `connect_failure`/`too_many_clients` → danger; `total`/`active`/`idle`/`stale`/`test` → attention.
+
+**Response** (GET `http://localhost:3100/loki/api/v1/query_range?query={app="pgwd"}`):
+
+```json
+{
+  "status": "success",
+  "data": {
+    "resultType": "streams",
+    "result": [
+      {
+        "stream": {
+          "app": "pgwd",
+          "threshold": "total",
+          "level": "attention",
+          "env": "prod",
+          "namespace": "mydb"
+        },
+        "values": [
+          ["1730500000000000000", "pgwd: Total connections 16 >= 16 | total=16 active=8 idle=8 max_connections=20 (limit total=16)"]
+        ]
+      }
+    ]
+  }
+}
+```
+
+**jq examples** (for alert rules or scripts):
+
+```bash
+# Extract log lines only
+curl -s "http://localhost:3100/loki/api/v1/query_range?query={app=\"pgwd\"}" | jq -r '.data.result[].values[][1]'
+
+# Extract threshold and level labels
+curl -s "http://localhost:3100/loki/api/v1/query_range?query={app=\"pgwd\"}" | jq -r '.data.result[].stream | "\(.threshold) \(.level)"'
+
+# Extract lines matching level=danger (connect_failure, too_many_clients)
+curl -s "http://localhost:3100/loki/api/v1/query_range?query={app=\"pgwd\",level=\"danger\"}" | jq -r '.data.result[].values[][1]'
+
+# Filter by namespace (K8s)
+curl -s "http://localhost:3100/loki/api/v1/query_range?query={app=\"pgwd\",namespace=\"mydb\"}" | jq -r '.data.result[].values[][1]'
+```
+
+---
+
 **Production:** Use a non-superuser role for application connections so `superuser_reserved_connections` (default 3) stays available for DBA/admin access when the instance is saturated. See [PostgreSQL: Connection and Authentication](https://www.postgresql.org/docs/current/runtime-config-connection.html) (`superuser_reserved_connections`).

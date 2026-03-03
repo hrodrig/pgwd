@@ -80,6 +80,7 @@ func TestHasAnyThreshold(t *testing.T) {
 		{"active", Config{ThresholdActive: 50}, true},
 		{"idle", Config{ThresholdIdle: 40}, true},
 		{"stale", Config{ThresholdStale: 1}, true},
+		{"level mode", Config{ThresholdTotal: 0, ThresholdActive: 0, ThresholdLevels: "75,85,95"}, true},
 		{"all", Config{ThresholdTotal: 1, ThresholdActive: 1, ThresholdIdle: 1, ThresholdStale: 1}, true},
 	}
 	for _, tt := range tests {
@@ -88,6 +89,55 @@ func TestHasAnyThreshold(t *testing.T) {
 				t.Errorf("HasAnyThreshold() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestParseThresholdLevels(t *testing.T) {
+	tests := []struct {
+		s    string
+		want []int
+	}{
+		{"75,85,95", []int{75, 85, 95}},
+		{"70,80,90", []int{70, 80, 90}},
+		{" 75 , 85 , 95 ", []int{75, 85, 95}},
+		{"", nil},
+		{"75", nil},
+		{"75,85", nil},
+		{"75,85,95,99", []int{75, 85, 95, 99}},
+		{"75,70,95", nil},
+		{"0,85,95", nil},
+		{"75,101,95", nil},
+	}
+	for _, tt := range tests {
+		got := ParseThresholdLevels(tt.s)
+		if len(got) != len(tt.want) {
+			t.Errorf("ParseThresholdLevels(%q) = %v, want %v", tt.s, got, tt.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tt.want[i] {
+				t.Errorf("ParseThresholdLevels(%q) = %v, want %v", tt.s, got, tt.want)
+				break
+			}
+		}
+	}
+}
+
+func TestUsesLevelMode(t *testing.T) {
+	tests := []struct {
+		c    Config
+		want bool
+	}{
+		{Config{ThresholdTotal: 0, ThresholdActive: 0, ThresholdLevels: "75,85,95"}, true},
+		{Config{ThresholdTotal: 80, ThresholdActive: 0, ThresholdLevels: "75,85,95"}, false},
+		{Config{ThresholdTotal: 0, ThresholdActive: 50, ThresholdLevels: "75,85,95"}, false},
+		{Config{ThresholdTotal: 0, ThresholdActive: 0, ThresholdLevels: "75,85"}, false},
+		{Config{ThresholdTotal: 0, ThresholdActive: 0, ThresholdLevels: ""}, false},
+	}
+	for _, tt := range tests {
+		if got := tt.c.UsesLevelMode(); got != tt.want {
+			t.Errorf("UsesLevelMode() for %+v = %v, want %v", tt.c, got, tt.want)
+		}
 	}
 }
 
@@ -135,6 +185,7 @@ func TestOverrideWith(t *testing.T) {
 		DryRun                  *bool
 		ForceNotification       *bool
 		DefaultThresholdPercent *int
+		ThresholdLevels         *string
 	}{
 		DBURL: &db, ThresholdTotal: &total, DefaultThresholdPercent: &percent,
 	})
