@@ -107,9 +107,11 @@ func validateConfig(cfg *config.Config) {
 	}
 }
 
-func setupKube(ctx context.Context, cfg *config.Config) {
+// setupKube starts port-forward and updates cfg.DBURL when -kube-postgres is set.
+// Returns a cleanup function that must be called on exit (e.g. defer in main).
+func setupKube(ctx context.Context, cfg *config.Config) (cleanup func()) {
 	if cfg.KubePostgres == "" {
-		return
+		return func() {}
 	}
 	if err := kube.RequireKubectl(); err != nil {
 		log.Fatalf("kube-postgres: %v", err)
@@ -137,11 +139,11 @@ func setupKube(ctx context.Context, cfg *config.Config) {
 		log.Fatal("kube: failed to build DB URL (check -db-url format)")
 	}
 	cfg.DBURL = finalURL
-	cleanup, err := kube.StartPortForward(ctx, cfg.KubeContext, namespace, resource, cfg.KubeLocalPort)
+	cleanup, err = kube.StartPortForward(ctx, cfg.KubeContext, namespace, resource, cfg.KubeLocalPort)
 	if err != nil {
 		log.Fatalf("kube port-forward: %v", err)
 	}
-	defer cleanup()
+	return cleanup
 }
 
 func runContextStrings(ctx context.Context, cfg *config.Config) (cluster, client, namespace, database string) {
@@ -470,7 +472,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	setupKube(ctx, &cfg)
+	kubeCleanup := setupKube(ctx, &cfg)
+	defer kubeCleanup()
+
 	runCluster, runClient, runNamespace, runDatabase := runContextStrings(ctx, &cfg)
 	senders := buildSenders(&cfg)
 
