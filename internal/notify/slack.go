@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -42,19 +41,21 @@ func slackHeader(ev Event, ts string) string {
 		}
 	}
 	h += "*" + ev.Message + "*\n"
-	h += fmt.Sprintf("• *Time*: %s\n", ts)
-	if ev.Client != "" {
-		h += fmt.Sprintf("• *Client*: %s\n", ev.Client)
+	// Most important first: Connections, Cluster, Database, then Client, Namespace, Time
+	h += slackConnLine(ev) + "\n"
+	if ev.Cluster != "" {
+		h += fmt.Sprintf("• *Cluster*: %s\n", ev.Cluster)
 	}
 	if ev.Database != "" {
 		h += fmt.Sprintf("• *Database*: %s\n", ev.Database)
 	}
-	if ev.Cluster != "" {
-		h += fmt.Sprintf("• *Cluster*: %s\n", ev.Cluster)
+	if ev.Client != "" {
+		h += fmt.Sprintf("• *Client*: %s\n", ev.Client)
 	}
 	if ev.Namespace != "" {
 		h += fmt.Sprintf("• *Namespace*: %s\n", ev.Namespace)
 	}
+	h += fmt.Sprintf("• *Time*: %s\n", ts)
 	return h
 }
 
@@ -107,12 +108,9 @@ func (s *Slack) Send(ctx context.Context, ev Event) error {
 		client = http.DefaultClient
 	}
 	ts := time.Now().Format("2006-01-02 15:04:05")
-	var b strings.Builder
-	b.WriteString(slackHeader(ev, ts))
-	b.WriteString(slackConnLine(ev))
 	body := map[string]any{
 		"attachments": []map[string]any{
-			{"color": slackColor(ev), "text": b.String(), "fallback": ev.Message},
+			{"color": slackColor(ev), "text": slackHeader(ev, ts), "fallback": ev.Message},
 		},
 	}
 	raw, _ := json.Marshal(body)

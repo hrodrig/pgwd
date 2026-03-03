@@ -520,7 +520,7 @@ docker stop pgwd-pg && docker rm pgwd-pg
 
 Using **127.0.0.1** and host port **5433** avoids hitting a local Postgres on 5432 and avoids IPv6 resolution quirks.
 
-**Who is on 5432?** Run `lsof -i :5432`. If you see both `postgres` (local) and `com.docke` (Docker), connections to **localhost:5432** go to the local postgres (it binds to localhost); the container is on `*:5432`. Use host port **5433** for the container so your client clearly reaches the container.
+**Who is on 5432?** Run `lsof -i :5432`. If you see both `postgres` (local) and `com.docker` (Docker), connections to **localhost:5432** go to the local postgres (it binds to localhost); the container is on `*:5432`. Use host port **5433** for the container so your client clearly reaches the container.
 
 ## Requirements
 
