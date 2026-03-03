@@ -60,7 +60,7 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.IntVar(&cfg.ThresholdStale, "threshold-stale", cfg.ThresholdStale, "Alert when stale connections (open > stale-age) >= N (PGWD_THRESHOLD_STALE)")
 	flag.StringVar(&cfg.SlackWebhook, "slack-webhook", cfg.SlackWebhook, "Slack Incoming Webhook URL (PGWD_SLACK_WEBHOOK)")
 	flag.StringVar(&cfg.LokiURL, "loki-url", cfg.LokiURL, "Loki push API URL, e.g. http://localhost:3100/loki/api/v1/push (PGWD_LOKI_URL)")
-	flag.StringVar(&cfg.LokiLabels, "loki-labels", cfg.LokiLabels, "Loki labels, e.g. job=pgwd,env=prod (PGWD_LOKI_LABELS)")
+	flag.StringVar(&cfg.LokiLabels, "loki-labels", cfg.LokiLabels, "Loki labels, e.g. app=pgwd,env=prod (PGWD_LOKI_LABELS)")
 	flag.IntVar(&cfg.Interval, "interval", cfg.Interval, "Run every N seconds; 0 = run once (PGWD_INTERVAL)")
 	flag.BoolVar(&cfg.DryRun, "dry-run", cfg.DryRun, "Only print, do not send notifications (PGWD_DRY_RUN)")
 	flag.BoolVar(&cfg.ForceNotification, "force-notification", cfg.ForceNotification, "Always send a test notification to validate delivery/format (PGWD_FORCE_NOTIFICATION)")

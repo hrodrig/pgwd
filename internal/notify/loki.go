@@ -14,7 +14,7 @@ import (
 // Loki sends log entries to Loki's push API.
 type Loki struct {
 	URL    string
-	Labels map[string]string // e.g. job=pgwd, level=warning
+	Labels map[string]string // e.g. app=pgwd, env=prod
 	Client *http.Client
 }
 
@@ -34,10 +34,14 @@ func (l *Loki) PushPayload(ev Event) ([]byte, error) {
 	for k, v := range l.Labels {
 		labels[k] = v
 	}
-	if labels["job"] == "" {
-		labels["job"] = "pgwd"
+	if labels["app"] == "" {
+		labels["app"] = "pgwd"
 	}
 	labels["threshold"] = ev.Threshold
+	labels["level"] = thresholdToLevel(ev.Threshold)
+	if ev.Namespace != "" {
+		labels["namespace"] = ev.Namespace
+	}
 
 	line := fmt.Sprintf("pgwd: %s | total=%d active=%d idle=%d", ev.Message, ev.Stats.Total, ev.Stats.Active, ev.Stats.Idle)
 	if ev.MaxConnections > 0 {
@@ -90,6 +94,20 @@ func (l *Loki) Send(ctx context.Context, ev Event) error {
 		return fmt.Errorf("loki push returned %s", resp.Status)
 	}
 	return nil
+}
+
+// thresholdToLevel maps threshold to severity level for Loki labels (attention, alert, danger).
+func thresholdToLevel(threshold string) string {
+	switch threshold {
+	case "too_many_clients", "connect_failure":
+		return "danger"
+	case "total", "active", "idle", "stale":
+		return "attention"
+	case "test":
+		return "attention"
+	default:
+		return "attention"
+	}
 }
 
 // ParseLokiLabels parses "k1=v1,k2=v2" into a map.

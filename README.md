@@ -124,7 +124,7 @@ pgwd -db-url "postgres://..." -threshold-total 80 -slack-webhook "https://hooks.
 # Loki only (optional labels)
 pgwd -db-url "postgres://..." -threshold-total 80 \
      -loki-url "http://localhost:3100/loki/api/v1/push" \
-     -loki-labels "job=pgwd,env=prod,db=myapp"
+     -loki-labels "app=pgwd,env=prod,db=myapp"
 
 # Slack and Loki (same event sent to both)
 pgwd -db-url "postgres://..." -threshold-total 80 \
@@ -308,7 +308,7 @@ All parameters can be set via **CLI** or **environment variables** with prefix `
 | `-threshold-stale` | `PGWD_THRESHOLD_STALE` | Alert when stale connections (open > stale-age) ≥ N |
 | `-slack-webhook` | `PGWD_SLACK_WEBHOOK` | Slack Incoming Webhook URL |
 | `-loki-url` | `PGWD_LOKI_URL` | Loki push API URL (e.g. `http://localhost:3100/loki/api/v1/push`) |
-| `-loki-labels` | `PGWD_LOKI_LABELS` | Loki labels, e.g. `job=pgwd,env=prod` |
+| `-loki-labels` | `PGWD_LOKI_LABELS` | Loki labels, e.g. `app=pgwd,env=prod` |
 | `-interval` | `PGWD_INTERVAL` | Run every N seconds; 0 = run once |
 | `-dry-run` | `PGWD_DRY_RUN` | Only print stats, do not send notifications |
 | `-force-notification` | `PGWD_FORCE_NOTIFICATION` | Always send at least one notification: test event when connected (to validate delivery, format, and channel). Requires at least one notifier. (Connection failure is always notified when a notifier is configured, with or without this flag.) |
@@ -438,15 +438,15 @@ Connections: total=<Total>, active=<Active>, idle=<Idle> (limit <Threshold>=<Thr
 
 ## Loki
 
-Set the Loki push endpoint URL (e.g. `http://loki:3100/loki/api/v1/push`). Optionally set `PGWD_LOKI_LABELS` for stream labels (e.g. `job=pgwd,env=prod`); default includes `job=pgwd`.
+Set the Loki push endpoint URL (e.g. `http://loki:3100/loki/api/v1/push`). Optionally set `PGWD_LOKI_LABELS` for stream labels (e.g. `app=pgwd,env=prod`); default includes `app=pgwd`.
 
-**Notification format:** Each alert is one log line in a stream. The stream has labels from `PGWD_LOKI_LABELS` plus `job=pgwd` (if not set) and `threshold=<total|active|idle|stale|test>`. The log line is:
+**Notification format:** Each alert is one log line in a stream. The stream has labels from `PGWD_LOKI_LABELS` plus `app=pgwd` (if not set), `threshold`, `level` (attention/alert/danger), and `namespace` (when using `-kube-postgres`). The log line is:
 
 ```
 pgwd threshold exceeded: <Message> | total=<Total> active=<Active> idle=<Idle> (limit <Threshold>=<ThresholdValue>)
 ```
 
-Same placeholders as Slack. Timestamp is the time of the push. You can query in Grafana or LogCLI by label (e.g. `{job="pgwd", threshold="total"}`).
+Same placeholders as Slack. Timestamp is the time of the push. You can query in Grafana or LogCLI by label (e.g. `{app="pgwd", threshold="total"}` or `{app="pgwd", level="danger"}`).
 
 ---
 

@@ -1,7 +1,7 @@
 # Minimal Loki config for testing (push + query). Single binary, in-memory ring.
 # Usage: docker compose -f testing/compose-loki.yaml up -d
 # Push: http://localhost:3100/loki/api/v1/push
-# Query: http://localhost:3100/loki/api/v1/query_range?query={job="pgwd"}
+# Query: http://localhost:3100/loki/api/v1/query_range?query={app="pgwd"}
 
 auth_enabled: false
 

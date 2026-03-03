@@ -47,8 +47,14 @@ test-integration:
 	@docker compose -f testing/compose.yaml up -d --scale client=0
 	@echo "Starting Loki..."
 	@docker compose -f testing/compose-loki.yaml up -d
-	@echo "Waiting for services (Postgres ~3s, Loki ~25s)..."
-	@sleep 25
+	@echo "Waiting for Postgres (healthcheck)..."
+	@until docker compose -f testing/compose.yaml exec -T postgres pg_isready -U pgwd -d pgwd 2>/dev/null; do sleep 2; done
+	@echo "Waiting for Loki (/ready)..."
+	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
+	  curl -sf http://localhost:3100/ready | grep -q ready && break; \
+	  sleep 2; \
+	  if [ $$i -eq 15 ]; then echo "Loki not ready after 30s"; exit 1; fi; \
+	done
 	@echo "Running integration tests..."
 	@PGWD_TEST_DB_URL="postgres://pgwd:pgwd@localhost:5432/pgwd?sslmode=disable" \
 	 PGWD_TEST_LOKI_URL="http://localhost:3100/loki/api/v1/push" \

@@ -84,7 +84,7 @@ func TestLoki_Integration(t *testing.T) {
 	defer cancel()
 
 	// Send a test event
-	loki := &Loki{URL: pushURL, Labels: map[string]string{"job": "pgwd", "env": "test"}}
+	loki := &Loki{URL: pushURL, Labels: map[string]string{"app": "pgwd", "env": "test"}}
 	ev := Event{
 		Stats:          postgres.ConnectionStats{Total: 5, Active: 2, Idle: 3},
 		Threshold:      "test",
@@ -100,12 +100,12 @@ func TestLoki_Integration(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Query Loki (queryLoki derives query_range URL from push URL)
-	lines, err := queryLoki(ctx, pushURL, `{job="pgwd"}`)
+	lines, err := queryLoki(ctx, pushURL, `{app="pgwd"}`)
 	if err != nil {
 		t.Fatalf("queryLoki: %v", err)
 	}
 	if len(lines) == 0 {
-		t.Fatal("no log lines found in Loki for job=pgwd")
+		t.Fatal("no log lines found in Loki for app=pgwd")
 	}
 
 	// Find our test line (threshold=test, delivery check)
@@ -137,13 +137,14 @@ func TestLoki_Integration_ShowPayload(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	loki := &Loki{URL: pushURL, Labels: map[string]string{"job": "pgwd", "env": "test"}}
+	loki := &Loki{URL: pushURL, Labels: map[string]string{"app": "pgwd", "env": "test"}}
 	ev := Event{
 		Stats:          postgres.ConnectionStats{Total: 5, Active: 2, Idle: 3},
 		Threshold:      "test",
 		ThresholdValue: 0,
 		Message:        "Test notification",
 		MaxConnections: 20,
+		Namespace:      "mynamespace", // example: set when running in K8s
 	}
 
 	// Build and print payload (before sending)
@@ -162,12 +163,12 @@ func TestLoki_Integration_ShowPayload(t *testing.T) {
 	time.Sleep(500 * time.Millisecond)
 
 	// Query and print response
-	resp, err := queryLokiRaw(ctx, pushURL, `{job="pgwd"}`)
+	resp, err := queryLokiRaw(ctx, pushURL, `{app="pgwd"}`)
 	if err != nil {
 		t.Fatalf("queryLokiRaw: %v", err)
 	}
 	respJSON, _ := json.MarshalIndent(resp, "", "  ")
-	t.Logf("--- Response from Loki (GET query_range?query={job=\"pgwd\"}) ---\n%s", string(respJSON))
+	t.Logf("--- Response from Loki (GET query_range?query={app=\"pgwd\"}) ---\n%s", string(respJSON))
 }
 
 func getEnvSkip(t *testing.T, key, desc string) string {

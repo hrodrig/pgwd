@@ -85,6 +85,72 @@ Without `PGWD_TEST_LOKI_URL` the tests are skipped.
 docker compose -f testing/compose-loki.yaml down
 ```
 
+### Loki payload reference (for Grafana alerts and jq)
+
+**Request** (POST `http://localhost:3100/loki/api/v1/push`):
+
+```json
+{
+  "streams": [
+    {
+      "stream": {
+        "app": "pgwd",
+        "threshold": "total",
+        "level": "attention",
+        "env": "prod",
+        "namespace": "mydb"
+      },
+      "values": [
+        ["1730500000000000000", "pgwd: Total connections 16 >= 16 | total=16 active=8 idle=8 max_connections=20 (limit total=16)"]
+      ]
+    }
+  ]
+}
+```
+
+Labels: `app` (default pgwd), `threshold`, `level` (attention/alert/danger), `namespace` (when in K8s). Level mapping: `connect_failure`/`too_many_clients` → danger; `total`/`active`/`idle`/`stale`/`test` → attention.
+
+**Response** (GET `http://localhost:3100/loki/api/v1/query_range?query={app="pgwd"}`):
+
+```json
+{
+  "status": "success",
+  "data": {
+    "resultType": "streams",
+    "result": [
+      {
+        "stream": {
+          "app": "pgwd",
+          "threshold": "total",
+          "level": "attention",
+          "env": "prod",
+          "namespace": "mydb"
+        },
+        "values": [
+          ["1730500000000000000", "pgwd: Total connections 16 >= 16 | total=16 active=8 idle=8 max_connections=20 (limit total=16)"]
+        ]
+      }
+    ]
+  }
+}
+```
+
+**jq examples** (for alert rules or scripts):
+
+```bash
+# Extract log lines only
+curl -s "http://localhost:3100/loki/api/v1/query_range?query={app=\"pgwd\"}" | jq -r '.data.result[].values[][1]'
+
+# Extract threshold and level labels
+curl -s "http://localhost:3100/loki/api/v1/query_range?query={app=\"pgwd\"}" | jq -r '.data.result[].stream | "\(.threshold) \(.level)"'
+
+# Extract lines matching level=danger (connect_failure, too_many_clients)
+curl -s "http://localhost:3100/loki/api/v1/query_range?query={app=\"pgwd\",level=\"danger\"}" | jq -r '.data.result[].values[][1]'
+
+# Filter by namespace (K8s)
+curl -s "http://localhost:3100/loki/api/v1/query_range?query={app=\"pgwd\",namespace=\"mydb\"}" | jq -r '.data.result[].values[][1]'
+```
+
 ---
 
 **Production:** Use a non-superuser role for application connections so `superuser_reserved_connections` (default 3) stays available for DBA/admin access when the instance is saturated. See [PostgreSQL: Connection and Authentication](https://www.postgresql.org/docs/current/runtime-config-connection.html) (`superuser_reserved_connections`).
