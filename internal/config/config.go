@@ -20,6 +20,10 @@ type Config struct {
 	KubeLocalPort         int    // local port for port-forward (default 5432)
 	KubePasswordVar       string // pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD)
 	KubePasswordContainer string // container name in pod if not default
+	// Kubernetes: connect to Loki via kubectl port-forward when Loki is inside the cluster (optional)
+	KubeLoki           string // e.g. "monitoring/svc/loki" — same format as kube-postgres
+	KubeLokiLocalPort  int    // local port for Loki port-forward (default 3100)
+	KubeLokiRemotePort int    // remote port on the Loki service (default 3100)
 
 	// Optional context for notifications (Slack health-check style): cluster name, client (service/pod or hostname).
 	// When -kube-postgres is set, Client and namespace are derived from it; Cluster can be detected from kubeconfig or set via PGWD_CLUSTER.
@@ -34,9 +38,11 @@ type Config struct {
 	ThresholdStale  int // alert when count of stale connections >= this
 
 	// Notifications
-	SlackWebhook string
-	LokiURL      string
-	LokiLabels   string // comma-separated key=value
+	SlackWebhook    string
+	LokiURL         string
+	LokiLabels      string // comma-separated key=value
+	LokiOrgID       string // X-Scope-OrgID header (Loki multi-tenancy); empty = not set
+	LokiBearerToken string // Authorization: Bearer <token>; empty = not set
 
 	// Behavior
 	Interval                int // seconds; 0 = run once
@@ -84,6 +90,9 @@ func FromEnv() Config {
 		KubeLocalPort:           envInt("KUBE_LOCAL_PORT", 5432),
 		KubePasswordVar:         env("KUBE_PASSWORD_VAR", "POSTGRES_PASSWORD"),
 		KubePasswordContainer:   env("KUBE_PASSWORD_CONTAINER", ""),
+		KubeLoki:                env("KUBE_LOKI", ""),
+		KubeLokiLocalPort:       envInt("KUBE_LOKI_LOCAL_PORT", 3100),
+		KubeLokiRemotePort:      envInt("KUBE_LOKI_REMOTE_PORT", 3100),
 		Cluster:                 env("CLUSTER", ""),
 		Client:                  env("CLIENT", ""),
 		ThresholdTotal:          envInt("THRESHOLD_TOTAL", 0),
@@ -94,6 +103,8 @@ func FromEnv() Config {
 		SlackWebhook:            env("SLACK_WEBHOOK", ""),
 		LokiURL:                 env("LOKI_URL", ""),
 		LokiLabels:              env("LOKI_LABELS", ""),
+		LokiOrgID:               env("LOKI_ORG_ID", ""),
+		LokiBearerToken:         env("LOKI_BEARER_TOKEN", ""),
 		Interval:                envInt("INTERVAL", 0),
 		DryRun:                  envBool("DRY_RUN", false),
 		ForceNotification:       envBool("FORCE_NOTIFICATION", false),
@@ -216,5 +227,5 @@ func (c *Config) HasAnyThreshold() bool {
 
 // HasAnyNotifier returns true if Slack or Loki is configured.
 func (c *Config) HasAnyNotifier() bool {
-	return c.SlackWebhook != "" || c.LokiURL != ""
+	return c.SlackWebhook != "" || c.LokiURL != "" || c.KubeLoki != ""
 }

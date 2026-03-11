@@ -28,6 +28,9 @@ sequenceDiagram
             pgwd->>Loki: Send(ctx, event)
             Loki-->>pgwd: (ok or error log)
         end
+        opt at least one Send ok
+            pgwd->>pgwd: log Notification sent
+        end
     end
     pgwd->>pgwd: return (interval <= 0 → exit)
 ```

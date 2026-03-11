@@ -155,7 +155,7 @@ curl -s "http://localhost:3100/loki/api/v1/query_range?query={app=\"pgwd\",names
 
 ## E2E Kubernetes (kind)
 
-Validates pgwd with `-kube-postgres` against a real cluster. Creates a kind cluster, deploys Postgres, runs `pgwd -dry-run`, then destroys the cluster.
+Validates pgwd with `-kube-postgres` and `-kube-loki` against a real cluster. Creates a kind cluster, deploys Postgres and Loki, runs `pgwd -dry-run` and `pgwd -kube-loki -force-notification`, then destroys the cluster.
 
 **Requires:** kind, kubectl, docker.
 

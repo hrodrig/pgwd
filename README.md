@@ -6,7 +6,7 @@
   <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.3.6-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.4.0-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -41,6 +41,7 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 - [FAQ](#faq)
 - [Docker](#docker)
 - [systemd](#systemd)
+- [Roadmap](#roadmap)
 - [Get involved](#get-involved)
 
 ---
@@ -325,6 +326,7 @@ When Postgres runs inside a Kubernetes cluster, use **`-kube-postgres`** so pgwd
 - **Requires:** `kubectl` in PATH and a valid kubeconfig. pgwd checks for `kubectl` before any kube step and exits with a clear error if it is missing. pgwd starts the port-forward, connects, and stops it on exit. **When running from cron**, set PATH so `kubectl` is findable (see [Running from cron](#running-from-cron) above).
 - **Multiple contexts:** If your kubeconfig has several contexts (e.g. dev, staging, prod), use **`-kube-context`** (or `PGWD_KUBE_CONTEXT`) to select which cluster to use. All kubectl operations (port-forward, pod resolution, password discovery, cluster name) use that context.
 - **Validate connectivity:** Use **`-validate-k8s-access`** to check kubectl connectivity and list pods before running with `-kube-postgres`. No DB or notifier required. Useful to confirm context and access before a real run.
+- **Loki inside the cluster:** When pgwd runs on a host outside the cluster (e.g. VM with cron) and Loki is inside the cluster, use **`-kube-loki namespace/svc/loki`** instead of `-loki-url`. pgwd runs `kubectl port-forward` to Loki and sends notifications to localhost. Use `-kube-loki-local-port` (default 3100) and `-kube-loki-remote-port` (default 3100) if Loki uses a different port. Mutually exclusive with `-loki-url` (use one or the other).
 
 ```bash
 # Validate kubectl connectivity (no DB or notifier needed)
@@ -339,6 +341,22 @@ PGWD_DB_URL="postgres://postgres:secret@localhost:5432/mydb" \
 # Password from pod env (POSTGRES_PASSWORD)
 PGWD_DB_URL="postgres://postgres:DISCOVER_MY_PASSWORD@localhost:5432/mydb" \
   pgwd -kube-postgres default/svc/postgres -dry-run
+
+# Loki inside cluster (pgwd runs outside): port-forward to Loki, then notify
+PGWD_DB_URL="postgres://postgres:DISCOVER_MY_PASSWORD@localhost:5432/mydb" \
+  pgwd -kube-postgres default/svc/postgres -kube-loki monitoring/svc/loki -slack-webhook "https://..." -force-notification
+
+# Port 3100 already in use: use -kube-loki-local-port (like -kube-local-port for Postgres)
+pgwd -kube-postgres default/svc/postgres -kube-loki monitoring/svc/loki -kube-loki-local-port 13100 \
+  -db-url "postgres://..." -slack-webhook "https://..." -force-notification
+
+# Grafana/Loki stack (kube-prometheus-stack etc.): match Grafana's X-Scope-OrgId or logs won't appear
+# Check your Grafana Loki data source (or Helm values: secureJsonData.httpHeaderValue1 for Loki)
+pgwd -kube-postgres mynamespace/svc/postgres -kube-local-port 15432 \
+  -kube-loki mynamespace/svc/loki -kube-loki-local-port 13100 \
+  -loki-org-id 1 \
+  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@localhost:15432/mydb?sslmode=disable' \
+  -force-notification
 ```
 
 [↑ Back to top](#top)
@@ -353,6 +371,9 @@ All parameters can be set via **CLI** or **environment variables** with prefix `
 |-----|-----|-------------|
 | `-db-url` | `PGWD_DB_URL` | PostgreSQL connection URL (required). With `-kube-postgres`, use host localhost and port matching `-kube-local-port`. |
 | `-kube-postgres` | `PGWD_KUBE_POSTGRES` | Connect via kubectl port-forward: `namespace/type/name` (e.g. `default/svc/postgres`). Requires kubectl in PATH. |
+| `-kube-loki` | `PGWD_KUBE_LOKI` | Connect to Loki via kubectl port-forward when Loki is inside the cluster: `namespace/type/name` (e.g. `monitoring/svc/loki`). Mutually exclusive with `-loki-url`. |
+| `-kube-loki-local-port` | `PGWD_KUBE_LOKI_LOCAL_PORT` | Local port for Loki port-forward (default 3100). |
+| `-kube-loki-remote-port` | `PGWD_KUBE_LOKI_REMOTE_PORT` | Remote port on the Loki service (default 3100). Use when Loki listens on a different port. |
 | `-kube-context` | `PGWD_KUBE_CONTEXT` | Kubectl context to use (empty = current context). Use when you have multiple contexts in kubeconfig and want to target a specific cluster. |
 | `-kube-local-port` | `PGWD_KUBE_LOCAL_PORT` | Local port for port-forward (default 5432). Use different ports to run multiple pgwd against different Postgres in the cluster. |
 | `-kube-password-var` | `PGWD_KUBE_PASSWORD_VAR` | Pod env var name when URL password is `DISCOVER_MY_PASSWORD` (default `POSTGRES_PASSWORD`). |
@@ -368,6 +389,8 @@ All parameters can be set via **CLI** or **environment variables** with prefix `
 | `-slack-webhook` | `PGWD_SLACK_WEBHOOK` | Slack Incoming Webhook URL |
 | `-loki-url` | `PGWD_LOKI_URL` | Loki push API URL (e.g. `http://localhost:3100/loki/api/v1/push`) |
 | `-loki-labels` | `PGWD_LOKI_LABELS` | Loki labels, e.g. `app=pgwd,env=prod` |
+| `-loki-org-id` | `PGWD_LOKI_ORG_ID` | Loki `X-Scope-OrgID` header (multi-tenancy). Required for 401; **must match Grafana's Loki data source** or logs won't appear (e.g. `1`, `my-tenant`). |
+| `-loki-bearer-token` | `PGWD_LOKI_BEARER_TOKEN` | Loki `Authorization: Bearer` token |
 | `-interval` | `PGWD_INTERVAL` | Run every N seconds; 0 = run once |
 | `-dry-run` | `PGWD_DRY_RUN` | Only print stats, do not send notifications |
 | `-force-notification` | `PGWD_FORCE_NOTIFICATION` | Always send at least one notification: test event when connected (to validate delivery, format, and channel). Requires at least one notifier. (Connection failure is always notified when a notifier is configured, with or without this flag.) |
@@ -525,7 +548,7 @@ Using **127.0.0.1** and host port **5433** avoids hitting a local Postgres on 54
 ## Requirements
 
 - At least one of: a threshold (`-threshold-levels` for 3-tier, `-threshold-idle`, or `-threshold-stale` with `-stale-age`), `-dry-run`, or `-force-notification`. If you set only `-db-url` and a notifier, pgwd uses 3-tier levels (75,85,95%) of `max_connections`.
-- If not using `-dry-run`: at least one notifier (`slack-webhook` or `loki-url`). For `-force-notification`, a notifier is required.
+- If not using `-dry-run`: at least one notifier (`slack-webhook`, `loki-url`, or `kube-loki`). For `-force-notification`, a notifier is required.
 - For `threshold-stale`, `stale-age` must be set and greater than 0.
 
 ## Behavior and exit
@@ -565,6 +588,10 @@ Connections: total=<Total>, active=<Active>, idle=<Idle> (limit <Threshold>=<Thr
 
 Set the Loki push endpoint URL (e.g. `http://loki:3100/loki/api/v1/push`). Optionally set `PGWD_LOKI_LABELS` for stream labels (e.g. `app=pgwd,env=prod`); default includes `app=pgwd`.
 
+**Auth:** If Loki returns `401 Unauthorized`, set `-loki-org-id` (e.g. `1`) for multi-tenancy, or `-loki-bearer-token` if your Loki requires auth (env: `PGWD_LOKI_ORG_ID`, `PGWD_LOKI_BEARER_TOKEN`).
+
+**Grafana / Loki stacks (kube-prometheus-stack, etc.):** Grafana's Loki data source is often provisioned with a specific `X-Scope-OrgId` (e.g. `1`, `my-tenant`). **pgwd must use the same org ID** or logs will not appear in Grafana. Check your Grafana Loki data source config (or Helm values: `grafana.additionalDataSources` → Loki → `secureJsonData.httpHeaderValue1`). Use `-loki-org-id <value>` to match.
+
 **Notification format:** Each alert is one log line in a stream. The stream has labels from `PGWD_LOKI_LABELS` plus `app=pgwd` (if not set), `threshold`, `level` (attention/alert/danger), and `namespace` (when using `-kube-postgres`). The log line is:
 
 ```
@@ -581,12 +608,14 @@ Same placeholders as Slack. Timestamp is the time of the push. You can query in 
 |--------|----------------|
 | **"missing database URL"** | Set `PGWD_DB_URL` or `-db-url`. The URL must be a valid [PostgreSQL connection string](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING). |
 | **"no thresholds set and could not default from server..."** | pgwd could not read `max_connections` from the server (error or 0). Use `-test-max-connections N` to override, or `-dry-run`, or `-force-notification`. With a normal Postgres, only `-db-url` and a notifier should be enough (defaults to 3-tier levels 75,85,95%). |
-| **"no notifier configured"** | Set `PGWD_SLACK_WEBHOOK` or `PGWD_LOKI_URL` (or use `-dry-run` to skip notifications). |
-| **"force-notification requires at least one notifier"** | Use `-force-notification` together with `-slack-webhook` and/or `-loki-url`. |
-| **"notify-on-connect-failure requires at least one notifier"** | You set `-notify-on-connect-failure` but have no notifier. Add `-slack-webhook` and/or `-loki-url`. (Connect failure is always notified when a notifier is configured; the flag is optional.) |
-| **"kubectl not found in PATH"** | When using `-kube-postgres`, ensure `kubectl` is installed and on your `PATH` (e.g. `which kubectl`). pgwd exits with this message before attempting port-forward or password discovery. |
+| **"no notifier configured"** | Set `PGWD_SLACK_WEBHOOK`, `PGWD_LOKI_URL`, or `PGWD_KUBE_LOKI` (or use `-dry-run` to skip notifications). |
+| **"force-notification requires at least one notifier"** | Use `-force-notification` together with `-slack-webhook` and/or `-loki-url` or `-kube-loki`. |
+| **"notify-on-connect-failure requires at least one notifier"** | You set `-notify-on-connect-failure` but have no notifier. Add `-slack-webhook` and/or `-loki-url` or `-kube-loki`. (Connect failure is always notified when a notifier is configured; the flag is optional.) |
+| **"kubectl not found in PATH"** | When using `-kube-postgres` or `-kube-loki`, ensure `kubectl` is installed and on your `PATH` (e.g. `which kubectl`). pgwd exits with this message before attempting port-forward or password discovery. |
 | **"when using threshold-stale, stale-age must be > 0"** | Set `-stale-age N` (e.g. 600) when using `-threshold-stale`. |
 | **Slack/Loki not receiving alerts** | Run once with `-force-notification` to send a test message. Check webhook URL, network/firewall, and that the app can reach Slack/Loki. |
+| **Loki: 401 Unauthorized** | Loki requires auth. Set `-loki-org-id 1` (multi-tenancy) or `-loki-bearer-token <token>` (or env `PGWD_LOKI_ORG_ID` / `PGWD_LOKI_BEARER_TOKEN`). |
+| **Logs sent to Loki but not visible in Grafana** | Grafana queries a specific tenant. pgwd must use the **same** `-loki-org-id` as Grafana's Loki data source (e.g. `1`, `my-tenant`). Check Grafana data source config or Helm values (`secureJsonData.httpHeaderValue1` for Loki). |
 | **"postgres connect: ..."** | DB unreachable: check host, port, TLS, credentials, and that the pgwd host can reach the Postgres server. |
 | **Stats or stale count errors in logs** | Permissions: the DB user must be able to read `pg_stat_activity` (usually any role can). Check `log.Printf` output for the exact error. |
 
@@ -618,6 +647,18 @@ Use `-force-notification`: pgwd sends one test message to all configured notifie
 <summary><strong>Postgres is in Kubernetes — how do I connect?</strong></summary>
 
 Use `-kube-postgres namespace/svc/name` (e.g. `default/svc/postgres`). pgwd runs `kubectl port-forward` and connects to localhost. Validate first with `-validate-k8s-access`. See [Kubernetes](#kubernetes).
+</details>
+
+<details>
+<summary><strong>Loki is inside the cluster — what if pgwd runs outside?</strong></summary>
+
+Use `-kube-loki namespace/svc/loki` (e.g. `monitoring/svc/loki`). pgwd runs `kubectl port-forward` to Loki (port 3100) and sends notifications to localhost. Mutually exclusive with `-loki-url`; use one or the other. See [Kubernetes](#kubernetes).
+</details>
+
+<details>
+<summary><strong>Logs sent to Loki but not visible in Grafana — why?</strong></summary>
+
+Loki uses multi-tenancy: each `X-Scope-OrgId` is a separate tenant. Grafana's Loki data source is provisioned with a specific org ID (e.g. `1`, `my-tenant`). pgwd must use the **same** value via `-loki-org-id` or `PGWD_LOKI_ORG_ID`. Check your Grafana Loki data source config (or Helm values: `grafana.additionalDataSources` → Loki → `secureJsonData.httpHeaderValue1`).
 </details>
 
 <details>
@@ -730,6 +771,8 @@ PGWD_THRESHOLD_LEVELS=75,85,95
 PGWD_THRESHOLD_IDLE=50
 PGWD_SLACK_WEBHOOK=https://hooks.slack.com/services/...
 PGWD_LOKI_URL=http://localhost:3100/loki/api/v1/push
+PGWD_LOKI_ORG_ID=1
+# ^ Match Grafana's Loki X-Scope-OrgId when using kube-prometheus-stack etc.
 PGWD_INTERVAL=60
 EOF
 sudo chmod 600 /etc/pgwd.env
@@ -767,11 +810,29 @@ PGWD_THRESHOLD_LEVELS=75,85,95
 PGWD_THRESHOLD_IDLE=50
 PGWD_SLACK_WEBHOOK=https://hooks.slack.com/services/...
 PGWD_LOKI_URL=http://localhost:3100/loki/api/v1/push
+PGWD_LOKI_ORG_ID=1
+# ^ Match Grafana's Loki data source X-Scope-OrgId (or logs won't appear in Grafana)
 PGWD_INTERVAL=60
 # For timer (one-shot) omit PGWD_INTERVAL or set 0
 ```
 
 **Optional:** Run the service as a dedicated user: create `useradd -r -s /bin/false pgwd`, then in the unit add `User=pgwd` and `Group=pgwd`. Ensure that user can read the env file (e.g. same group or move secrets to a credential store).
+
+[↑ Back to top](#top)
+
+---
+
+## Roadmap
+
+Target **v1.0.0** by early July.
+
+| Version | Target | Scope |
+|---------|--------|-------|
+| **0.3.x** | Mar | Patches and fixes. Deprecation of threshold-total/active in progress. |
+| **0.4.0** | Mar 2026 ✅ | Loki auth (-loki-org-id, -loki-bearer-token), kube-loki, Grafana org ID docs, notification sent log. |
+| **0.5.0** | May | **CSV metrics** — save time series to file. |
+| **0.6.0** | May–Jun | **DB metrics** — save to database (PostgreSQL/TimescaleDB). Last 0.x before 1.0. |
+| **1.0.0** | Early Jul | **Breaking:** remove threshold-total and threshold-active. Stable API. Criteria: 100+ tests, logo, deprecations removed. |
 
 [↑ Back to top](#top)
 

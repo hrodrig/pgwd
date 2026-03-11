@@ -18,6 +18,9 @@ sequenceDiagram
         pgwd->>Slack: Send(ctx, connect_failure event)
         Slack-->>pgwd: (ok or error log)
     end
+    opt at least one Send ok
+        pgwd->>pgwd: log Notification sent
+    end
     pgwd->>User: log.Fatal("postgres connect failed..."), exit 1
 ```
 

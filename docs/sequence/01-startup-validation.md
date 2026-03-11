@@ -27,13 +27,20 @@ sequenceDiagram
         pgwd->>Kube: port-forward (background)
         pgwd->>pgwd: replace DB URL (localhost, port)
     end
+    opt -kube-loki set
+        pgwd->>Kube: port-forward to Loki (background)
+        pgwd->>pgwd: set Loki URL (localhost, kube-loki-local-port)
+    end
     pgwd->>pgwd: compute run context (cluster, client, namespace from kube/config, database from DB URL path)
     pgwd->>pgwd: build senders (Slack, Loki from config)
     pgwd->>Postgres: Pool(ctx, dbURL)
     alt connect error
-        opt notify-on-connect-failure or force-notification
+        opt senders configured
             pgwd->>Slack: Send(connect_failure event)
             Slack-->>pgwd: (ok or error log)
+            opt at least one ok
+                pgwd->>pgwd: log Notification sent
+            end
         end
         pgwd->>User: log.Fatalf, exit 1
     end

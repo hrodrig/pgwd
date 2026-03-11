@@ -61,14 +61,19 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.StringVar(&cfg.SlackWebhook, "slack-webhook", cfg.SlackWebhook, "Slack Incoming Webhook URL (PGWD_SLACK_WEBHOOK)")
 	flag.StringVar(&cfg.LokiURL, "loki-url", cfg.LokiURL, "Loki push API URL, e.g. http://localhost:3100/loki/api/v1/push (PGWD_LOKI_URL)")
 	flag.StringVar(&cfg.LokiLabels, "loki-labels", cfg.LokiLabels, "Loki labels, e.g. app=pgwd,env=prod (PGWD_LOKI_LABELS)")
+	flag.StringVar(&cfg.LokiOrgID, "loki-org-id", cfg.LokiOrgID, "Loki X-Scope-OrgID header (multi-tenancy); for 401 Unauthorized (PGWD_LOKI_ORG_ID)")
+	flag.StringVar(&cfg.LokiBearerToken, "loki-bearer-token", cfg.LokiBearerToken, "Loki Authorization: Bearer token (PGWD_LOKI_BEARER_TOKEN)")
 	flag.IntVar(&cfg.Interval, "interval", cfg.Interval, "Run every N seconds; 0 = run once (PGWD_INTERVAL)")
 	flag.BoolVar(&cfg.DryRun, "dry-run", cfg.DryRun, "Only print, do not send notifications (PGWD_DRY_RUN)")
 	flag.BoolVar(&cfg.ForceNotification, "force-notification", cfg.ForceNotification, "Always send a test notification to validate delivery/format (PGWD_FORCE_NOTIFICATION)")
 	flag.IntVar(&cfg.DefaultThresholdPercent, "default-threshold-percent", cfg.DefaultThresholdPercent, "When one of total/active is 0, set it to this % of max_connections (1-100, default 80) (PGWD_DEFAULT_THRESHOLD_PERCENT)")
 	flag.StringVar(&cfg.ThresholdLevels, "threshold-levels", cfg.ThresholdLevels, "When both total and active are 0: comma-separated percentages for 3-tier alerts, e.g. 75,85,95 (attention/alert/danger). Only highest level fires. (PGWD_THRESHOLD_LEVELS)")
 	flag.StringVar(&cfg.KubePostgres, "kube-postgres", cfg.KubePostgres, "Connect via kubectl port-forward: namespace/type/name (e.g. default/svc/postgres) (PGWD_KUBE_POSTGRES)")
+	flag.StringVar(&cfg.KubeLoki, "kube-loki", cfg.KubeLoki, "Connect to Loki via kubectl port-forward when Loki is inside the cluster: namespace/type/name (e.g. monitoring/svc/loki) (PGWD_KUBE_LOKI)")
 	flag.StringVar(&cfg.KubeContext, "kube-context", cfg.KubeContext, "Kubectl context to use (empty = current context) (PGWD_KUBE_CONTEXT)")
 	flag.IntVar(&cfg.KubeLocalPort, "kube-local-port", cfg.KubeLocalPort, "Local port for kube port-forward (default 5432) (PGWD_KUBE_LOCAL_PORT)")
+	flag.IntVar(&cfg.KubeLokiLocalPort, "kube-loki-local-port", cfg.KubeLokiLocalPort, "Local port for Loki port-forward (default 3100) (PGWD_KUBE_LOKI_LOCAL_PORT)")
+	flag.IntVar(&cfg.KubeLokiRemotePort, "kube-loki-remote-port", cfg.KubeLokiRemotePort, "Remote port on the Loki service (default 3100) (PGWD_KUBE_LOKI_REMOTE_PORT)")
 	flag.StringVar(&cfg.KubePasswordVar, "kube-password-var", cfg.KubePasswordVar, "Pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD) (PGWD_KUBE_PASSWORD_VAR)")
 	flag.StringVar(&cfg.KubePasswordContainer, "kube-password-container", cfg.KubePasswordContainer, "Container name in pod for password discovery (PGWD_KUBE_PASSWORD_CONTAINER)")
 	flag.StringVar(&cfg.Cluster, "cluster", cfg.Cluster, "Cluster name for notifications (PGWD_CLUSTER); when -kube-postgres is set, detected from kubeconfig if unset")
@@ -87,13 +92,27 @@ func warnDeprecatedThresholds(cfg *config.Config) {
 }
 
 func validateConfig(cfg *config.Config) {
+	validateDBURL(cfg)
+	warnDeprecatedThresholds(cfg)
+	validateStale(cfg)
+	validateNotifiers(cfg)
+	validateKubePostgres(cfg)
+	validateKubeLoki(cfg)
+}
+
+func validateDBURL(cfg *config.Config) {
 	if cfg.DBURL == "" {
 		log.Fatal("missing database URL: set PGWD_DB_URL or -db-url")
 	}
-	warnDeprecatedThresholds(cfg)
+}
+
+func validateStale(cfg *config.Config) {
 	if cfg.ThresholdStale > 0 && cfg.StaleAge <= 0 {
 		log.Fatal("when using threshold-stale, stale-age must be > 0 (PGWD_STALE_AGE or -stale-age)")
 	}
+}
+
+func validateNotifiers(cfg *config.Config) {
 	if !cfg.HasAnyNotifier() && !cfg.DryRun {
 		log.Fatal("no notifier configured: set PGWD_SLACK_WEBHOOK and/or PGWD_LOKI_URL (or -slack-webhook / -loki-url), or use -dry-run")
 	}
@@ -103,8 +122,23 @@ func validateConfig(cfg *config.Config) {
 	if cfg.NotifyOnConnectFailure && !cfg.HasAnyNotifier() {
 		log.Fatal("notify-on-connect-failure requires at least one notifier (slack-webhook or loki-url)")
 	}
+}
+
+func validateKubePostgres(cfg *config.Config) {
 	if cfg.KubePostgres != "" && cfg.DBURL == "" {
 		log.Fatal("kube-postgres requires PGWD_DB_URL or -db-url (use host localhost and the same port as -kube-local-port)")
+	}
+}
+
+func validateKubeLoki(cfg *config.Config) {
+	if cfg.KubeLoki != "" && cfg.LokiURL != "" {
+		log.Fatal("use -kube-loki OR -loki-url, not both (-loki-url for exposed Loki, -kube-loki when Loki is inside the cluster)")
+	}
+	if cfg.KubeLoki != "" && (cfg.KubeLokiLocalPort < 1 || cfg.KubeLokiLocalPort > 65535) {
+		log.Fatal("kube-loki-local-port must be between 1 and 65535")
+	}
+	if cfg.KubeLoki != "" && (cfg.KubeLokiRemotePort < 1 || cfg.KubeLokiRemotePort > 65535) {
+		log.Fatal("kube-loki-remote-port must be between 1 and 65535")
 	}
 }
 
@@ -147,6 +181,27 @@ func setupKube(ctx context.Context, cfg *config.Config) (cleanup func()) {
 	return cleanup
 }
 
+// setupKubeLoki starts port-forward to Loki when -kube-loki is set and LokiURL is empty.
+// Sets cfg.LokiURL to localhost:port. Returns a cleanup function. Call it on exit.
+func setupKubeLoki(ctx context.Context, cfg *config.Config) (cleanup func()) {
+	if cfg.KubeLoki == "" || cfg.LokiURL != "" {
+		return func() {}
+	}
+	if err := kube.RequireKubectl(); err != nil {
+		log.Fatalf("kube-loki: %v", err)
+	}
+	namespace, resource, err := kube.ParseKubePostgres(cfg.KubeLoki)
+	if err != nil {
+		log.Fatalf("kube-loki: %v", err)
+	}
+	cfg.LokiURL = fmt.Sprintf("http://127.0.0.1:%d/loki/api/v1/push", cfg.KubeLokiLocalPort)
+	cleanup, err = kube.StartPortForwardTo(ctx, cfg.KubeContext, namespace, resource, cfg.KubeLokiLocalPort, cfg.KubeLokiRemotePort)
+	if err != nil {
+		log.Fatalf("kube-loki port-forward: %v", err)
+	}
+	return cleanup
+}
+
 func runContextStrings(ctx context.Context, cfg *config.Config) (cluster, client, namespace, database string) {
 	if cfg.Cluster != "" {
 		cluster = cfg.Cluster
@@ -183,8 +238,10 @@ func buildSenders(cfg *config.Config) []notify.Sender {
 	}
 	if cfg.LokiURL != "" {
 		senders = append(senders, &notify.Loki{
-			URL:    cfg.LokiURL,
-			Labels: notify.ParseLokiLabels(cfg.LokiLabels),
+			URL:         cfg.LokiURL,
+			Labels:      notify.ParseLokiLabels(cfg.LokiLabels),
+			OrgID:       cfg.LokiOrgID,
+			BearerToken: cfg.LokiBearerToken,
 		})
 	}
 	return senders
@@ -211,10 +268,16 @@ func notifyConnectFailure(ctx context.Context, senders []notify.Sender, cfg *con
 		ev.Threshold = "too_many_clients"
 		ev.Message = "Postgres rejected connection: too many clients already (max_connections exceeded). Database is saturated — urgent."
 	}
+	sent := 0
 	for _, s := range senders {
 		if sendErr := s.Send(ctx, ev); sendErr != nil {
 			log.Printf("notify (connect failure): %v", sendErr)
+		} else {
+			sent++
 		}
+	}
+	if sent > 0 {
+		log.Printf("Notification sent")
 	}
 }
 
@@ -429,10 +492,16 @@ func sendEvents(ctx context.Context, senders []notify.Sender, cfg *config.Config
 			log.Printf("[dry-run] would send: %s", ev.Message)
 			continue
 		}
+		sent := 0
 		for _, s := range senders {
 			if err := s.Send(ctx, ev); err != nil {
 				log.Printf("notify: %v", err)
+			} else {
+				sent++
 			}
+		}
+		if sent > 0 {
+			log.Printf("Notification sent: %s", ev.Message)
 		}
 	}
 }
@@ -482,6 +551,9 @@ func main() {
 
 	kubeCleanup := setupKube(ctx, &cfg)
 	defer kubeCleanup()
+
+	kubeLokiCleanup := setupKubeLoki(ctx, &cfg)
+	defer kubeLokiCleanup()
 
 	runCluster, runClient, runNamespace, runDatabase := runContextStrings(ctx, &cfg)
 	senders := buildSenders(&cfg)

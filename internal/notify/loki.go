@@ -13,9 +13,11 @@ import (
 
 // Loki sends log entries to Loki's push API.
 type Loki struct {
-	URL    string
-	Labels map[string]string // e.g. app=pgwd, env=prod
-	Client *http.Client
+	URL         string
+	Labels      map[string]string // e.g. app=pgwd, env=prod
+	OrgID       string            // X-Scope-OrgID header (multi-tenancy)
+	BearerToken string            // Authorization: Bearer <token>
+	Client      *http.Client
 }
 
 // lokiPushBody matches Loki's /loki/api/v1/push JSON.
@@ -85,6 +87,12 @@ func (l *Loki) Send(ctx context.Context, ev Event) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if l.OrgID != "" {
+		req.Header.Set("X-Scope-OrgID", l.OrgID)
+	}
+	if l.BearerToken != "" {
+		req.Header.Set("Authorization", "Bearer "+l.BearerToken)
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
