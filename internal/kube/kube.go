@@ -22,11 +22,11 @@ func contextArgs(kubeContext string) []string {
 	return []string{"--context", kubeContext}
 }
 
-// RequireKubectl returns an error if kubectl is not found in PATH. Call this when -kube-postgres is set so the user gets a clear message before any other kube step.
+// RequireKubectl returns an error if kubectl is not found in PATH. Call this when -kube-postgres or -kube-loki is set.
 func RequireKubectl() error {
 	_, err := exec.LookPath("kubectl")
 	if err != nil {
-		return fmt.Errorf("kubectl not found in PATH (required for -kube-postgres): %w", err)
+		return fmt.Errorf("kubectl not found in PATH (required for -kube-postgres / -kube-loki): %w", err)
 	}
 	return nil
 }
@@ -142,14 +142,19 @@ func GetPasswordFromPod(ctx context.Context, kubeContext, namespace, podName, co
 	return "", fmt.Errorf("could not find %s or PGPASSWORD in pod %s", envVar, podName)
 }
 
-// StartPortForward runs kubectl port-forward in the background and waits for the local port to be listening.
-// Returns a cleanup function that kills the port-forward process. Call it on exit.
+// StartPortForward runs kubectl port-forward to localPort:5432 (Postgres). Returns a cleanup function. Call it on exit.
 func StartPortForward(ctx context.Context, kubeContext, namespace, resource string, localPort int) (cleanup func(), err error) {
+	return StartPortForwardTo(ctx, kubeContext, namespace, resource, localPort, 5432)
+}
+
+// StartPortForwardTo runs kubectl port-forward in the background (localPort:remotePort) and waits for the local port to be listening.
+// Use remotePort 5432 for Postgres, 3100 for Loki. Returns a cleanup function that kills the port-forward process.
+func StartPortForwardTo(ctx context.Context, kubeContext, namespace, resource string, localPort, remotePort int) (cleanup func(), err error) {
 	kubectl, err := exec.LookPath("kubectl")
 	if err != nil {
 		return nil, fmt.Errorf("kubectl not found in PATH: %w", err)
 	}
-	addr := fmt.Sprintf("%d:5432", localPort)
+	addr := fmt.Sprintf("%d:%d", localPort, remotePort)
 	args := append(contextArgs(kubeContext), "port-forward", "-n", namespace, resource, addr)
 	cmd := exec.CommandContext(ctx, kubectl, args...)
 	cmd.Stdout = nil

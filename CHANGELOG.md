@@ -8,6 +8,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ### Added
 
+- **Loki auth:** `-loki-org-id` and `-loki-bearer-token` (`PGWD_LOKI_ORG_ID`, `PGWD_LOKI_BEARER_TOKEN`). Loki struct now sends `X-Scope-OrgID` and `Authorization: Bearer` headers when set. Fixes 401 Unauthorized when Loki requires multi-tenancy or auth.
+- **Notification sent log:** Log "Notification sent" (or "Notification sent: &lt;message&gt;") when at least one notifier delivers successfully. Helps confirm delivery when running with `-force-notification`.
+- **README:** Grafana/Loki stack org ID — must match Grafana's `X-Scope-OrgId` or logs won't appear. Troubleshooting entry, FAQ, Kubernetes example with `-loki-org-id`, env examples.
+
+---
+
+## [0.4.0] - 2026-03-11
+
+### Added
+
+- **README:** Log rotation (logrotate) for cron logs — examples for `/var/log/pgwd.log` and `~/log/pgwd-cron.log` with `su username groupname` for logs in user home.
+- **README:** Usage examples updated to use `-threshold-levels` (3-tier) as primary; `-threshold-total` and `-threshold-active` deprecated. Table and examples now show levels, idle, stale.
+- **README:** TOC, logo/banner, "Back to top" links, and FAQ section (expandable) for better navigation and discoverability.
+- **-kube-loki** (`PGWD_KUBE_LOKI`): Connect to Loki via kubectl port-forward when Loki is inside the cluster and pgwd runs outside (e.g. VM with cron). Same format as `-kube-postgres`: `namespace/svc/name` (e.g. `monitoring/svc/loki`). Mutually exclusive with `-loki-url`. Use `-kube-loki-local-port` and `-kube-loki-remote-port` (default 3100) when Loki uses a different port.
+- **E2E kube test:** Now deploys Loki and runs `pgwd -kube-loki -force-notification` to validate the full path. `testing/k8s/loki.yaml` added.
 - **docs:** Sequence diagrams audit ([docs/sequence/AUDIT.md](docs/sequence/AUDIT.md)) mapping each diagram step to code; README and docs/README link to it.
 - **Cursor rule:** `.cursor/rules/diagrams-mermaid.mdc` — validate Mermaid rendering when adding/editing diagrams; avoid backticks, semicolons, and colons inside message text; keep diagrams in sync with code (see AUDIT.md).
 - **tools/:** Scripts and docs for scanning before merge/release: `tools/scan.sh` (govulncheck + optional Grype on dir), [tools/README.md](tools/README.md) (install Grype, scan image with Grype, realistic results, do not upgrade zlib/base packages in Alpine). CI: `.github/workflows/security.yml` (govulncheck + Grype on built image, `--fail-on high,critical`). Release rule and AGENTS updated to run scan before release.
@@ -178,7 +193,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.3.6...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/hrodrig/pgwd/compare/v0.3.6...v0.4.0
 [0.3.6]: https://github.com/hrodrig/pgwd/compare/v0.3.1...v0.3.6
 [0.3.1]: https://github.com/hrodrig/pgwd/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/hrodrig/pgwd/compare/v0.2.4...v0.3.0

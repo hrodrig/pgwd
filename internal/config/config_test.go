@@ -19,7 +19,7 @@ func setEnv(key, value string) func() {
 
 func TestFromEnv_Defaults(t *testing.T) {
 	// Clear pgwd-related env so we get real defaults
-	prefixes := []string{"PGWD_DB_URL", "PGWD_KUBE_POSTGRES", "PGWD_KUBE_LOCAL_PORT", "PGWD_KUBE_PASSWORD_VAR", "PGWD_KUBE_PASSWORD_CONTAINER",
+	prefixes := []string{"PGWD_DB_URL", "PGWD_KUBE_POSTGRES", "PGWD_KUBE_LOKI", "PGWD_KUBE_LOCAL_PORT", "PGWD_KUBE_LOKI_LOCAL_PORT", "PGWD_KUBE_LOKI_REMOTE_PORT", "PGWD_KUBE_PASSWORD_VAR", "PGWD_KUBE_PASSWORD_CONTAINER",
 		"PGWD_THRESHOLD_TOTAL", "PGWD_THRESHOLD_ACTIVE", "PGWD_THRESHOLD_IDLE",
 		"PGWD_STALE_AGE", "PGWD_THRESHOLD_STALE", "PGWD_SLACK_WEBHOOK", "PGWD_LOKI_URL", "PGWD_LOKI_LABELS",
 		"PGWD_INTERVAL", "PGWD_DRY_RUN", "PGWD_FORCE_NOTIFICATION", "PGWD_NOTIFY_ON_CONNECT_FAILURE", "PGWD_DEFAULT_THRESHOLD_PERCENT", "PGWD_VALIDATE_K8S_ACCESS"}
@@ -158,6 +158,7 @@ func TestHasAnyNotifier(t *testing.T) {
 		{"none", Config{}, false},
 		{"slack", Config{SlackWebhook: "https://hooks.slack.com/..."}, true},
 		{"loki", Config{LokiURL: "http://loki:3100/push"}, true},
+		{"kube-loki", Config{KubeLoki: "monitoring/svc/loki"}, true},
 		{"both", Config{SlackWebhook: "x", LokiURL: "y"}, true},
 	}
 	for _, tt := range tests {

@@ -10,10 +10,12 @@ Before merging to `main` or creating a release (tag and `make release`), run **`
 1. **`make lint`** — gofmt -s and gocyclo -over 14. If formatting fails: `make lint-fix` then retry. If complexity fails: refactor so functions stay ≤ 14.
 2. **`make test`** — unit tests.
 3. **`make test-integration`** — Postgres + Loki via Docker compose. Requires Docker.
-4. **`make test-e2e-kube`** — kind cluster + Postgres + pgwd -kube-postgres -dry-run. Requires kind, kubectl, Docker.
+4. **`make test-e2e-kube`** — kind cluster + Postgres + Loki + pgwd -kube-postgres -dry-run and pgwd -kube-loki -force-notification. Requires kind, kubectl, Docker.
 5. **`make docker-scan`** — builds image, runs Grype with `--fail-on high`. Requires Docker and Grype on PATH.
 
 **These are NOT optional.** `make release` depends on `release-check`; if any step fails, the release is blocked.
+
+**When VERSION changes:** Regenerate `docs/demo.gif` with `vhs docs/demo.tape` (run from repo root). The demo shows `pgwd -version`; the GIF must reflect the new version. See `docs/README.md` for VHS setup.
 
 CI runs lint and tests. The Security workflow runs govulncheck and Grype on the image; both must pass (no `continue-on-error`). Do not push a release tag if CI or Security is red.
 
