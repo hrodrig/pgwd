@@ -50,10 +50,21 @@ spec:
       containers:
         - name: loki
           image: grafana/loki:2.9.4
+          imagePullPolicy: Always
           args:
             - -config.file=/etc/loki/config.yaml
           ports:
             - containerPort: 3100
+          securityContext:
+            runAsUser: 10001
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            limits:
+              memory: 512Mi
+              cpu: "0.5"
           volumeMounts:
             - name: config
               mountPath: /etc/loki
@@ -64,6 +75,12 @@ spec:
               port: 3100
             initialDelaySeconds: 5
             periodSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /ready
+              port: 3100
+            initialDelaySeconds: 10
+            periodSeconds: 5
       volumes:
         - name: config
           configMap:

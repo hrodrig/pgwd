@@ -14,6 +14,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 - **docs/testing-alert-levels.md:** Procedure to trigger attention/alert/danger with `-test-max-connections` against production without changing Postgres config.
 - **testing/compose:** Resource limits (`mem_limit`, `cpus`) and non-root `user` for client; resource limits for postgres. Addresses Snyk findings.
 - **testing/compose-loki:** Resource limits and non-root `user` (10001) for Loki.
+- **testing/k8s/postgres.yaml, loki.yaml:** securityContext (allowPrivilegeEscalation, runAsNonRoot/runAsUser for Loki), resources limits, livenessProbe, imagePullPolicy. Addresses Snyk K8s findings.
 - **Dockerfile, Dockerfile.release:** `apk update && apk upgrade` before ca-certificates to pick up zlib 1.3.2-r0 (fixes CVE-2026-22184, CVE-2026-27171).
 - **Loki auth:** `-loki-org-id` and `-loki-bearer-token` (`PGWD_LOKI_ORG_ID`, `PGWD_LOKI_BEARER_TOKEN`). Loki struct now sends `X-Scope-OrgID` and `Authorization: Bearer` headers when set. Fixes 401 Unauthorized when Loki requires multi-tenancy or auth.
 - **Notification sent log:** Log "Notification sent" (or "Notification sent: &lt;message&gt;") when at least one notifier delivers successfully. Helps confirm delivery when running with `-force-notification`.
