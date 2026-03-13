@@ -8,6 +8,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ### Added
 
+- (none yet)
+
+---
+
+## [0.5.0] - 2026-03-13
+
+### Added
+
 - **Loki labels:** `database` and `cluster` stream labels when Event has them (from connection URL and `-cluster` or kubeconfig). Enables LogQL filtering by database and cluster.
 - **Loki log line:** Database and cluster at the start of the message when present: `pgwd [cluster=X] [database=Y]: message | total=...`.
 - **docs/loki-grafana-alerts.md:** Labels, log line format, LogQL examples, Grafana alert rule setup, JSON payload reference.
@@ -16,9 +24,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 - **testing/compose-loki:** Resource limits and non-root `user` (10001) for Loki.
 - **testing/k8s/postgres.yaml, loki.yaml:** securityContext (allowPrivilegeEscalation, runAsNonRoot/runAsUser for Loki), resources limits, livenessProbe, imagePullPolicy. Addresses Snyk K8s findings.
 - **Dockerfile, Dockerfile.release:** `apk update && apk upgrade` before ca-certificates to pick up zlib 1.3.2-r0 (fixes CVE-2026-22184, CVE-2026-27171).
-- **Loki auth:** `-loki-org-id` and `-loki-bearer-token` (`PGWD_LOKI_ORG_ID`, `PGWD_LOKI_BEARER_TOKEN`). Loki struct now sends `X-Scope-OrgID` and `Authorization: Bearer` headers when set. Fixes 401 Unauthorized when Loki requires multi-tenancy or auth.
-- **Notification sent log:** Log "Notification sent" (or "Notification sent: &lt;message&gt;") when at least one notifier delivers successfully. Helps confirm delivery when running with `-force-notification`.
-- **README:** Grafana/Loki stack org ID — must match Grafana's `X-Scope-OrgId` or logs won't appear. Troubleshooting entry, FAQ, Kubernetes example with `-loki-org-id`, env examples.
 
 ---
 
@@ -201,7 +206,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/hrodrig/pgwd/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/hrodrig/pgwd/compare/v0.3.6...v0.4.0
 [0.3.6]: https://github.com/hrodrig/pgwd/compare/v0.3.1...v0.3.6
 [0.3.1]: https://github.com/hrodrig/pgwd/compare/v0.3.0...v0.3.1

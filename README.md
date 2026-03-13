@@ -6,7 +6,7 @@
   <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.4.0-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.5.0-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -435,7 +435,7 @@ make install
 # Custom install path: GOBIN=~/bin make install  (default is $HOME/go/bin)
 ```
 
-**Release (GitHub):** See [Release steps](#release-steps) below for the full workflow. Quick: from `main`, `git tag v0.4.0`, `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
+**Release (GitHub):** See [Release steps](#release-steps) below for the full workflow. Quick: from `main`, `git tag v0.5.0`, `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
 
 ### Release steps
 
@@ -678,7 +678,7 @@ When you use `-threshold-levels 75,85,95` (default), pgwd fires one alert per ru
 **Published image (each release):** Multi-arch images (linux/amd64, linux/arm64) are published to [GitHub Container Registry](https://github.com/hrodrig/pgwd/pkgs/container/pgwd) as `ghcr.io/hrodrig/pgwd`. Use a version tag or `latest`:
 
 ```bash
-docker pull ghcr.io/hrodrig/pgwd:v0.4.0
+docker pull ghcr.io/hrodrig/pgwd:v0.5.0
 # or
 docker pull ghcr.io/hrodrig/pgwd:latest
 ```
@@ -704,13 +704,13 @@ This runs `docker build` with `--build-arg VERSION=...`, `--build-arg COMMIT=...
 
 **Validate the image**
 
-Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.4.0`), or `pgwd` if you built locally with `make docker-build`:
+Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.5.0`), or `pgwd` if you built locally with `make docker-build`:
 
 ```bash
 # Help (no DB needed)
 docker run --rm ghcr.io/hrodrig/pgwd:latest -h
 
-# Version (should show e.g. pgwd v0.4.0 (commit ..., built ...))
+# Version (should show e.g. pgwd v0.5.0 (commit ..., built ...))
 docker run --rm ghcr.io/hrodrig/pgwd:latest --version
 
 # Expect "missing database URL" (validates startup path)
@@ -830,10 +830,10 @@ Target **v1.0.0** by early July.
 
 | Version | Target | Scope |
 |---------|--------|-------|
-| **0.3.x** | Mar | Patches and fixes. Deprecation of threshold-total/active in progress. |
 | **0.4.0** | Mar 2026 ✅ | Loki auth (-loki-org-id, -loki-bearer-token), kube-loki, Grafana org ID docs, notification sent log. |
-| **0.5.0** | May | **CSV metrics** — save time series to file. |
-| **0.6.0** | May–Jun | **DB metrics** — save to database (PostgreSQL/TimescaleDB). Last 0.x before 1.0. |
+| **0.5.0** | Mar 2026 ✅ | Loki database/cluster labels and log line, Grafana alert docs, security hardening (zlib, compose, k8s). |
+| **0.6.0** | May | **CSV metrics** — save time series to file. |
+| **0.7.0** | May–Jun | **DB metrics** — save to database (PostgreSQL/TimescaleDB). Last 0.x before 1.0. |
 | **1.0.0** | Early Jul | **Breaking:** remove threshold-total and threshold-active. Stable API. Criteria: 100+ tests, logo, deprecations removed. |
 
 [↑ Back to top](#top)
