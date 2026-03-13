@@ -12,6 +12,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 - **Loki log line:** Database and cluster at the start of the message when present: `pgwd [cluster=X] [database=Y]: message | total=...`.
 - **docs/loki-grafana-alerts.md:** Labels, log line format, LogQL examples, Grafana alert rule setup, JSON payload reference.
 - **docs/testing-alert-levels.md:** Procedure to trigger attention/alert/danger with `-test-max-connections` against production without changing Postgres config.
+- **testing/compose:** Resource limits (`mem_limit`, `cpus`) and non-root `user` for client; resource limits for postgres. Addresses Snyk findings.
+- **testing/compose-loki:** Resource limits and non-root `user` (10001) for Loki.
 - **Loki auth:** `-loki-org-id` and `-loki-bearer-token` (`PGWD_LOKI_ORG_ID`, `PGWD_LOKI_BEARER_TOKEN`). Loki struct now sends `X-Scope-OrgID` and `Authorization: Bearer` headers when set. Fixes 401 Unauthorized when Loki requires multi-tenancy or auth.
 - **Notification sent log:** Log "Notification sent" (or "Notification sent: &lt;message&gt;") when at least one notifier delivers successfully. Helps confirm delivery when running with `-force-notification`.
 - **README:** Grafana/Loki stack org ID — must match Grafana's `X-Scope-OrgId` or logs won't appear. Troubleshooting entry, FAQ, Kubernetes example with `-loki-org-id`, env examples.
