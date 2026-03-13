@@ -44,8 +44,25 @@ func (l *Loki) PushPayload(ev Event) ([]byte, error) {
 	if ev.Namespace != "" {
 		labels["namespace"] = ev.Namespace
 	}
+	if ev.Database != "" {
+		labels["database"] = ev.Database
+	}
+	if ev.Cluster != "" {
+		labels["cluster"] = ev.Cluster
+	}
 
-	line := fmt.Sprintf("pgwd: %s | total=%d active=%d idle=%d", ev.Message, ev.Stats.Total, ev.Stats.Active, ev.Stats.Idle)
+	prefix := "pgwd:"
+	if ev.Cluster != "" || ev.Database != "" {
+		var parts []string
+		if ev.Cluster != "" {
+			parts = append(parts, fmt.Sprintf("cluster=%s", ev.Cluster))
+		}
+		if ev.Database != "" {
+			parts = append(parts, fmt.Sprintf("database=%s", ev.Database))
+		}
+		prefix = fmt.Sprintf("pgwd [%s]:", strings.Join(parts, " "))
+	}
+	line := fmt.Sprintf("%s %s | total=%d active=%d idle=%d", prefix, ev.Message, ev.Stats.Total, ev.Stats.Active, ev.Stats.Idle)
 	if ev.MaxConnections > 0 {
 		line += fmt.Sprintf(" max_connections=%d", ev.MaxConnections)
 		if ev.MaxConnectionsIsOverride {

@@ -1,5 +1,11 @@
 # pgwd — Documentation
 
+## Loki and Grafana alerts
+
+[Loki payload structure for Grafana alerts](./loki-grafana-alerts.md) — Labels, log line format, example LogQL queries, and how to build Grafana alert rules that react to pgwd notifications (attention, alert, danger).
+
+[Testing alert levels without changing production](./testing-alert-levels.md) — Procedure to trigger attention, alert, and danger notifications using `-test-max-connections` against a real Postgres instance (e.g. production) without modifying its config or waiting for real load.
+
 ## Sequence diagrams
 
 Sequence diagrams for main use cases (Mermaid format). View in any Markdown viewer that supports Mermaid (e.g. GitHub, VS Code with Mermaid extension, or [Mermaid Live](https://mermaid.live)).

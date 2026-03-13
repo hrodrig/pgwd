@@ -185,7 +185,7 @@ pgwd -db-url "postgres://..." -loki-url "http://localhost:3100/loki/api/v1/push"
 | **Detect connection leaks** | Use `stale-age` + `threshold-stale` (e.g. 600 and 1). Alert when any connection stays open longer than 10 min. |
 | **Pre-production test** | `-dry-run` and low thresholds to see current counts without sending alerts. |
 | **Validate notifications** | `-force-notification` with Slack/Loki: sends one test message regardless of thresholds. Use one-shot to confirm delivery, format, and how messages look. (If the connection to Postgres fails, pgwd always sends a connect-failure alert when a notifier is configured.) |
-| **Test alerts without low max_connections** | Use `-test-max-connections N` (e.g. 20) with `-force-notification` or low thresholds: thresholds and messages use N as “max_connections”, while stats stay real. Notifications show “(test override)” so total can exceed N. |
+| **Test alerts without low max_connections** | Use `-test-max-connections N` (e.g. 20) with `-force-notification` or low thresholds: thresholds and messages use N as “max_connections”, while stats stay real. Notifications show “(test override)” so total can exceed N. See [docs/testing-alert-levels.md](docs/testing-alert-levels.md) for a procedure to trigger attention/alert/danger against production without changing Postgres config. |
 | **Zero config (use defaults)** | Only set `-db-url` and a notifier; pgwd uses 3-tier levels (75,85,95%) by default. Use `-threshold-levels` to customize or `-default-threshold-percent` when using explicit thresholds. |
 | **Multiple environments** | Set `PGWD_*` in env per environment; override `-db-url` or `-loki-labels` per deploy. |
 | **Postgres in Kubernetes** | Use `-kube-postgres namespace/svc/name` (or `namespace/pod/name`). pgwd runs `kubectl port-forward` and connects to localhost. Optionally put `DISCOVER_MY_PASSWORD` in the URL to read the password from the pod's env (e.g. `POSTGRES_PASSWORD`). Requires `kubectl` in PATH. |
@@ -435,7 +435,7 @@ make install
 # Custom install path: GOBIN=~/bin make install  (default is $HOME/go/bin)
 ```
 
-**Release (GitHub):** See [Release steps](#release-steps) below for the full workflow. Quick: from `main`, `git tag v0.3.6`, `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
+**Release (GitHub):** See [Release steps](#release-steps) below for the full workflow. Quick: from `main`, `git tag v0.4.0`, `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
 
 ### Release steps
 
@@ -592,13 +592,15 @@ Set the Loki push endpoint URL (e.g. `http://loki:3100/loki/api/v1/push`). Optio
 
 **Grafana / Loki stacks (kube-prometheus-stack, etc.):** Grafana's Loki data source is often provisioned with a specific `X-Scope-OrgId` (e.g. `1`, `my-tenant`). **pgwd must use the same org ID** or logs will not appear in Grafana. Check your Grafana Loki data source config (or Helm values: `grafana.additionalDataSources` → Loki → `secureJsonData.httpHeaderValue1`). Use `-loki-org-id <value>` to match.
 
-**Notification format:** Each alert is one log line in a stream. The stream has labels from `PGWD_LOKI_LABELS` plus `app=pgwd` (if not set), `threshold`, `level` (attention/alert/danger), and `namespace` (when using `-kube-postgres`). The log line is:
+**Notification format:** Each alert is one log line in a stream. The stream has labels from `PGWD_LOKI_LABELS` plus `app=pgwd` (if not set), `threshold`, `level` (attention/alert/danger), `namespace` (when using `-kube-postgres`), `database`, and `cluster` (when set). The log line includes database and cluster at the start when available:
 
 ```
-pgwd threshold exceeded: <Message> | total=<Total> active=<Active> idle=<Idle> (limit <Threshold>=<ThresholdValue>)
+pgwd [cluster=<Cluster>] [database=<Database>]: <Message> | total=<Total> active=<Active> idle=<Idle> (limit <Threshold>=<ThresholdValue>)
 ```
 
-Same placeholders as Slack. Timestamp is the time of the push. You can query in Grafana or LogCLI by label (e.g. `{app="pgwd", threshold="total"}` or `{app="pgwd", level="danger"}`).
+Example with database and cluster: `pgwd [cluster=prod] [database=myapp]: Test notification — delivery check (force-notification). | total=33 active=1 idle=32 max_connections=2048 (delivery check)`
+
+Same placeholders as Slack. Timestamp is the time of the push. You can query in Grafana or LogCLI by label (e.g. `{app="pgwd", threshold="total"}` or `{app="pgwd", level="danger"}`). For Grafana alert rules, see [docs/loki-grafana-alerts.md](docs/loki-grafana-alerts.md) (labels, LogQL examples, payload structure).
 
 ---
 
@@ -676,7 +678,7 @@ When you use `-threshold-levels 75,85,95` (default), pgwd fires one alert per ru
 **Published image (each release):** Multi-arch images (linux/amd64, linux/arm64) are published to [GitHub Container Registry](https://github.com/hrodrig/pgwd/pkgs/container/pgwd) as `ghcr.io/hrodrig/pgwd`. Use a version tag or `latest`:
 
 ```bash
-docker pull ghcr.io/hrodrig/pgwd:v0.3.6
+docker pull ghcr.io/hrodrig/pgwd:v0.4.0
 # or
 docker pull ghcr.io/hrodrig/pgwd:latest
 ```
@@ -702,13 +704,13 @@ This runs `docker build` with `--build-arg VERSION=...`, `--build-arg COMMIT=...
 
 **Validate the image**
 
-Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.3.6`), or `pgwd` if you built locally with `make docker-build`:
+Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.4.0`), or `pgwd` if you built locally with `make docker-build`:
 
 ```bash
 # Help (no DB needed)
 docker run --rm ghcr.io/hrodrig/pgwd:latest -h
 
-# Version (should show e.g. pgwd v0.3.6 (commit ..., built ...))
+# Version (should show e.g. pgwd v0.4.0 (commit ..., built ...))
 docker run --rm ghcr.io/hrodrig/pgwd:latest --version
 
 # Expect "missing database URL" (validates startup path)
