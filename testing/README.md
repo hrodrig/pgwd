@@ -2,6 +2,8 @@
 
 Local test helpers for pgwd.
 
+**Security:** Compose files set resource limits (`mem_limit`, `cpus`) and run client/Loki as non-root (`user`) to satisfy Snyk and similar scanners. Postgres entrypoint requires root for init.
+
 ## Postgres (compose)
 
 `compose.yaml` runs PostgreSQL 16 (default **max_connections=20**) and an optional **client** service that holds one connection open. Use one or several clients to consume connections and test pgwd thresholds.

@@ -32,6 +32,19 @@ type lokiStream struct {
 
 // PushPayload returns the JSON body that Send posts to Loki. Useful for debugging and tests.
 func (l *Loki) PushPayload(ev Event) ([]byte, error) {
+	labels := buildLokiLabels(l, ev)
+	line := buildLokiLine(ev)
+	ts := strconv.FormatInt(time.Now().UnixNano(), 10)
+	body := lokiPushBody{
+		Streams: []lokiStream{{
+			Stream: labels,
+			Values: [][]string{{ts, line}},
+		}},
+	}
+	return json.Marshal(body)
+}
+
+func buildLokiLabels(l *Loki, ev Event) map[string]string {
 	labels := make(map[string]string)
 	for k, v := range l.Labels {
 		labels[k] = v
@@ -44,31 +57,54 @@ func (l *Loki) PushPayload(ev Event) ([]byte, error) {
 	if ev.Namespace != "" {
 		labels["namespace"] = ev.Namespace
 	}
+	if ev.Database != "" {
+		labels["database"] = ev.Database
+	}
+	if ev.Cluster != "" {
+		labels["cluster"] = ev.Cluster
+	}
+	return labels
+}
 
-	line := fmt.Sprintf("pgwd: %s | total=%d active=%d idle=%d", ev.Message, ev.Stats.Total, ev.Stats.Active, ev.Stats.Idle)
+func buildLokiLine(ev Event) string {
+	prefix := "pgwd:"
+	if ev.Cluster != "" || ev.Database != "" {
+		var parts []string
+		if ev.Cluster != "" {
+			parts = append(parts, fmt.Sprintf("cluster=%s", ev.Cluster))
+		}
+		if ev.Database != "" {
+			parts = append(parts, fmt.Sprintf("database=%s", ev.Database))
+		}
+		prefix = fmt.Sprintf("pgwd [%s]:", strings.Join(parts, " "))
+	}
+	line := fmt.Sprintf("%s %s | total=%d active=%d idle=%d", prefix, ev.Message, ev.Stats.Total, ev.Stats.Active, ev.Stats.Idle)
+	line += lokiLineSuffix(ev)
+	return line
+}
+
+func lokiLineSuffix(ev Event) string {
+	s := ""
 	if ev.MaxConnections > 0 {
-		line += fmt.Sprintf(" max_connections=%d", ev.MaxConnections)
+		s = fmt.Sprintf(" max_connections=%d", ev.MaxConnections)
 		if ev.MaxConnectionsIsOverride {
-			line += " (test override)"
+			s += " (test override)"
 		}
 	}
-	if ev.Threshold == "test" {
-		line += " (delivery check)"
-	} else if ev.Threshold == "connect_failure" {
-		line += " (connection failed)"
-	} else if ev.Threshold == "too_many_clients" {
-		line += " (too many clients — DB saturated)"
-	} else {
-		line += fmt.Sprintf(" (limit %s=%d)", ev.Threshold, ev.ThresholdValue)
+	return s + thresholdSuffix(ev.Threshold, ev.ThresholdValue)
+}
+
+func thresholdSuffix(threshold string, value int) string {
+	switch threshold {
+	case "test":
+		return " (delivery check)"
+	case "connect_failure":
+		return " (connection failed)"
+	case "too_many_clients":
+		return " (too many clients — DB saturated)"
+	default:
+		return fmt.Sprintf(" (limit %s=%d)", threshold, value)
 	}
-	ts := strconv.FormatInt(time.Now().UnixNano(), 10)
-	body := lokiPushBody{
-		Streams: []lokiStream{{
-			Stream: labels,
-			Values: [][]string{{ts, line}},
-		}},
-	}
-	return json.Marshal(body)
 }
 
 // Send pushes a log line to Loki.

@@ -29,12 +29,16 @@ services:
       interval: 2s
       timeout: 5s
       retries: 5
+    # Resource limits for Snyk/security scans. Postgres entrypoint needs root for init.
+    mem_limit: 256m
+    cpus: 0.5
 
   # One container = one long-lived connection. Uses pgwd_app (non-superuser) so
   # superuser_reserved_connections (3) stay free for admin (psql -U pgwd from inside).
   # Examples: 1 client (default), or: docker compose -f testing/compose.yaml up -d --scale client=10
   client:
     image: postgres:16-alpine
+    user: "70:70"  # postgres user (Alpine); non-root for Snyk
     environment:
       PGHOST: postgres
       PGPASSWORD: pgwd
@@ -44,3 +48,5 @@ services:
       postgres:
         condition: service_healthy
     command: ["sh", "-c", "while true; do psql -c 'SELECT pg_sleep(3600)'; done"]
+    mem_limit: 64m
+    cpus: 0.25

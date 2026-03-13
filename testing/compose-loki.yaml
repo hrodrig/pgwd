@@ -13,8 +13,11 @@
 services:
   loki:
     image: grafana/loki:2.9.4
+    user: "10001:10001"  # loki user; non-root for Snyk
     ports:
       - "3100:3100"
     volumes:
       - ./loki-config.yaml:/etc/loki/config.yaml:ro
     command: ["-config.file=/etc/loki/config.yaml"]
+    mem_limit: 256m
+    cpus: 0.5
