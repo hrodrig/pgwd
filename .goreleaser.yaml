@@ -5,6 +5,10 @@
 
 version: 2
 
+before:
+  hooks:
+    - sh -c 'gzip -c contrib/man/man1/pgwd.1 > contrib/man/man1/pgwd.1.gz'
+
 builds:
   - id: pgwd
     main: ./cmd/pgwd
@@ -13,6 +17,9 @@ builds:
       - linux
       - darwin
       - windows
+      - freebsd
+      - openbsd
+      - netbsd
     goarch:
       - amd64
       - arm64
@@ -31,6 +38,9 @@ archives:
       - goos: windows
         format: zip
     name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - src: contrib/man/man1/pgwd.1
+        dst: share/man/man1/pgwd.1
 
 checksum:
   name_template: "checksums.txt"
@@ -48,6 +58,9 @@ nfpms:
       - rpm
     builds:
       - pgwd
+    contents:
+      - src: contrib/man/man1/pgwd.1.gz
+        dst: /usr/share/man/man1/
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
@@ -95,6 +108,8 @@ homebrew_casks:
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     url:
       verified: "github.com/hrodrig/pgwd/"
+    manpages:
+      - share/man/man1/pgwd.1
     hooks:
       post:
         install: |

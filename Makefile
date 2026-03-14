@@ -8,6 +8,51 @@ COMMIT   := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BUILDDATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS   := -ldflags "-s -w -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildDate=$(BUILDDATE)"
 
+# Default target: show help
+.DEFAULT_GOAL := help
+
+.PHONY: help
+help:
+	@echo "pgwd — Postgres Watch Dog"
+	@echo ""
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "Build:"
+	@echo "  build              Build binary for current platform"
+	@echo "  build-all          Cross-compile for Linux, macOS, Windows (output in dist/)"
+	@echo "  build-linux        Cross-compile for Linux (amd64, arm64)"
+	@echo "  build-darwin       Cross-compile for macOS (amd64, arm64)"
+	@echo "  build-windows      Cross-compile for Windows (amd64, arm64)"
+	@echo ""
+	@echo "Install & run:"
+	@echo "  install            Install to \$$GOBIN (go install)"
+	@echo "  install-man        Install man page to \$$MANDIR/man1 (default /usr/local/share/man)"
+	@echo "  clean              Remove binary and dist/"
+	@echo ""
+	@echo "Test:"
+	@echo "  test               Unit tests"
+	@echo "  test-integration   Integration tests (requires Docker)"
+	@echo "  test-e2e-kube      E2E test with kind cluster (requires kind, kubectl, Docker)"
+	@echo ""
+	@echo "Quality:"
+	@echo "  lint               Check gofmt and gocyclo"
+	@echo "  lint-fix           Fix formatting (gofmt -s -w)"
+	@echo ""
+	@echo "Docker:"
+	@echo "  docker-build       Build image with version info"
+	@echo "  docker-scan        Build image and run Grype (security scan)"
+	@echo ""
+	@echo "Release:"
+	@echo "  release-check      Run all checks (lint, test, test-integration, test-e2e-kube, docker-scan)"
+	@echo "  release            Full release (from main only; runs release-check first)"
+	@echo "  snapshot           Goreleaser snapshot build (outputs to dist/)"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make build"
+	@echo "  make build VERSION=v0.5.0"
+	@echo "  GOBIN=/usr/local/bin make install"
+	@echo "  make release-check"
+
 # Build for current platform. Override version: make build VERSION=v0.1.0
 build:
 	go build $(LDFLAGS) -o $(BINARY) ./cmd/pgwd
@@ -35,6 +80,14 @@ build-windows:
 # Install: go install → $GOBIN (default $HOME/go/bin). Custom path: GOBIN=/usr/local/bin make install
 install:
 	go install $(LDFLAGS) ./cmd/pgwd
+
+# Install man page. MANDIR defaults to /usr/local/share/man. Use: MANDIR=/usr/share/man make install-man
+MANDIR ?= /usr/local/share/man
+.PHONY: install-man
+install-man:
+	@mkdir -p $(MANDIR)/man1
+	@cp contrib/man/man1/pgwd.1 $(MANDIR)/man1/
+	@echo "Installed man page to $(MANDIR)/man1/pgwd.1"
 
 # Run tests (unit tests; integration tests are skipped without PGWD_TEST_* env vars)
 test:
@@ -106,7 +159,7 @@ release-check:
 	@echo "All release checks passed."
 
 # Release: only from main. Requires release-check to pass. Merge develop → main, update VERSION, then: git tag v0.1.0 && make release
-.PHONY: release snapshot docker-build docker-scan lint lint-fix test-integration
+.PHONY: help release snapshot docker-build docker-scan lint lint-fix test-integration
 release: release-check
 	@branch=$$(git branch --show-current 2>/dev/null); \
 	if [ "$$branch" != "main" ]; then \

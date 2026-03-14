@@ -19,7 +19,7 @@
 
 Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via **Slack** and/or **Loki** when configured thresholds are exceeded. It can also alert on **stale connections** (connections that stay open and never close).
 
-**Documentation:** [Sequence diagrams](docs/README.md#sequence-diagrams) (Mermaid) for each use case, [audited against the code](docs/sequence/AUDIT.md), and terminal demo (recorded with [VHS](https://github.com/charmbracelet/vhs)) — see [docs/](docs/README.md). **Scanning** before release (govulncheck, Grype): [tools/README.md](tools/README.md).
+**Documentation:** [Sequence diagrams](docs/README.md#sequence-diagrams) (Mermaid) for each use case, [audited against the code](docs/sequence/AUDIT.md), terminal demo (recorded with [VHS](https://github.com/charmbracelet/vhs)), and `man pgwd` (included in .deb/.rpm packages) — see [docs/](docs/README.md). **Scanning** before release (govulncheck, Grype): [tools/README.md](tools/README.md).
 
 ![Terminal demo](docs/demo.gif)
 
@@ -417,13 +417,24 @@ go install github.com/hrodrig/pgwd@latest
 
 This installs the binary to `$GOBIN` (default `$HOME/go/bin`). Ensure `$GOBIN` is on your `PATH`.
 
-**Pre-built binaries:** [Releases](https://github.com/hrodrig/pgwd/releases) provide binaries (tar.gz, zip), `.deb`, and `.rpm` packages for Linux, macOS, and Windows (amd64 and arm64).
-
-**Homebrew (macOS):**
+**One-liner (Linux, macOS, BSD) — installs latest release:**
 
 ```bash
-brew install hrodrig/pgwd/pgwd
+curl -sSL https://raw.githubusercontent.com/hrodrig/pgwd/main/scripts/install.sh | bash
 ```
+
+**Package managers:**
+
+| Platform | Command |
+|----------|---------|
+| **Homebrew (macOS)** | `brew install hrodrig/pgwd/pgwd` |
+| **Debian/Ubuntu** | `wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v0.5.0/pgwd_v0.5.0_linux_amd64.deb && sudo dpkg -i /tmp/pgwd.deb` |
+| **Fedora/RHEL** | `sudo dnf install https://github.com/hrodrig/pgwd/releases/download/v0.5.0/pgwd_v0.5.0_linux_amd64.rpm` |
+| **Alpine** | `wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.0/pgwd_v0.5.0_linux_amd64.tar.gz \| tar -xzf - -C /usr/local/bin` |
+
+Replace `v0.5.0` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets.
+
+**Pre-built binaries:** [Releases](https://github.com/hrodrig/pgwd/releases) provide binaries (tar.gz, zip), `.deb`, and `.rpm` packages for Linux, macOS, and Windows (amd64 and arm64). The `.deb` and `.rpm` packages include a man page (`man pgwd`).
 
 ## Build
 
@@ -433,6 +444,7 @@ go build -o pgwd ./cmd/pgwd
 make build
 make install
 # Custom install path: GOBIN=~/bin make install  (default is $HOME/go/bin)
+# Install man page: make install-man  (MANDIR=/usr/share/man for system-wide)
 ```
 
 **Release (GitHub):** See [Release steps](#release-steps) below for the full workflow. Quick: from `main`, `git tag v0.5.0`, `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
@@ -564,6 +576,8 @@ pgwd -h
 ```
 
 Shows all flags and their env equivalents.
+
+**Man page:** When installed via `.deb` or `.rpm`, run `man pgwd` for the full manual. From source: `make install-man` (or `MANDIR=/usr/share/man make install-man` for system-wide).
 
 ## Slack
 
