@@ -8,7 +8,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ### Added
 
-- (none yet)
+- **Man page** (`man pgwd`): `contrib/man/man1/pgwd.1` with all options, examples, and env vars. `make install-man` (MANDIR defaults to /usr/local/share/man). `.deb` and `.rpm` packages include the man page in `/usr/share/man/man1/`. Homebrew cask installs the man page automatically.
+- **scripts/install.sh:** One-liner installer for Linux, macOS, and BSD (downloads latest release, extracts to BINDIR).
+- **Cursor rule:** `.cursor/rules/man-page-sync.mdc` — keep man page in sync when adding flags or changing version.
 
 ---
 
