@@ -41,6 +41,8 @@ archives:
     files:
       - src: contrib/man/man1/pgwd.1
         dst: share/man/man1/pgwd.1
+      - src: LICENSE
+        dst: share/doc/pgwd/LICENSE
 
 checksum:
   name_template: "checksums.txt"
