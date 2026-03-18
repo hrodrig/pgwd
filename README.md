@@ -41,6 +41,7 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 - [FAQ](#faq)
 - [Docker](#docker)
 - [systemd](#systemd)
+- [Alpine Linux (OpenRC)](#alpine-linux-openrc)
 - [Roadmap](#roadmap)
 - [Get involved](#get-involved)
 
@@ -206,6 +207,11 @@ pgwd -db-url "postgres://..." \
 
 ### Run mode and dry-run
 
+| `interval` | Behavior |
+|-------------|----------|
+| **0** | One-shot — check once, then exit |
+| **> 0** (e.g. 60) | Daemon — check every N seconds until Ctrl+C or SIGTERM |
+
 ```bash
 # One-shot: run once, then exit (ideal for cron)
 pgwd -db-url "postgres://..." -notifications-slack-webhook "https://..."
@@ -216,13 +222,17 @@ pgwd -db-url "postgres://..." -interval 60 -notifications-slack-webhook "https:/
 
 # Dry run: only print stats (total/active/idle), no notifications; no webhook/loki needed
 pgwd -db-url "postgres://..." -dry-run
-# Output example: total=42 active=3 idle=39
+# With interval > 0 (default 60): runs as daemon, prints every interval — Ctrl+C to stop
+# With interval 0: runs once and exits — quick connectivity test
+pgwd -db-url "postgres://..." -dry-run -interval 0
 
 # Force notification: send a test message to all configured notifiers (no threshold required)
 # Use to validate delivery and format before relying on real alerts
 pgwd -db-url "postgres://..." -notifications-slack-webhook "https://..." -force-notification
 pgwd -db-url "postgres://..." -notifications-loki-url "http://localhost:3100/loki/api/v1/push" -force-notification
 ```
+
+**Quick test** (after install): `pgwd -dry-run -interval 0` — one check, prints stats, exits. Use config file or `-db-url` + `-config`.
 
 [↑ Back to top](#top)
 
@@ -482,7 +492,7 @@ curl -sSL https://raw.githubusercontent.com/hrodrig/pgwd/main/scripts/install.sh
 | **Homebrew (macOS)** | `brew install hrodrig/pgwd/pgwd` |
 | **Debian/Ubuntu** | `wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v0.5.0/pgwd_v0.5.0_linux_amd64.deb && sudo dpkg -i /tmp/pgwd.deb` |
 | **Fedora/RHEL** | `sudo dnf install https://github.com/hrodrig/pgwd/releases/download/v0.5.0/pgwd_v0.5.0_linux_amd64.rpm` |
-| **Alpine** | `wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.0/pgwd_v0.5.0_linux_amd64.tar.gz \| tar -xzf - -C /usr/local/bin` |
+| **Alpine** | `wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.0/pgwd_v0.5.0_linux_amd64.tar.gz \| tar -xzf - -C /usr/local/bin` — see [Alpine (OpenRC)](#alpine-linux-openrc) |
 
 Replace `v0.5.0` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets.
 
@@ -868,6 +878,42 @@ From source: copy `contrib/systemd/pgwd-once.service` and `contrib/systemd/pgwd.
 To change the interval, edit the timer: `OnUnitActiveSec=5min` → e.g. `OnUnitActiveSec=10min`, then `sudo systemctl daemon-reload`.
 
 **Optional:** Run the service as a dedicated user: create `useradd -r -s /bin/false pgwd`, then in the unit add `User=pgwd` and `Group=pgwd`. Ensure that user can read the config file.
+
+[↑ Back to top](#top)
+
+---
+
+## Alpine Linux (OpenRC)
+
+Alpine uses **OpenRC** (rc.d), not systemd. Config: `/etc/pgwd/pgwd.conf`.
+
+**Install** — tar.gz (binario estático, musl-compatible):
+
+```bash
+wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.0/pgwd_v0.5.0_linux_amd64.tar.gz | tar -xzf - -C /usr/local/bin
+# arm64: replace amd64 with arm64
+```
+
+**When available in aports:** `apk add pgwd` (installs binary, config, and OpenRC init script).
+
+**Daemon (OpenRC)**
+
+```bash
+# Config (required)
+sudo mkdir -p /etc/pgwd
+sudo cp contrib/pgwd.conf.example /etc/pgwd/pgwd.conf
+sudo nano /etc/pgwd/pgwd.conf  # client, db.url, etc.
+
+# Init script (from tarball; apk installs it automatically)
+sudo cp contrib/openrc/pgwd.initd /etc/init.d/pgwd
+sudo chmod +x /etc/init.d/pgwd
+
+# Start and enable on boot
+rc-service pgwd start
+rc-update add pgwd default
+```
+
+See `contrib/openrc/README.md` for details.
 
 [↑ Back to top](#top)
 

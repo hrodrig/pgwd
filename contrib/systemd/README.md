@@ -25,6 +25,13 @@ Daemon and timer units for running pgwd under systemd. **No EnvironmentFile** â€
 
 **.deb/.rpm** install these units to `/lib/systemd/system/`. Skip the `cp` steps below; just enable and start.
 
+## Quick test (before enabling)
+
+```bash
+# One check, print stats, exit â€” validates config and DB connectivity
+pgwd -dry-run -interval 0
+```
+
 ## Daemon mode
 
 ```bash
