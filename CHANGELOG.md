@@ -8,9 +8,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ### Added
 
+- **Config file** (YAML): Load settings from `/etc/pgwd/pgwd.conf` (or `-config` / `PGWD_CONFIG`). Keys match `-flag` and `PGWD_*` env vars. Example: `contrib/pgwd.conf.example`.
+- **.deb and .rpm packages:** Install `/etc/pgwd/pgwd.conf` from the example (type `config|noreplace` — not overwritten on upgrade if user modified). Edit before use. Also install systemd units to `/lib/systemd/system/` (pgwd.service, pgwd-once.service, pgwd.timer) — enable with `systemctl enable --now pgwd`. Debian/Ubuntu: prerm stops and disables services before removal; postrm removes `/etc/pgwd` on `apt purge`.
+
+### Changed
+
+- **Config file as single source:** When a config file is loaded, env vars (PGWD_*) are ignored; config file is the only source. When no config file exists, env vars apply. CLI flags always override. Removed `EnvironmentFile` from systemd units; use config file only.
+- **Config file layout (breaking):** Reorganized YAML structure: `db` (url, threshold, stale_age, default_threshold_percent), `kube`, `notifications` (loki, slack). Top-level: client, cluster, interval, dry_run, etc.
+- **client required (breaking):** `client` is now mandatory; no fallback to hostname or kube resource. Set in config or `-client`.
+- **cluster from kubeconfig:** Cluster name is computed from kubeconfig when `-kube-postgres` is set. Removed `cluster` from config file and CLI; not configurable.
+- **Notification CLI flags and env vars renamed (breaking):** `-loki-url` → `-notifications-loki-url`, `-slack-webhook` → `-notifications-slack-webhook`, etc. Env: `PGWD_LOKI_URL` → `PGWD_NOTIFICATIONS_LOKI_URL`, `PGWD_SLACK_WEBHOOK` → `PGWD_NOTIFICATIONS_SLACK_WEBHOOK`, etc. Aligns CLI and env with YAML structure (`notifications.loki.*`, `notifications.slack.*`).
+- **DB threshold env vars renamed (breaking):** `PGWD_THRESHOLD_TOTAL` → `PGWD_DB_THRESHOLD_TOTAL`, `PGWD_THRESHOLD_ACTIVE` → `PGWD_DB_THRESHOLD_ACTIVE`, `PGWD_THRESHOLD_IDLE` → `PGWD_DB_THRESHOLD_IDLE`, `PGWD_THRESHOLD_STALE` → `PGWD_DB_THRESHOLD_STALE`, `PGWD_THRESHOLD_LEVELS` → `PGWD_DB_THRESHOLD_LEVELS`, `PGWD_STALE_AGE` → `PGWD_DB_STALE_AGE`, `PGWD_DEFAULT_THRESHOLD_PERCENT` → `PGWD_DB_DEFAULT_THRESHOLD_PERCENT`. Aligns env with YAML structure (`db.threshold.*`, `db.stale_age`, `db.default_threshold_percent`).
+- **DB threshold CLI flags renamed (breaking):** `-threshold-total` → `-db-threshold-total`, `-threshold-active` → `-db-threshold-active`, `-threshold-idle` → `-db-threshold-idle`, `-threshold-stale` → `-db-threshold-stale`, `-threshold-levels` → `-db-threshold-levels`, `-stale-age` → `-db-stale-age`, `-default-threshold-percent` → `-db-default-threshold-percent`. Aligns CLI with YAML and env (`db.*`).
 - **Man page** (`man pgwd`): `contrib/man/man1/pgwd.1` with all options, examples, and env vars. `make install-man` (MANDIR defaults to /usr/local/share/man). `.deb` and `.rpm` packages include the man page in `/usr/share/man/man1/`. Homebrew cask installs the man page automatically.
 - **Release tarball:** LICENSE included as `share/doc/pgwd/LICENSE` for Alpine and other packagers (MIT compliance).
 - **scripts/install.sh:** One-liner installer for Linux, macOS, and BSD (downloads latest release, extracts to BINDIR).
+- **OpenBSD pledge:** On OpenBSD, pgwd calls `pledge()` to restrict syscalls (stdio, rpath, inet, dns, proc). Stub on other platforms.
+- **Makefile:** `check-docker` runs before snapshot, release, test-integration, test-e2e-kube, docker-build, docker-scan — fails early with clear message if Docker is not running.
 - **Cursor rule:** `.cursor/rules/man-page-sync.mdc` — keep man page in sync when adding flags or changing version.
 
 ---
@@ -37,7 +51,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 - **README:** Log rotation (logrotate) for cron logs — examples for `/var/log/pgwd.log` and `~/log/pgwd-cron.log` with `su username groupname` for logs in user home.
 - **README:** Usage examples updated to use `-threshold-levels` (3-tier) as primary; `-threshold-total` and `-threshold-active` deprecated. Table and examples now show levels, idle, stale.
 - **README:** TOC, logo/banner, "Back to top" links, and FAQ section (expandable) for better navigation and discoverability.
-- **-kube-loki** (`PGWD_KUBE_LOKI`): Connect to Loki via kubectl port-forward when Loki is inside the cluster and pgwd runs outside (e.g. VM with cron). Same format as `-kube-postgres`: `namespace/svc/name` (e.g. `monitoring/svc/loki`). Mutually exclusive with `-loki-url`. Use `-kube-loki-local-port` and `-kube-loki-remote-port` (default 3100) when Loki uses a different port.
+- **-kube-loki** (`PGWD_KUBE_LOKI`): Connect to Loki via kubectl port-forward when Loki is inside the cluster and pgwd runs outside (e.g. VM with cron). Same format as `-kube-postgres`: `namespace/svc/name` (e.g. `monitoring/svc/loki`). Mutually exclusive with `-notifications-loki-url`. Use `-kube-loki-local-port` and `-kube-loki-remote-port` (default 3100) when Loki uses a different port.
 - **E2E kube test:** Now deploys Loki and runs `pgwd -kube-loki -force-notification` to validate the full path. `testing/k8s/loki.yaml` added.
 - **docs:** Sequence diagrams audit ([docs/sequence/AUDIT.md](docs/sequence/AUDIT.md)) mapping each diagram step to code; README and docs/README link to it.
 - **Cursor rule:** `.cursor/rules/diagrams-mermaid.mdc` — validate Mermaid rendering when adding/editing diagrams; avoid backticks, semicolons, and colons inside message text; keep diagrams in sync with code (see AUDIT.md).

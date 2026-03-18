@@ -19,6 +19,7 @@ import (
 	"github.com/hrodrig/pgwd/internal/config"
 	"github.com/hrodrig/pgwd/internal/kube"
 	"github.com/hrodrig/pgwd/internal/notify"
+	"github.com/hrodrig/pgwd/internal/openbsd"
 	"github.com/hrodrig/pgwd/internal/postgres"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -52,22 +53,24 @@ func handleVersion() {
 
 func parseFlags(cfg *config.Config) (showVersion bool) {
 	showVersionFlag := flag.Bool("version", false, "print version and exit")
+	configPath := config.ConfigPath()
+	flag.StringVar(&configPath, "config", configPath, "Config file path (PGWD_CONFIG); default /etc/pgwd/pgwd.conf")
 	flag.StringVar(&cfg.DBURL, "db-url", cfg.DBURL, "PostgreSQL connection URL (PGWD_DB_URL)")
-	flag.IntVar(&cfg.ThresholdTotal, "threshold-total", cfg.ThresholdTotal, "Alert when total connections >= N (PGWD_THRESHOLD_TOTAL). Deprecated: use -threshold-levels; will be removed in v1.0.0.")
-	flag.IntVar(&cfg.ThresholdActive, "threshold-active", cfg.ThresholdActive, "Alert when active connections >= N (PGWD_THRESHOLD_ACTIVE). Deprecated: use -threshold-levels; will be removed in v1.0.0.")
-	flag.IntVar(&cfg.ThresholdIdle, "threshold-idle", cfg.ThresholdIdle, "Alert when idle connections >= N (PGWD_THRESHOLD_IDLE)")
-	flag.IntVar(&cfg.StaleAge, "stale-age", cfg.StaleAge, "Consider connection stale if open longer than N seconds (PGWD_STALE_AGE)")
-	flag.IntVar(&cfg.ThresholdStale, "threshold-stale", cfg.ThresholdStale, "Alert when stale connections (open > stale-age) >= N (PGWD_THRESHOLD_STALE)")
-	flag.StringVar(&cfg.SlackWebhook, "slack-webhook", cfg.SlackWebhook, "Slack Incoming Webhook URL (PGWD_SLACK_WEBHOOK)")
-	flag.StringVar(&cfg.LokiURL, "loki-url", cfg.LokiURL, "Loki push API URL, e.g. http://localhost:3100/loki/api/v1/push (PGWD_LOKI_URL)")
-	flag.StringVar(&cfg.LokiLabels, "loki-labels", cfg.LokiLabels, "Loki labels, e.g. app=pgwd,env=prod (PGWD_LOKI_LABELS)")
-	flag.StringVar(&cfg.LokiOrgID, "loki-org-id", cfg.LokiOrgID, "Loki X-Scope-OrgID header (multi-tenancy); for 401 Unauthorized (PGWD_LOKI_ORG_ID)")
-	flag.StringVar(&cfg.LokiBearerToken, "loki-bearer-token", cfg.LokiBearerToken, "Loki Authorization: Bearer token (PGWD_LOKI_BEARER_TOKEN)")
+	flag.IntVar(&cfg.ThresholdTotal, "db-threshold-total", cfg.ThresholdTotal, "Alert when total connections >= N (PGWD_DB_THRESHOLD_TOTAL). Deprecated: use -db-threshold-levels; will be removed in v1.0.0.")
+	flag.IntVar(&cfg.ThresholdActive, "db-threshold-active", cfg.ThresholdActive, "Alert when active connections >= N (PGWD_DB_THRESHOLD_ACTIVE). Deprecated: use -db-threshold-levels; will be removed in v1.0.0.")
+	flag.IntVar(&cfg.ThresholdIdle, "db-threshold-idle", cfg.ThresholdIdle, "Alert when idle connections >= N (PGWD_DB_THRESHOLD_IDLE)")
+	flag.IntVar(&cfg.StaleAge, "db-stale-age", cfg.StaleAge, "Consider connection stale if open longer than N seconds (PGWD_DB_STALE_AGE)")
+	flag.IntVar(&cfg.ThresholdStale, "db-threshold-stale", cfg.ThresholdStale, "Alert when stale connections (open > stale-age) >= N (PGWD_DB_THRESHOLD_STALE)")
+	flag.StringVar(&cfg.SlackWebhook, "notifications-slack-webhook", cfg.SlackWebhook, "Slack Incoming Webhook URL (PGWD_NOTIFICATIONS_SLACK_WEBHOOK)")
+	flag.StringVar(&cfg.LokiURL, "notifications-loki-url", cfg.LokiURL, "Loki push API URL, e.g. http://localhost:3100/loki/api/v1/push (PGWD_NOTIFICATIONS_LOKI_URL)")
+	flag.StringVar(&cfg.LokiLabels, "notifications-loki-labels", cfg.LokiLabels, "Loki labels, e.g. app=pgwd,env=prod (PGWD_NOTIFICATIONS_LOKI_LABELS)")
+	flag.StringVar(&cfg.LokiOrgID, "notifications-loki-org-id", cfg.LokiOrgID, "Loki X-Scope-OrgID header (multi-tenancy); for 401 Unauthorized (PGWD_NOTIFICATIONS_LOKI_ORG_ID)")
+	flag.StringVar(&cfg.LokiBearerToken, "notifications-loki-bearer-token", cfg.LokiBearerToken, "Loki Authorization: Bearer token (PGWD_NOTIFICATIONS_LOKI_BEARER_TOKEN)")
 	flag.IntVar(&cfg.Interval, "interval", cfg.Interval, "Run every N seconds; 0 = run once (PGWD_INTERVAL)")
 	flag.BoolVar(&cfg.DryRun, "dry-run", cfg.DryRun, "Only print, do not send notifications (PGWD_DRY_RUN)")
 	flag.BoolVar(&cfg.ForceNotification, "force-notification", cfg.ForceNotification, "Always send a test notification to validate delivery/format (PGWD_FORCE_NOTIFICATION)")
-	flag.IntVar(&cfg.DefaultThresholdPercent, "default-threshold-percent", cfg.DefaultThresholdPercent, "When one of total/active is 0, set it to this % of max_connections (1-100, default 80) (PGWD_DEFAULT_THRESHOLD_PERCENT)")
-	flag.StringVar(&cfg.ThresholdLevels, "threshold-levels", cfg.ThresholdLevels, "When both total and active are 0: comma-separated percentages for 3-tier alerts, e.g. 75,85,95 (attention/alert/danger). Only highest level fires. (PGWD_THRESHOLD_LEVELS)")
+	flag.IntVar(&cfg.DefaultThresholdPercent, "db-default-threshold-percent", cfg.DefaultThresholdPercent, "When one of total/active is 0, set it to this % of max_connections (1-100, default 80) (PGWD_DB_DEFAULT_THRESHOLD_PERCENT)")
+	flag.StringVar(&cfg.ThresholdLevels, "db-threshold-levels", cfg.ThresholdLevels, "When both total and active are 0: comma-separated percentages for 3-tier alerts, e.g. 75,85,95 (attention/alert/danger). Only highest level fires. (PGWD_DB_THRESHOLD_LEVELS)")
 	flag.StringVar(&cfg.KubePostgres, "kube-postgres", cfg.KubePostgres, "Connect via kubectl port-forward: namespace/type/name (e.g. default/svc/postgres) (PGWD_KUBE_POSTGRES)")
 	flag.StringVar(&cfg.KubeLoki, "kube-loki", cfg.KubeLoki, "Connect to Loki via kubectl port-forward when Loki is inside the cluster: namespace/type/name (e.g. monitoring/svc/loki) (PGWD_KUBE_LOKI)")
 	flag.StringVar(&cfg.KubeContext, "kube-context", cfg.KubeContext, "Kubectl context to use (empty = current context) (PGWD_KUBE_CONTEXT)")
@@ -76,8 +79,7 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.IntVar(&cfg.KubeLokiRemotePort, "kube-loki-remote-port", cfg.KubeLokiRemotePort, "Remote port on the Loki service (default 3100) (PGWD_KUBE_LOKI_REMOTE_PORT)")
 	flag.StringVar(&cfg.KubePasswordVar, "kube-password-var", cfg.KubePasswordVar, "Pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD) (PGWD_KUBE_PASSWORD_VAR)")
 	flag.StringVar(&cfg.KubePasswordContainer, "kube-password-container", cfg.KubePasswordContainer, "Container name in pod for password discovery (PGWD_KUBE_PASSWORD_CONTAINER)")
-	flag.StringVar(&cfg.Cluster, "cluster", cfg.Cluster, "Cluster name for notifications (PGWD_CLUSTER); when -kube-postgres is set, detected from kubeconfig if unset")
-	flag.StringVar(&cfg.Client, "client", cfg.Client, "Client/service/pod name for notifications (PGWD_CLIENT); when -kube-postgres is set, derived from resource (e.g. svc/name) if unset")
+	flag.StringVar(&cfg.Client, "client", cfg.Client, "Client name for this monitor instance — REQUIRED (PGWD_CLIENT); identifies which monitor sent the alert")
 	flag.BoolVar(&cfg.NotifyOnConnectFailure, "notify-on-connect-failure", cfg.NotifyOnConnectFailure, "Send an alert to notifiers when Postgres connection fails (infrastructure alert) (PGWD_NOTIFY_ON_CONNECT_FAILURE)")
 	flag.IntVar(&cfg.TestMaxConnections, "test-max-connections", cfg.TestMaxConnections, "Override server max_connections for defaults and display (for testing alerts; 0 = use server) (PGWD_TEST_MAX_CONNECTIONS)")
 	flag.BoolVar(&cfg.ValidateK8sAccess, "validate-k8s-access", cfg.ValidateK8sAccess, "Validate kubectl connectivity and list pods, then exit. Use -kube-context to select context. (PGWD_VALIDATE_K8S_ACCESS)")
@@ -87,12 +89,13 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 
 func warnDeprecatedThresholds(cfg *config.Config) {
 	if cfg.ThresholdTotal > 0 || cfg.ThresholdActive > 0 {
-		fmt.Fprintln(os.Stderr, "pgwd: -threshold-total and -threshold-active are deprecated and will be removed in v1.0.0; use -threshold-levels instead (e.g. -threshold-levels 75,85,95)")
+		fmt.Fprintln(os.Stderr, "pgwd: -db-threshold-total and -db-threshold-active are deprecated and will be removed in v1.0.0; use -db-threshold-levels instead (e.g. -db-threshold-levels 75,85,95)")
 	}
 }
 
 func validateConfig(cfg *config.Config) {
 	validateDBURL(cfg)
+	validateClient(cfg)
 	warnDeprecatedThresholds(cfg)
 	validateStale(cfg)
 	validateNotifiers(cfg)
@@ -100,45 +103,51 @@ func validateConfig(cfg *config.Config) {
 	validateKubeLoki(cfg)
 }
 
+func validateClient(cfg *config.Config) {
+	if cfg.Client == "" {
+		log.Fatal("pgwd: client is required: set client in config or -client (identifies this monitor instance)")
+	}
+}
+
 func validateDBURL(cfg *config.Config) {
 	if cfg.DBURL == "" {
-		log.Fatal("missing database URL: set PGWD_DB_URL or -db-url")
+		log.Fatal("pgwd: missing database URL: set PGWD_DB_URL or -db-url")
 	}
 }
 
 func validateStale(cfg *config.Config) {
 	if cfg.ThresholdStale > 0 && cfg.StaleAge <= 0 {
-		log.Fatal("when using threshold-stale, stale-age must be > 0 (PGWD_STALE_AGE or -stale-age)")
+		log.Fatal("pgwd: when using -db-threshold-stale, -db-stale-age must be > 0 (PGWD_DB_STALE_AGE)")
 	}
 }
 
 func validateNotifiers(cfg *config.Config) {
 	if !cfg.HasAnyNotifier() && !cfg.DryRun {
-		log.Fatal("no notifier configured: set PGWD_SLACK_WEBHOOK and/or PGWD_LOKI_URL (or -slack-webhook / -loki-url), or use -dry-run")
+		log.Fatal("pgwd: no notifier configured: set PGWD_NOTIFICATIONS_SLACK_WEBHOOK and/or PGWD_NOTIFICATIONS_LOKI_URL (or -notifications-slack-webhook / -notifications-loki-url), or use -dry-run")
 	}
 	if cfg.ForceNotification && !cfg.HasAnyNotifier() {
-		log.Fatal("force-notification requires at least one notifier (slack-webhook or loki-url)")
+		log.Fatal("pgwd: force-notification requires at least one notifier (-notifications-slack-webhook or -notifications-loki-url)")
 	}
 	if cfg.NotifyOnConnectFailure && !cfg.HasAnyNotifier() {
-		log.Fatal("notify-on-connect-failure requires at least one notifier (slack-webhook or loki-url)")
+		log.Fatal("pgwd: notify-on-connect-failure requires at least one notifier (-notifications-slack-webhook or -notifications-loki-url)")
 	}
 }
 
 func validateKubePostgres(cfg *config.Config) {
 	if cfg.KubePostgres != "" && cfg.DBURL == "" {
-		log.Fatal("kube-postgres requires PGWD_DB_URL or -db-url (use host localhost and the same port as -kube-local-port)")
+		log.Fatal("pgwd: kube-postgres requires PGWD_DB_URL or -db-url (use host localhost and the same port as -kube-local-port)")
 	}
 }
 
 func validateKubeLoki(cfg *config.Config) {
 	if cfg.KubeLoki != "" && cfg.LokiURL != "" {
-		log.Fatal("use -kube-loki OR -loki-url, not both (-loki-url for exposed Loki, -kube-loki when Loki is inside the cluster)")
+		log.Fatal("pgwd: use -kube-loki OR -notifications-loki-url, not both (-notifications-loki-url for exposed Loki, -kube-loki when Loki is inside the cluster)")
 	}
 	if cfg.KubeLoki != "" && (cfg.KubeLokiLocalPort < 1 || cfg.KubeLokiLocalPort > 65535) {
-		log.Fatal("kube-loki-local-port must be between 1 and 65535")
+		log.Fatal("pgwd: kube-loki-local-port must be between 1 and 65535")
 	}
 	if cfg.KubeLoki != "" && (cfg.KubeLokiRemotePort < 1 || cfg.KubeLokiRemotePort > 65535) {
-		log.Fatal("kube-loki-remote-port must be between 1 and 65535")
+		log.Fatal("pgwd: kube-loki-remote-port must be between 1 and 65535")
 	}
 }
 
@@ -203,23 +212,10 @@ func setupKubeLoki(ctx context.Context, cfg *config.Config) (cleanup func()) {
 }
 
 func runContextStrings(ctx context.Context, cfg *config.Config) (cluster, client, namespace, database string) {
-	if cfg.Cluster != "" {
-		cluster = cfg.Cluster
-	} else if cfg.KubePostgres != "" {
+	if cfg.KubePostgres != "" {
 		cluster = kube.ClusterName(ctx, cfg.KubeContext)
 	}
-	if cfg.Client != "" {
-		client = cfg.Client
-	} else if cfg.KubePostgres != "" {
-		if _, res, err := kube.ParseKubePostgres(cfg.KubePostgres); err == nil {
-			client = res
-		}
-	}
-	if client == "" {
-		if h, err := os.Hostname(); err == nil {
-			client = h
-		}
-	}
+	client = cfg.Client
 	if cfg.KubePostgres != "" {
 		if ns, _, err := kube.ParseKubePostgres(cfg.KubePostgres); err == nil {
 			namespace = ns
@@ -529,14 +525,60 @@ func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, se
 	}
 }
 
+func logConfigTrace(path string, configLoaded bool, hasCLIArgs bool) {
+	if path != "" {
+		if configLoaded {
+			log.Printf("pgwd: config file %s: loaded", path)
+		} else {
+			log.Printf("pgwd: config file %s: not found", path)
+		}
+	}
+	envCount := 0
+	for _, e := range os.Environ() {
+		if strings.HasPrefix(e, "PGWD_") {
+			envCount++
+		}
+	}
+	if configLoaded {
+		if envCount > 0 {
+			log.Printf("pgwd: PGWD_* env: %d var(s) set, ignored (config file is source)", envCount)
+		} else {
+			log.Printf("pgwd: PGWD_* env: not set")
+		}
+	} else {
+		if envCount == 0 {
+			log.Printf("pgwd: PGWD_* env: not set")
+		} else {
+			log.Printf("pgwd: PGWD_* env: %d var(s) set", envCount)
+		}
+	}
+	if !hasCLIArgs {
+		log.Printf("pgwd: CLI params: not used")
+	} else {
+		log.Printf("pgwd: CLI params: used")
+	}
+}
+
 func main() {
 	handleVersion()
 
-	cfg := config.FromEnv()
+	path := config.ConfigPath()
+	hasCLIArgs := len(os.Args) > 1
+	cfg, loaded, err := config.FromFile(path)
+	if err != nil {
+		log.Fatalf("pgwd: config file %s: %v", path, err)
+	}
+	if !loaded {
+		config.ApplyDefaults(&cfg)
+		config.ApplyEnv(&cfg)
+	} else {
+		config.ApplyDefaults(&cfg)
+	}
 	if parseFlags(&cfg) {
 		printVersion()
 		os.Exit(0)
 	}
+	logConfigTrace(path, loaded, hasCLIArgs)
 	if cfg.ValidateK8sAccess {
 		ctx := context.Background()
 		if err := kube.ValidateKubernetesAccess(ctx, cfg.KubeContext); err != nil {
@@ -554,6 +596,8 @@ func main() {
 
 	kubeLokiCleanup := setupKubeLoki(ctx, &cfg)
 	defer kubeLokiCleanup()
+
+	openbsd.ApplyPledge()
 
 	runCluster, runClient, runNamespace, runDatabase := runContextStrings(ctx, &cfg)
 	senders := buildSenders(&cfg)

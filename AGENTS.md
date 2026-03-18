@@ -6,7 +6,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 
 - **What it is:** Go CLI that monitors PostgreSQL connection counts (total, active, idle, stale) and notifies via Slack and/or Loki when configured thresholds are exceeded.
 - **Entrypoint:** `cmd/pgwd/main.go`. Packages: `internal/config`, `internal/postgres`, `internal/notify` (Slack, Loki).
-- **Config:** CLI flags and env vars (`PGWD_*`). No config file yet. CLI overrides env.
+- **Config:** Config file (YAML) at `/etc/pgwd/pgwd.conf` or `-config` / `PGWD_CONFIG`. When the file loads, env vars are ignored; otherwise `ApplyDefaults` + `ApplyEnv` (`PGWD_*`). CLI flags always override. Structure: `db` (url, threshold, stale_age), `kube`, `notifications` (loki, slack). `client` is required. See `internal/config`, `internal/config/file.go`, `contrib/pgwd.conf.example`.
 - **Kubernetes:** Optional `-kube-postgres namespace/svc/name` (or `pod/name`) runs `kubectl port-forward` and connects to localhost; URL password `DISCOVER_MY_PASSWORD` reads password from pod env. Optional `-kube-loki namespace/svc/loki` runs port-forward to Loki when Loki is inside the cluster and pgwd runs outside. Requires `kubectl` in PATH (pgwd checks at startup and exits with a clear error if missing). See `internal/kube`.
 - **Connect failure:** When Postgres connection fails, pgwd always sends a `connect_failure` (or `too_many_clients` if the error is "too many clients already") event to all notifiers if any are configured and not `-dry-run`. No extra flag is required. Senders are built before connecting so the alert can be sent on failure.
 
@@ -45,7 +45,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 ## Repository structure
 
 - `cmd/pgwd/` — main package.
-- `internal/config/` — config from env and CLI.
+- `internal/config/` — config from file (YAML), env (`PGWD_*`), and CLI. `file.go`: FromFile, ApplyDefaults.
 - `internal/postgres/` — pool, stats, stale count, max_connections.
 - `internal/notify/` — Slack and Loki senders, event type.
 - `internal/kube/` — Kubernetes port-forward, pod resolution, password discovery; `RequireKubectl()` at startup when `-kube-postgres` is set.

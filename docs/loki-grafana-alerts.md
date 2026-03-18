@@ -15,9 +15,9 @@ pgwd sends logs to Loki's `/loki/api/v1/push` API. Each notification is one log 
 | `level`     | yes            | Severity: `attention`, `alert`, or `danger`        |
 | `namespace` | when K8s       | Kubernetes namespace (e.g. `mynamespace`)       |
 | `database`  | when set       | Database name from connection URL                |
-| `cluster`   | when set       | Cluster name (`-cluster` or from kubeconfig)     |
+| `cluster`   | when set       | Cluster name (from kubeconfig when using -kube-postgres)     |
 
-Additional labels from `-loki-labels` (e.g. `env=prod`) are also included.
+Additional labels from `-notifications-loki-labels` (e.g. `env=prod`) are also included.
 
 ### Log line format
 

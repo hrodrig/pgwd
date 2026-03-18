@@ -1,0 +1,110 @@
+# /etc/pgwd/pgwd.conf — pgwd config (YAML)
+# Copy to /etc/pgwd/pgwd.conf and adjust.
+# When config file is loaded, env vars (PGWD_*) are ignored. CLI flags override.
+#
+# YAML ↔ CLI mapping (CLI overrides config):
+#   client                    → -client
+#   interval                  → -interval
+#   dry_run                   → -dry-run
+#   notify_on_connect_failure → -notify-on-connect-failure
+#   db.url                    → -db-url
+#   db.stale_age              → -db-stale-age
+#   db.default_threshold_percent → -db-default-threshold-percent
+#   db.threshold.active       → -db-threshold-active
+#   db.threshold.idle         → -db-threshold-idle
+#   db.threshold.levels       → -db-threshold-levels
+#   db.threshold.stale        → -db-threshold-stale
+#   db.threshold.total        → -db-threshold-total
+#   kube.context              → -kube-context
+#   kube.local_port           → -kube-local-port
+#   kube.loki                 → -kube-loki
+#   kube.loki_local_port      → -kube-loki-local-port
+#   kube.loki_remote_port     → -kube-loki-remote-port
+#   kube.password_container   → -kube-password-container
+#   kube.password_var         → -kube-password-var
+#   kube.postgres             → -kube-postgres
+#   notifications.loki.url     → -notifications-loki-url
+#   notifications.loki.bearer_token → -notifications-loki-bearer-token
+#   notifications.loki.labels  → -notifications-loki-labels
+#   notifications.loki.org_id  → -notifications-loki-org-id
+#   notifications.slack.webhook → -notifications-slack-webhook
+# CLI-only (validation, not in YAML): -config, -force-notification, -test-max-connections, -validate-k8s-access
+
+# -----------------------------------------------------------------------------
+# Instance identity (required when multiple pgwd instances run)
+# -----------------------------------------------------------------------------
+# client: Name that identifies this monitor in alerts. Required. Use a unique
+#         name per instance (e.g. prod-db-primary, analytics-replica-01, vm-backup-02).
+#         Cluster name is auto-detected from kubeconfig when kube.postgres is set.
+client: "prod-db-primary"
+
+# -----------------------------------------------------------------------------
+# Behavior
+# -----------------------------------------------------------------------------
+# interval: Seconds between checks. 60 = every minute. 0 = run once (e.g. with cron/timer).
+interval: 60
+# dry_run: If true, only print stats; do not send notifications. Useful for testing.
+# Set true for initial setup or when no notifiers configured yet.
+dry_run: true
+# notify_on_connect_failure: If true, send alert when Postgres connection fails.
+#                            (Default: always notify when a notifier is configured.)
+notify_on_connect_failure: false
+
+# -----------------------------------------------------------------------------
+# Database connection and thresholds
+# -----------------------------------------------------------------------------
+db:
+  # url: PostgreSQL connection URL. Example: postgres://user:pass@host:5432/dbname
+  url: postgres://user:pass@localhost:5432/mydb
+  # stale_age: Consider a connection "stale" if open longer than N seconds (for threshold.stale).
+  stale_age: 0
+  # default_threshold_percent: When threshold.total/active are 0, used to compute from max_connections (1-100).
+  default_threshold_percent: 80
+  threshold:
+    # active: Alert when active connections >= N. 0 = use levels mode.
+    active: 0
+    # idle: Alert when idle connections >= N.
+    idle: 0
+    # levels: 3-tier percentages (attention, alert, danger). Use when active and total are 0.
+    #         Example: "75,85,95" = attention at 75%, alert at 85%, danger at 95%.
+    levels: "75,85,95"
+    # stale: Alert when connections open > stale_age seconds >= N.
+    stale: 0
+    # total: Alert when total connections >= N. 0 = use levels mode.
+    total: 0
+
+# -----------------------------------------------------------------------------
+# Kubernetes (optional). Use when Postgres and/or Loki run inside a cluster.
+# -----------------------------------------------------------------------------
+kube:
+  # context: Kubectl context (e.g. prod, staging). Empty = current context. Override via CLI: -kube-context.
+  context: ""
+  # local_port: Local port for Postgres port-forward (default 5432).
+  local_port: 5432
+  # loki: Loki service for port-forward when Loki is inside cluster. Format: namespace/type/name (e.g. monitoring/svc/loki).
+  loki: ""
+  loki_local_port: 3100
+  loki_remote_port: 3100
+  # password_container: Container name in pod for password discovery (default: primary container).
+  password_container: ""
+  # password_var: Pod env var for password when URL uses DISCOVER_MY_PASSWORD (default: POSTGRES_PASSWORD).
+  password_var: POSTGRES_PASSWORD
+  # postgres: Postgres service for port-forward. Format: namespace/type/name (e.g. default/svc/postgres).
+  postgres: ""
+
+# -----------------------------------------------------------------------------
+# Notifications
+# -----------------------------------------------------------------------------
+notifications:
+  loki:
+    # url: Loki push API URL (e.g. http://localhost:3100/loki/api/v1/push). Use when Loki is exposed.
+    url: ""
+    # bearer_token: Authorization: Bearer token (if Loki requires auth).
+    bearer_token: ""
+    # labels: Comma-separated key=value (e.g. app=pgwd,env=prod).
+    labels: ""
+    # org_id: X-Scope-OrgID header for multi-tenancy. Must match Grafana Loki data source.
+    org_id: ""
+  slack:
+    # webhook: Slack Incoming Webhook URL (https://hooks.slack.com/services/...).
+    webhook: ""

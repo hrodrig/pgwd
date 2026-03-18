@@ -13,10 +13,21 @@ pgwd \- monitor PostgreSQL connections and notify via Slack/Loki
 configured thresholds are exceeded. It does not terminate connections; it
 only observes and alerts.
 .PP
-All options can be set via CLI flag or environment variable (prefix
+All options can be set via config file, CLI flag, or environment variable
+(prefix
 .BR PGWD_ ).
-CLI overrides env.
+When a config file is loaded, env vars are ignored; config file is the single source.
+When no config file exists, env vars apply. CLI flags always override.
+Use
+.BR \-config
+to specify a custom config path (default:
+.I /etc/pgwd/pgwd.conf ).
+See
+.I contrib/pgwd.conf.example .
 .SH OPTIONS
+.TP
+.BR \-config " \fIpath\fR"
+Config file path (YAML). Default: /etc/pgwd/pgwd.conf. Env: PGWD_CONFIG.
 .TP
 .BR \-db\-url " \fIurl\fR"
 PostgreSQL connection URL (required). Env: PGWD_DB_URL.
@@ -26,7 +37,7 @@ Connect via kubectl port-forward (e.g. default/svc/postgres). Env: PGWD_KUBE_POS
 .TP
 .BR \-kube\-loki " \fInamespace/type/name\fR"
 Connect to Loki via kubectl port-forward when Loki is inside the cluster.
-Mutually exclusive with \-loki-url. Env: PGWD_KUBE_LOKI.
+Mutually exclusive with \-notifications-loki-url. Env: PGWD_KUBE_LOKI.
 .TP
 .BR \-kube\-loki\-local\-port " \fIN\fR"
 Local port for Loki port-forward (default 3100). Env: PGWD_KUBE_LOKI_LOCAL_PORT.
@@ -41,61 +52,67 @@ Kubectl context to use (empty = current). Env: PGWD_KUBE_CONTEXT.
 Local port for Postgres port-forward (default 5432). Env: PGWD_KUBE_LOCAL_PORT.
 .TP
 .BR \-kube\-password\-var " \fIvar\fR"
-Pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD).
+Pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD). Env: PGWD_KUBE_PASSWORD_VAR.
 .TP
 .BR \-kube\-password\-container " \fIname\fR"
-Container name in pod for password discovery.
+Container name in pod for password discovery. Env: PGWD_KUBE_PASSWORD_CONTAINER.
 .TP
 .BR \-validate\-k8s\-access
-Validate kubectl connectivity and list pods, then exit.
-.TP
-.BR \-cluster " \fIname\fR"
-Cluster name shown in notifications. Env: PGWD_CLUSTER.
+Validate kubectl connectivity and list pods, then exit. Env: PGWD_VALIDATE_K8S_ACCESS.
 .TP
 .BR \-client " \fIname\fR"
-Client/service/pod name shown in notifications. Env: PGWD_CLIENT.
+Custom name for this monitor instance — REQUIRED. Identifies which monitor sent the alert. Cluster name is computed from kubeconfig when using \-kube-postgres; not configurable. Env: PGWD_CLIENT.
 .TP
-.BR \-threshold\-levels " \fI75,85,95\fR"
-Comma-separated percentages for 3-tier alerts (attention/alert/danger). Default: 75,85,95.
+.BR \-db\-threshold\-total " \fIN\fR"
+Alert when total connections >= N. Deprecated: use \-db-threshold-levels; will be removed in v1.0.0. Env: PGWD_DB_THRESHOLD_TOTAL.
 .TP
-.BR \-threshold\-idle " \fIN\fR"
-Alert when idle connections >= N. Env: PGWD_THRESHOLD_IDLE.
+.BR \-db\-threshold\-active " \fIN\fR"
+Alert when active connections >= N. Deprecated: use \-db-threshold-levels; will be removed in v1.0.0. Env: PGWD_DB_THRESHOLD_ACTIVE.
 .TP
-.BR \-stale\-age " \fIN\fR"
-Consider connection stale if open longer than N seconds. Env: PGWD_STALE_AGE.
+.BR \-db\-threshold\-levels " \fI75,85,95\fR"
+Comma-separated percentages for 3-tier alerts (attention/alert/danger). Default: 75,85,95. Env: PGWD_DB_THRESHOLD_LEVELS.
 .TP
-.BR \-threshold\-stale " \fIN\fR"
-Alert when stale connections >= N. Env: PGWD_THRESHOLD_STALE.
+.BR \-db\-threshold\-idle " \fIN\fR"
+Alert when idle connections >= N. Env: PGWD_DB_THRESHOLD_IDLE.
 .TP
-.BR \-slack\-webhook " \fIurl\fR"
-Slack Incoming Webhook URL. Env: PGWD_SLACK_WEBHOOK.
+.BR \-db\-stale\-age " \fIN\fR"
+Consider connection stale if open longer than N seconds. Env: PGWD_DB_STALE_AGE.
 .TP
-.BR \-loki\-url " \fIurl\fR"
-Loki push API URL (e.g. http://localhost:3100/loki/api/v1/push). Env: PGWD_LOKI_URL.
+.BR \-db\-threshold\-stale " \fIN\fR"
+Alert when stale connections >= N. Env: PGWD_DB_THRESHOLD_STALE.
 .TP
-.BR \-loki\-labels " \fIkey=val,...\fR"
-Loki labels (e.g. app=pgwd,env=prod). Env: PGWD_LOKI_LABELS.
+.BR \-notifications\-slack\-webhook " \fIurl\fR"
+Slack Incoming Webhook URL. Env: PGWD_NOTIFICATIONS_SLACK_WEBHOOK.
 .TP
-.BR \-loki\-org\-id " \fIid\fR"
-Loki X-Scope-OrgID header (multi-tenancy). Env: PGWD_LOKI_ORG_ID.
+.BR \-notifications\-loki\-url " \fIurl\fR"
+Loki push API URL (e.g. http://localhost:3100/loki/api/v1/push). Env: PGWD_NOTIFICATIONS_LOKI_URL.
 .TP
-.BR \-loki\-bearer\-token " \fItoken\fR"
-Loki Authorization: Bearer token. Env: PGWD_LOKI_BEARER_TOKEN.
+.BR \-notifications\-loki\-labels " \fIkey=val,...\fR"
+Loki labels (e.g. app=pgwd,env=prod). Env: PGWD_NOTIFICATIONS_LOKI_LABELS.
+.TP
+.BR \-notifications\-loki\-org\-id " \fIid\fR"
+Loki X-Scope-OrgID header (multi-tenancy). Env: PGWD_NOTIFICATIONS_LOKI_ORG_ID.
+.TP
+.BR \-notifications\-loki\-bearer\-token " \fItoken\fR"
+Loki Authorization: Bearer token. Env: PGWD_NOTIFICATIONS_LOKI_BEARER_TOKEN.
 .TP
 .BR \-interval " \fIN\fR"
 Run every N seconds; 0 = run once. Env: PGWD_INTERVAL.
 .TP
 .BR \-dry\-run
-Only print stats, do not send notifications.
+Only print stats, do not send notifications. Env: PGWD_DRY_RUN.
 .TP
 .BR \-force\-notification
-Always send a test notification to validate delivery.
+Always send a test notification to validate delivery. Env: PGWD_FORCE_NOTIFICATION.
 .TP
-.BR \-default\-threshold\-percent " \fIN\fR"
-When one of total/active is 0, set it to this % of max_connections (1-100, default 80).
+.BR \-notify\-on\-connect\-failure
+Send an alert to notifiers when Postgres connection fails (infrastructure alert). Env: PGWD_NOTIFY_ON_CONNECT_FAILURE.
+.TP
+.BR \-db\-default\-threshold\-percent " \fIN\fR"
+When one of total/active is 0, set it to this % of max_connections (1-100, default 80). Env: PGWD_DB_DEFAULT_THRESHOLD_PERCENT.
 .TP
 .BR \-test\-max\-connections " \fIN\fR"
-Override server max_connections for testing alerts.
+Override server max_connections for testing alerts. Env: PGWD_TEST_MAX_CONNECTIONS.
 .TP
 .BR \-version
 Print version and exit.
@@ -103,26 +120,26 @@ Print version and exit.
 .TP
 Minimal one-shot with Slack:
 .RS
-pgwd \-db-url "postgres://user:pass@localhost:5432/mydb" \e
-     \-slack-webhook "https://hooks.slack.com/services/..."
+pgwd \-client my-monitor \-db-url "postgres://user:pass@localhost:5432/mydb" \e
+     \-notifications-slack-webhook "https://hooks.slack.com/services/..."
 .RE
 .TP
 Daemon every 60s with Loki:
 .RS
-pgwd \-db-url "postgres://..." \-loki-url "http://localhost:3100/loki/api/v1/push" \e
+pgwd \-client my-monitor \-db-url "postgres://..." \-notifications-loki-url "http://localhost:3100/loki/api/v1/push" \e
      \-interval 60
 .RE
 .TP
-Postgres and Loki in Kubernetes:
+Postgres and Loki in Kubernetes (cluster from kubeconfig):
 .RS
-pgwd \-kube-postgres default/svc/postgres \-kube-loki monitoring/svc/loki \e
+pgwd \-client my-monitor \-kube-postgres default/svc/postgres \-kube-loki monitoring/svc/loki \e
      \-db-url "postgres://postgres:DISCOVER_MY_PASSWORD@localhost:5432/mydb" \e
-     \-slack-webhook "https://..."
+     \-notifications-slack-webhook "https://..."
 .RE
 .TP
 Dry run (no notifications):
 .RS
-pgwd \-db-url "postgres://..." \-dry-run
+pgwd \-client my-monitor \-db-url "postgres://..." \-dry-run
 .RE
 .SH EXIT STATUS
 0 on success; non-zero on fatal errors (e.g. DB connection failure).

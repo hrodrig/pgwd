@@ -1,6 +1,6 @@
 # systemd unit for pgwd (daemon mode).
 # Copy to /etc/systemd/system/pgwd.service and adjust paths.
-# Config: set variables in /etc/pgwd.env (or /etc/pgwd/pgwd.env) and restrict with chmod 600.
+# Config: /etc/pgwd/pgwd.conf (or -config /path/to/custom.conf). No env file.
 #
 #   sudo cp contrib/systemd/pgwd.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
@@ -14,14 +14,13 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/pgwd
+# .deb/.rpm install to /usr/bin. For manual install to /usr/local/bin, change path.
+ExecStart=/usr/bin/pgwd
 Restart=on-failure
 RestartSec=30
 
-# Load env from one of these (first existing wins if you create both).
-# Use /etc/pgwd/pgwd.env if you prefer a dedicated directory for future config.
-EnvironmentFile=-/etc/pgwd/pgwd.env
-EnvironmentFile=-/etc/pgwd.env
+# Optional: custom config path (default is /etc/pgwd/pgwd.conf)
+# ExecStart=/usr/bin/pgwd -config /etc/pgwd/pgwd.conf
 
 # Optional: run as a dedicated user (create with: useradd -r -s /bin/false pgwd)
 # User=pgwd

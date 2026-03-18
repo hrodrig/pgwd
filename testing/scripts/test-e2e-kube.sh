@@ -38,13 +38,15 @@ echo "Running pgwd -validate-k8s-access..."
 ./pgwd -validate-k8s-access
 
 echo "Running pgwd -kube-postgres with -dry-run..."
-./pgwd -kube-postgres pgwd-e2e/svc/postgres \
+./pgwd -client pgwd-e2e-test \
+  -kube-postgres pgwd-e2e/svc/postgres \
   -kube-local-port 15432 \
   -db-url 'postgres://pgwd:DISCOVER_MY_PASSWORD@localhost:15432/pgwd?sslmode=disable' \
   -dry-run
 
 echo "Running pgwd -kube-postgres -kube-loki with -force-notification (daemon mode to keep port-forward up)..."
-./pgwd -kube-postgres pgwd-e2e/svc/postgres \
+./pgwd -client pgwd-e2e-test \
+  -kube-postgres pgwd-e2e/svc/postgres \
   -kube-local-port 15432 \
   -kube-loki pgwd-e2e/svc/loki \
   -kube-loki-local-port 13100 \

@@ -6,22 +6,24 @@ Last audit: checked each diagram against `cmd/pgwd/main.go` and `internal/notify
 
 | Diagram step | Code |
 |--------------|------|
-| User runs pgwd (CLI args) | `main()`, `flag.Parse()` |
-| read PGWD_* vars | `config.FromEnv()` before flags |
-| config.FromEnv + flag.Parse (CLI overrides) | Lines 46, 50–71 |
-| validate DB URL present | `validateDBURL()` 96–100 |
-| validate stale-age if threshold-stale | `validateStale()` 104–108 |
-| validate at least one notifier (or dry-run) | `validateNotifiers()` 110–117 |
+| User runs pgwd (CLI args) | `main()` |
+| config file exists and loads | `config.FromFile(path)` 567; if loaded, env vars ignored |
+| no config file: ApplyDefaults + ApplyEnv | 571–573 `ApplyDefaults()`, `ApplyEnv()` |
+| flag.Parse (CLI overrides) | 577 `parseFlags()` |
+| validate client required | `validateClient()` 106–109 |
+| validate DB URL present | `validateDBURL()` 112–116 |
+| validate stale-age if threshold-stale | `validateStale()` 118–122 |
+| validate at least one notifier (or dry-run) | `validateNotifiers()` 124–133 |
 | validate force-notification / notify-on-connect-failure require notifier | `validateNotifiers()` |
-| signal.NotifyContext(SIGINT, SIGTERM) | 549 |
-| opt -kube-postgres: resolve pod, get password, port-forward, replace DB URL | 552–553 `setupKube()` |
-| opt -kube-loki: port-forward to Loki, set Loki URL | 555–556 `setupKubeLoki()` |
-| compute run context (cluster, client, namespace, database) | 559 `runContextStrings()` |
-| build senders (Slack, Loki) | 560 `buildSenders()` |
-| Pool(ctx, dbURL) | 562 |
-| connect error → opt Send(connect_failure) then log.Fatal | 563–565 `notifyConnectFailure()` |
+| signal.NotifyContext(SIGINT, SIGTERM) | 590 |
+| opt -kube-postgres: resolve pod, get password, port-forward, replace DB URL | 594 `setupKube()` |
+| opt -kube-loki: port-forward to Loki, set Loki URL | 596 `setupKubeLoki()` |
+| compute run context (cluster, client, namespace, database) | 601 `runContextStrings()` |
+| build senders (Slack, Loki) | 602 `buildSenders()` |
+| Pool(ctx, dbURL) | 604 |
+| connect error → opt Send(connect_failure) then log.Fatal | 605–607 `notifyConnectFailure()` |
 | opt at least one Send ok → log Notification sent | 279–281 in `notifyConnectFailure()` |
-| MaxConnections, apply default thresholds when total/active 0 | 568–572 `applyThresholdDefaults()` |
+| MaxConnections, apply default thresholds when total/active 0 | 611–615 `applyThresholdDefaults()` |
 | validate at least one threshold or dry-run or force-notification | `validateThresholdConfig()` |
 
 **Verdict:** Matches.
@@ -32,7 +34,7 @@ Last audit: checked each diagram against `cmd/pgwd/main.go` and `internal/notify
 
 | Diagram step | Code |
 |--------------|------|
-| run() called (interval 0) | `makeRunFunc()`; interval <= 0 → return 574–576 |
+| run() called (interval 0) | `makeRunFunc()`; interval <= 0 → return 618–620 |
 | Stats(ctx, pool) | 512 `postgres.Stats(ctx, pool)` |
 | opt StaleCount if threshold-stale set | 443–446 `collectStaleEvent()` |
 | compare stats to thresholds, build events | 439–468 `collectEvents()` |
@@ -110,7 +112,7 @@ Last audit: checked each diagram against `cmd/pgwd/main.go` and `internal/notify
 
 ## When to re-audit
 
-- After changing startup order, validations, kube flow (kube-postgres, kube-loki), or connect-failure handling (01, 07).
+- After changing config loading (FromFile, ApplyEnv, config file as single source), startup order, validations, kube flow (kube-postgres, kube-loki), or connect-failure handling (01, 07).
 - After changing `run()` (stats, thresholds, events, dry-run, force-notification) (02, 03, 04, 05, 06).
 - After changing `sendEvents()` or `notifyConnectFailure()` (Notification sent log).
 - Before a release if any of the above code paths were modified.

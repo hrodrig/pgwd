@@ -50,6 +50,9 @@ checksum:
 nfpms:
   - id: default
     package_name: pgwd
+    scripts:
+      preremove: contrib/deb/prerm.sh
+      postremove: contrib/deb/postrm.sh
     file_name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}"
     description: Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki
     vendor: "Hermes Rodríguez"
@@ -63,6 +66,18 @@ nfpms:
     contents:
       - src: contrib/man/man1/pgwd.1.gz
         dst: /usr/share/man/man1/
+      # Config: install example as /etc/pgwd/pgwd.conf; user must edit (client, db.url, notifications).
+      # config|noreplace: on upgrade, do not overwrite if user modified the file.
+      - src: contrib/pgwd.conf.example
+        dst: /etc/pgwd/pgwd.conf
+        type: config|noreplace
+      # systemd units: daemon, one-shot, timer. User enables with: systemctl enable --now pgwd
+      - src: contrib/systemd/pgwd.service
+        dst: /lib/systemd/system/pgwd.service
+      - src: contrib/systemd/pgwd-once.service
+        dst: /lib/systemd/system/pgwd-once.service
+      - src: contrib/systemd/pgwd.timer
+        dst: /lib/systemd/system/pgwd.timer
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"

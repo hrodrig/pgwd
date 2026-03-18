@@ -1,6 +1,8 @@
 # pgwd — build and install (macOS, Linux, Windows)
 
 BINARY   := pgwd
+# Check Docker is running before targets that use it. Fails early with clear message.
+check-docker = @docker info >/dev/null 2>&1 || { echo "Error: Docker is not running. Start Docker and try again."; exit 1; }
 DIST     := dist
 # Version: read from VERSION file (e.g. 0.1.0); if missing, use v0.1.0. Override: make build VERSION=v0.2.0
 VERSION  ?= $(shell v=$$(cat VERSION 2>/dev/null | tr -d '\n\r'); [ -n "$$v" ] && echo "v$$v" || echo "v0.1.0")
@@ -96,6 +98,7 @@ test:
 # E2E kube test: create kind cluster, deploy Postgres, run pgwd -kube-postgres -dry-run, destroy cluster.
 # Requires: kind, kubectl, docker. Use before release to validate -kube-postgres path.
 test-e2e-kube:
+	$(check-docker)
 	@command -v kind >/dev/null 2>&1 || { echo "kind not found; install with: brew install kind or https://kind.sigs.k8s.io/docs/user/quick-start/#installation"; exit 1; }
 	@command -v kubectl >/dev/null 2>&1 || { echo "kubectl not found; install with: brew install kubectl"; exit 1; }
 	@chmod +x testing/scripts/test-e2e-kube.sh
@@ -104,6 +107,7 @@ test-e2e-kube:
 # Integration tests: require Docker. Start Postgres and Loki, run tests, then stop.
 # Use before release to validate Postgres and Loki integration.
 test-integration:
+	$(check-docker)
 	@echo "Starting Postgres..."
 	@docker compose -f testing/compose.yaml up -d --scale client=0
 	@echo "Starting Loki..."
@@ -138,10 +142,12 @@ lint-fix:
 
 # Docker image with version/commit/builddate from VERSION and git (run from repo root)
 docker-build:
+	$(check-docker)
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILDDATE=$(BUILDDATE) -t pgwd .
 
 # Build image as pgwd:scan and run Grype (--fail-on high). Requires: docker, grype on PATH.
 docker-scan:
+	$(check-docker)
 	@command -v grype >/dev/null 2>&1 || { echo "grype not found; install with: brew install grype or https://github.com/anchore/grype#installation"; exit 1; }
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILDDATE=$(BUILDDATE) -t pgwd:scan .
 	grype pgwd:scan --fail-on high
@@ -161,6 +167,7 @@ release-check:
 # Release: only from main. Requires release-check to pass. Merge develop → main, update VERSION, then: git tag v0.1.0 && make release
 .PHONY: help release snapshot docker-build docker-scan lint lint-fix test-integration
 release: release-check
+	$(check-docker)
 	@branch=$$(git branch --show-current 2>/dev/null); \
 	if [ "$$branch" != "main" ]; then \
 	  echo "Error: release only from main (current: $$branch). Merge and checkout main first."; \
@@ -170,6 +177,7 @@ release: release-check
 
 # Snapshot build (no tag required), outputs to dist/
 snapshot:
+	$(check-docker)
 	goreleaser release --snapshot --clean
 
 # Remove built binary and dist/

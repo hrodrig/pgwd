@@ -10,7 +10,7 @@ sequenceDiagram
     participant Slack
     participant Loki
 
-    User->>pgwd: pgwd -force-notification -db-url ... -slack-webhook ... (-loki-url ...)
+    User->>pgwd: pgwd -force-notification -db-url ... -notifications-slack-webhook ... (-notifications-loki-url ...)
     pgwd->>Postgres: Stats(ctx, pool)
     Postgres-->>pgwd: total, active, idle
     pgwd->>pgwd: append test event (threshold=test, message, event includes run context (time, client, database, cluster, namespace, connections))
