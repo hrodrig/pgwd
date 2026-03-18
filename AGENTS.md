@@ -53,6 +53,10 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 - `contrib/systemd/` — systemd units (daemon, timer, one-shot).
 - `tools/` — scripts for scanning before merging to main: `tools/scan.sh` (govulncheck, optional Grype). See `tools/README.md`. CI runs govulncheck in the Security workflow.
 
+## Skills
+
+- **golang-pro** (`.agents/skills/golang-pro/SKILL.md`): Use when implementing concurrent Go patterns (goroutines, channels), designing interfaces, writing table-driven tests, or optimizing performance. Covers generics, context propagation, error wrapping, and idiomatic Go. References: `references/concurrency.md`, `references/interfaces.md`, `references/generics.md`, `references/testing.md`, `references/project-structure.md`.
+
 ## Other instructions
 
 - **README:** Must keep badges (Release, Go version, License) and explicit link to Releases; see `.cursor/rules/readme-badges-version.mdc`.
