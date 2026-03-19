@@ -597,7 +597,11 @@ func main() {
 	kubeLokiCleanup := setupKubeLoki(ctx, &cfg)
 	defer kubeLokiCleanup()
 
-	openbsd.ApplyPledge()
+	// On OpenBSD: skip pledge when using kube. pgwd spawns kubectl; if pgwd has pledged,
+	// kubectl inherits it and fails (pledge "rpath", syscall 59). Without pledge, kubectl works.
+	if cfg.KubePostgres == "" && cfg.KubeLoki == "" {
+		openbsd.ApplyPledge()
+	}
 
 	runCluster, runClient, runNamespace, runDatabase := runContextStrings(ctx, &cfg)
 	senders := buildSenders(&cfg)

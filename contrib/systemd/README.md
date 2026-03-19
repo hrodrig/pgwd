@@ -2,6 +2,8 @@
 
 Daemon and timer units for running pgwd under systemd. **No EnvironmentFile** — config comes from `/etc/pgwd/pgwd.conf` (or `-config` for a custom path).
 
+**One config = one Postgres.** For multiple instances (different clusters, thresholds), use one timer per config, or run from cron with one entry per config file. See README "Running from cron" and "Example: multiple services".
+
 ## Prerequisites
 
 1. **Config file** — pgwd requires a config file. **.deb/.rpm** install it to `/etc/pgwd/pgwd.conf`. From source:

@@ -29,17 +29,18 @@ A [VHS](https://github.com/charmbracelet/vhs) tape records a short terminal demo
 ### Prerequisites
 
 - [VHS](https://github.com/charmbracelet/vhs): `brew install vhs` (or see project install docs)
-- pgwd binary on `PATH` (e.g. `make build` then `export PATH="$PWD:$PATH"` from repo root)
+- pgwd binary on `PATH`: run `make install` from repo root (installs to `$GOBIN`, default `$HOME/go/bin`)
 
 ### Render the demo
 
-From the **repository root** (so `pgwd` resolves and paths match):
+From the **repository root**:
 
 ```bash
-vhs docs/demo.tape
+make install
+bash -c "vhs docs/demo.tape"
 ```
 
-Output is written to `docs/demo.gif` (or the path set by `Output` in the tape). To produce MP4 instead, change the `Output` line in `demo.tape` to e.g. `Output docs/demo.mp4` and run again.
+Using `bash -c` avoids zsh/Oh My Zsh prompt issues. Output is written to `docs/demo.gif` (or the path set by `Output` in the tape). To produce MP4 instead, change the `Output` line in `demo.tape` to e.g. `Output docs/demo.mp4` and run again.
 
 ### Tape location
 
@@ -48,9 +49,4 @@ Output is written to `docs/demo.gif` (or the path set by `Output` in the tape). 
 
 ### Prompt / Oh My Zsh issues
 
-If you see `git_prompt_info: command not found` or a broken prompt in the GIF, run VHS from **bash** so it does not inherit your zsh/Oh My Zsh setup:
-
-```bash
-bash
-vhs docs/demo.tape
-```
+If you see `git_prompt_info: command not found` or a broken prompt in the GIF, use `bash -c "vhs docs/demo.tape"` (see Render the demo above) so VHS does not inherit your zsh/Oh My Zsh setup.

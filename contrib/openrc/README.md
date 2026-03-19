@@ -2,6 +2,8 @@
 
 Alpine uses OpenRC, not systemd. This init script runs pgwd as a daemon.
 
+**One config = one Postgres.** For multiple instances (different clusters, thresholds), cron is often simpler: one cron entry per config file. See main README "Running from cron" and "Example: multiple services".
+
 ## Install (manual, from tarball)
 
 ```bash

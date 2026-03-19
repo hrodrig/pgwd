@@ -6,7 +6,7 @@
   <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.5.0-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.5.4-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -42,6 +42,7 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 - [Docker](#docker)
 - [systemd](#systemd)
 - [Alpine Linux (OpenRC)](#alpine-linux-openrc)
+- [OpenBSD](#openbsd)
 - [Roadmap](#roadmap)
 - [Get involved](#get-involved)
 
@@ -106,7 +107,7 @@ pgwd loads settings from (in order): **config file** → **environment variables
 | Environment | `PGWD_*` |
 | CLI | `-flag` |
 
-**Config file** (YAML) — keys match `-flag` and `PGWD_*` env vars. See `contrib/pgwd.conf.example`.
+**Config file** (YAML) — keys match `-flag` and `PGWD_*` env vars. See `contrib/pgwd.conf.example`. One config = one Postgres; for multiple instances, use one config per instance (e.g. cron with `-config /etc/pgwd/prod-db1.conf`).
 
 ```bash
 # Use default path /etc/pgwd/pgwd.conf
@@ -242,6 +243,7 @@ pgwd -db-url "postgres://..." -notifications-loki-url "http://localhost:3100/lok
 
 | Scenario | Suggestion |
 |----------|------------|
+| **Many Postgres instances** | One config per instance; one cron entry per instance. Each instance can have different clusters, thresholds, and environments. No coordination needed; add a new instance = add a cron line. Often more efficient than a daemon when instances are diverse. |
 | **Cron check every 5 min** | One-shot (`interval` 0 or unset), one or more thresholds, Slack or Loki. Run from cron every 5 minutes. |
 | **Long-running watcher** | Daemon with `-interval 60` (or 120). Run under systemd/supervisor; stop with SIGTERM. |
 | **Detect connection leaks** | Use `stale-age` + `threshold-stale` (e.g. 600 and 1). Alert when any connection stays open longer than 10 min. |
@@ -254,6 +256,8 @@ pgwd -db-url "postgres://..." -notifications-loki-url "http://localhost:3100/lok
 | **Alert when Postgres is unreachable** | If you configure a notifier (Slack/Loki), pgwd **always** sends an alert when the connection fails (e.g. refused, timeout, or "too many clients"). No extra flag needed. |
 
 ### Running from cron
+
+**One config = one Postgres.** When you have many diverse instances (different clusters, thresholds, kube contexts), cron is often the most efficient approach: one cron entry per instance, each with its own config file. No daemon to manage; add or remove instances by editing crontab.
 
 Cron runs with a **minimal environment** (e.g. `PATH=/usr/bin:/bin`). Two things to keep in mind:
 
@@ -310,7 +314,17 @@ Cron runs with a **minimal environment** (e.g. `PATH=/usr/bin:/bin`). Two things
 
 ### Example: multiple services and heartbeat via bash + cron
 
-You can run pgwd for several Postgres instances (e.g. one per Kubernetes service) from a single cron schedule: use a bash script that sets `KUBECONFIG`, `PGWD_NOTIFICATIONS_SLACK_WEBHOOK`, and `PATH`, then invokes pgwd once per service with distinct **`-kube-local-port`** values so port-forwards do not clash. Add a second script that runs **`-force-notification`** on a schedule (e.g. every 2 hours) as a “still alive” heartbeat.
+**Simpler: one cron line per instance.** If each instance has its own config file (e.g. `/etc/pgwd/prod-db1.conf`, `/etc/pgwd/analytics.conf`), add one cron entry per config:
+
+```bash
+PATH=/usr/local/bin:/usr/bin:/bin
+*/5 * * * * pgwd -config /etc/pgwd/prod-db1.conf >> /var/log/pgwd-prod-db1.log 2>&1
+*/5 * * * * pgwd -config /etc/pgwd/analytics.conf >> /var/log/pgwd-analytics.log 2>&1
+```
+
+Each run is independent; no port clashes when using different configs (each has its own `kube.local_port` if using kube).
+
+**Alternative: single script for many services.** You can run pgwd for several Postgres instances (e.g. one per Kubernetes service) from a single cron schedule: use a bash script that sets `KUBECONFIG`, `PGWD_NOTIFICATIONS_SLACK_WEBHOOK`, and `PATH`, then invokes pgwd once per service with distinct **`-kube-local-port`** values so port-forwards do not clash. Add a second script that runs **`-force-notification`** on a schedule (e.g. every 2 hours) as a “still alive” heartbeat.
 
 **Check script** (e.g. `~/bin/pgwd-cron.sh`): runs every 5 minutes, checks all services, alerts only when thresholds are exceeded.
 
@@ -493,6 +507,7 @@ curl -sSL https://raw.githubusercontent.com/hrodrig/pgwd/main/scripts/install.sh
 | **Debian/Ubuntu** | `wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v0.5.0/pgwd_v0.5.0_linux_amd64.deb && sudo dpkg -i /tmp/pgwd.deb` |
 | **Fedora/RHEL** | `sudo dnf install https://github.com/hrodrig/pgwd/releases/download/v0.5.0/pgwd_v0.5.0_linux_amd64.rpm` |
 | **Alpine** | `wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.0/pgwd_v0.5.0_linux_amd64.tar.gz \| tar -xzf - -C /usr/local/bin` — see [Alpine (OpenRC)](#alpine-linux-openrc) |
+| **OpenBSD** | tarball with rc.d: see [OpenBSD](#openbsd) |
 
 Replace `v0.5.0` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets.
 
@@ -668,13 +683,15 @@ Set the Loki push endpoint URL (e.g. `http://loki:3100/loki/api/v1/push`). Optio
 
 **Grafana / Loki stacks (kube-prometheus-stack, etc.):** Grafana's Loki data source is often provisioned with a specific `X-Scope-OrgId` (e.g. `1`, `my-tenant`). **pgwd must use the same org ID** or logs will not appear in Grafana. Check your Grafana Loki data source config (or Helm values: `grafana.additionalDataSources` → Loki → `secureJsonData.httpHeaderValue1`). Use `-notifications-loki-org-id <value>` to match.
 
-**Notification format:** Each alert is one log line in a stream. The stream has labels from `PGWD_NOTIFICATIONS_LOKI_LABELS` plus `app=pgwd` (if not set), `threshold`, `level` (attention/alert/danger), `namespace` (when using `-kube-postgres`), `database`, and `cluster` (when set). The log line includes database and cluster at the start when available:
+**Notification format:** Each alert is one log line in a stream. The stream has labels from `PGWD_NOTIFICATIONS_LOKI_LABELS` plus `app=pgwd` (if not set), `threshold`, `level` (attention/alert/danger), `namespace` (when using `-kube-postgres`), `database`, `cluster`, and `client` (when set). The log line includes database, cluster, and client at the start when available:
+
+Filter by instance: `{app="pgwd", client="my-monitor"}` in Grafana.
 
 ```
-pgwd [cluster=<Cluster>] [database=<Database>]: <Message> | total=<Total> active=<Active> idle=<Idle> (limit <Threshold>=<ThresholdValue>)
+pgwd [cluster=<Cluster>] [database=<Database>] [client=<Client>]: <Message> | total=<Total> active=<Active> idle=<Idle> (limit <Threshold>=<ThresholdValue>)
 ```
 
-Example with database and cluster: `pgwd [cluster=prod] [database=myapp]: Test notification — delivery check (force-notification). | total=33 active=1 idle=32 max_connections=2048 (delivery check)`
+Example: `pgwd [cluster=prod] [database=myapp] [client=pgwd-vps-01]: Test notification — delivery check (force-notification). | total=33 active=1 idle=32 max_connections=2048 (delivery check)`
 
 Same placeholders as Slack. Timestamp is the time of the push. You can query in Grafana or LogCLI by label (e.g. `{app="pgwd", threshold="total"}` or `{app="pgwd", level="danger"}`). For Grafana alert rules, see [docs/loki-grafana-alerts.md](docs/loki-grafana-alerts.md) (labels, LogQL examples, payload structure).
 
@@ -713,6 +730,12 @@ pgwd uses `max_connections` (from Postgres) to compute percentage-based threshol
 <summary><strong>Can I run pgwd from cron?</strong></summary>
 
 Yes. Use one-shot mode (`PGWD_INTERVAL=0` or omit it). Run pgwd every 5 minutes (or your preferred interval). Ensure `PATH` includes `kubectl` if you use `-kube-postgres`. See [Running from cron](#running-from-cron) for details and log rotation.
+</details>
+
+<details>
+<summary><strong>Can I monitor multiple Postgres instances?</strong></summary>
+
+Yes. One config file = one Postgres. For many diverse instances (different clusters, thresholds, kube contexts), cron is often the most efficient: one cron entry per instance, each with its own config (`-config /etc/pgwd/instance-name.conf`). No coordination needed; add a new instance = add a cron line. See [Example: multiple services](#example-multiple-services-and-heartbeat-via-bash--cron).
 </details>
 
 <details>
@@ -914,6 +937,29 @@ rc-update add pgwd default
 ```
 
 See `contrib/openrc/README.md` for details.
+
+[↑ Back to top](#top)
+
+---
+
+## OpenBSD
+
+OpenBSD uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-kube-postgres` and `-kube-loki` (external VPS with kubeconfig; see `contrib/openbsd/README.md`).
+
+**Install** — tarball includes binary, rc.d script, and config example:
+
+```bash
+tar xzf pgwd_v0.5.4_openbsd_amd64.tar.gz
+doas install -m755 pgwd /usr/local/bin/
+doas install -m555 share/openbsd/rc.d/pgwd /etc/rc.d/pgwd
+doas mkdir -p /etc/pgwd
+doas cp etc/pgwd/pgwd.conf.example /etc/pgwd/pgwd.conf
+doas vi /etc/pgwd/pgwd.conf  # client, db.url, etc.
+doas rcctl enable pgwd
+doas rcctl start pgwd
+```
+
+See `contrib/openbsd/README.md` for details.
 
 [↑ Back to top](#top)
 

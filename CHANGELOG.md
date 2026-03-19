@@ -29,6 +29,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
+## [0.5.4] - 2026-03-19
+
+### Added
+
+- **Alpine Linux (OpenRC):** `contrib/openrc/pgwd.initd` init script. See `contrib/openrc/README.md`. Main README: Alpine section with install and daemon setup.
+- **OpenBSD rc.d:** `contrib/openbsd/pgwd` script for rc.d. Tarball `pgwd_v*_openbsd_amd64.tar.gz` includes rc.d script and config example. See `contrib/openbsd/README.md`. Main README: OpenBSD section. Logging: set `pgwd_logger="daemon.info"` in rc.conf.local to send output to syslog (`tail -f /var/log/daemon`).
+- **OpenBSD + Kubernetes:** When using `-kube-postgres` or `-kube-loki`, pgwd skips pledge on OpenBSD so kubectl can run (pledge would block exec). Documented in `contrib/openbsd/README.md` with anonymous config example (external VPS, kubeconfig, port-forward to Postgres and Loki).
+- **Loki client label:** `client` stream label and log line prefix when set. Enables Grafana filtering by instance (e.g. `{app="pgwd", client="pgwd-vps-01"}`).
+
+### Changed
+
+- **Docker:** Runtime base image `alpine:3.23` → `alpine:3.21` to avoid CVE-2026-2673 (OpenSSL 3.5/3.6; 3.21 uses 3.3.6, not affected).
+
+---
+
 ## [0.5.0] - 2026-03-13
 
 ### Added
@@ -223,7 +238,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/hrodrig/pgwd/compare/v0.5.0...v0.5.4
 [0.5.0]: https://github.com/hrodrig/pgwd/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/hrodrig/pgwd/compare/v0.3.6...v0.4.0
 [0.3.6]: https://github.com/hrodrig/pgwd/compare/v0.3.1...v0.3.6

@@ -15,7 +15,7 @@ Before merging to `main` or creating a release (tag and `make release`), run **`
 
 **These are NOT optional.** `make release` depends on `release-check`; if any step fails, the release is blocked.
 
-**When VERSION changes:** (1) Regenerate `docs/demo.gif` with `vhs docs/demo.tape` (run from repo root). The demo shows `pgwd -version`; the GIF must reflect the new version. See `docs/README.md` for VHS setup. (2) Update `contrib/man/man1/pgwd.1` — `.TH` line (date and version). See `.cursor/rules/man-page-sync.mdc`.
+**When VERSION changes:** (1) Regenerate `docs/demo.gif` with `make install && bash -c "vhs docs/demo.tape"` (run from repo root). The demo shows `pgwd -version`; the GIF must reflect the new version. See `docs/README.md` for VHS setup. (2) Update `contrib/man/man1/pgwd.1` — `.TH` line (date and version). See `.cursor/rules/man-page-sync.mdc`.
 
 CI runs lint and tests. The Security workflow runs govulncheck and Grype on the image; both must pass (no `continue-on-error`). Do not push a release tag if CI or Security is red.
 

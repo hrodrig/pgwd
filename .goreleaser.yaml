@@ -43,6 +43,10 @@ archives:
         dst: share/man/man1/pgwd.1
       - src: LICENSE
         dst: share/doc/pgwd/LICENSE
+      - src: contrib/openbsd/pgwd
+        dst: share/openbsd/rc.d/pgwd
+      - src: contrib/pgwd.conf.example
+        dst: etc/pgwd/pgwd.conf.example
 
 checksum:
   name_template: "checksums.txt"

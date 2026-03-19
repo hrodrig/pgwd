@@ -1,5 +1,7 @@
 # /etc/pgwd/pgwd.conf — pgwd config (YAML)
 # Copy to /etc/pgwd/pgwd.conf and adjust.
+# One config file = one Postgres instance. For multiple instances, use one config per
+# instance and run from cron (one cron entry per config) or multiple daemons/timers.
 # When config file is loaded, env vars (PGWD_*) are ignored. CLI flags override.
 #
 # YAML ↔ CLI mapping (CLI overrides config):
