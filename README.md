@@ -44,6 +44,7 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 - [Alpine Linux (OpenRC)](#alpine-linux-openrc)
 - [OpenBSD](#openbsd)
 - [FreeBSD](#freebsd)
+- [NetBSD](#netbsd)
 - [Roadmap](#roadmap)
 - [Get involved](#get-involved)
 
@@ -510,6 +511,7 @@ curl -sSL https://raw.githubusercontent.com/hrodrig/pgwd/main/scripts/install.sh
 | **Alpine** | `wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.0/pgwd_v0.5.0_linux_amd64.tar.gz \| tar -xzf - -C /usr/local/bin` — see [Alpine (OpenRC)](#alpine-linux-openrc) |
 | **OpenBSD** | tarball with rc.d: see [OpenBSD](#openbsd) |
 | **FreeBSD** | port or tarball: see [FreeBSD](#freebsd) |
+| **NetBSD** | tarball with rc.d: see [NetBSD](#netbsd) |
 
 Replace `v0.5.0` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets.
 
@@ -1006,6 +1008,29 @@ vi /etc/pgwd/pgwd.conf  # client, db.url, etc.
 ```
 
 The port installs the binary, man page, LICENSE, config example, and rc.d script to `/usr/local/`. Run as daemon: `echo 'pgwd_enable="YES"' >> /etc/rc.conf && service pgwd start`. See `contrib/freebsd/README.md` for details.
+
+[↑ Back to top](#top)
+
+---
+
+## NetBSD
+
+NetBSD uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-kube-postgres` and `-kube-loki` (external host with kubeconfig; see `contrib/netbsd/README.md`).
+
+**Install** — tarball includes binary, rc.d script, and config example:
+
+```bash
+tar xzf pgwd_v0.5.6_netbsd_amd64.tar.gz
+install -m755 pgwd /usr/local/bin/
+install -m555 share/netbsd/rc.d/pgwd /etc/rc.d/pgwd
+mkdir -p /etc/pgwd
+cp etc/pgwd/pgwd.conf.example /etc/pgwd/pgwd.conf
+vi /etc/pgwd/pgwd.conf  # client, db.url, etc.
+echo 'pgwd=YES' >> /etc/rc.conf
+service pgwd start
+```
+
+See `contrib/netbsd/README.md` for details.
 
 [↑ Back to top](#top)
 

@@ -1,6 +1,6 @@
 # OpenBSD rc.d script for pgwd
 
-OpenBSD uses rc.d, not systemd. This script runs pgwd as a daemon.
+[OpenBSD](https://www.openbsd.org) uses rc.d, not systemd. This script runs pgwd as a daemon.
 
 **One config = one Postgres.** For multiple instances (different clusters, thresholds), cron is often simpler: one cron entry per config file. See main README "Running from cron" and "Example: multiple services".
 

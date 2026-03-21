@@ -1,6 +1,6 @@
 # FreeBSD port for pgwd
 
-This directory contains the FreeBSD port files for pgwd. Use them to build and install pgwd from the official ports tree (when accepted) or from a local port.
+This directory contains the [FreeBSD](https://www.freebsd.org) port files for pgwd. Use them to build and install pgwd from the official ports tree (when accepted) or from a local port.
 
 **One config = one Postgres.** For multiple instances (different clusters, thresholds), cron is often simpler: one cron entry per config file. See main README "Running from cron" and "Example: multiple services".
 
