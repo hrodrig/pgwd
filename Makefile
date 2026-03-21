@@ -159,9 +159,10 @@ docker-scan:
 	grype pgwd:scan --fail-on high
 
 # --- Release (requires goreleaser: brew install goreleaser) ---
-# release-check: MANDATORY before release. Runs lint, test, test-integration, test-e2e-kube, docker-scan. All must pass.
+# release-check: MANDATORY before release. Requires Docker (all tests use it). Runs lint, test, test-integration, test-e2e-kube, docker-scan. All must pass.
 .PHONY: release-check
 release-check:
+	$(check-docker)
 	@echo "Running release checks (lint, test, test-integration, test-e2e-kube, docker-scan)..."
 	@$(MAKE) lint
 	@$(MAKE) test
