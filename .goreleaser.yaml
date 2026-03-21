@@ -20,6 +20,7 @@ builds:
       - freebsd
       - openbsd
       - netbsd
+      - dragonfly
       - solaris
     goarch:
       - amd64
@@ -34,6 +35,8 @@ builds:
       - goos: solaris
         goarch: arm64
       - goos: solaris
+        goarch: riscv64
+      - goos: dragonfly
         goarch: riscv64
     env:
       - CGO_ENABLED=0
@@ -59,6 +62,8 @@ archives:
         dst: share/openbsd/rc.d/pgwd
       - src: contrib/netbsd/rc.d/pgwd
         dst: share/netbsd/rc.d/pgwd
+      - src: contrib/dragonflybsd/rc.d/pgwd
+        dst: share/dragonfly/rc.d/pgwd
       - src: contrib/pgwd.conf.example
         dst: etc/pgwd/pgwd.conf.example
 

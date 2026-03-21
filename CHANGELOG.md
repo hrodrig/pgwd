@@ -34,6 +34,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
+## [0.5.7] - 2026-02-23
+
+### Added
+
+- **DragonFly BSD rc.d:** `contrib/dragonflybsd/rc.d/pgwd` script. Tarball `pgwd_v*_dragonfly_amd64.tar.gz` includes rc.d script and config example. rc.conf: `pgwd_enable="YES"`, `pgwd_flags`, `pgwd_env`. Uses `daemon(8)` like FreeBSD. See `contrib/dragonflybsd/README.md`.
+- **Solaris and Linux riscv64:** GoReleaser builds for `solaris/amd64` and `linux/riscv64`. Makefile: `build-solaris`, `build-linux` (riscv64). Ignore rules for unsupported GOOS/GOARCH combos.
+- **Man page FILES section:** Platform-specific setup references (contrib/freebsd, netbsd, dragonflybsd, openbsd READMEs).
+
+### Changed
+
+- **AGENTS.md:** Commit message review rule — show proposed message and wait for approval before `git commit`.
+- **Version 0.5.7:** VERSION, README badge, contrib READMEs, FreeBSD port.
+
+---
+
 ## [0.5.4] - 2026-03-19
 
 ### Added
@@ -243,7 +258,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.5.4...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.5.7...HEAD
+[0.5.7]: https://github.com/hrodrig/pgwd/compare/v0.5.4...v0.5.7
 [0.5.4]: https://github.com/hrodrig/pgwd/compare/v0.5.0...v0.5.4
 [0.5.0]: https://github.com/hrodrig/pgwd/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/hrodrig/pgwd/compare/v0.3.6...v0.4.0

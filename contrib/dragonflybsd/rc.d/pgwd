@@ -1,0 +1,87 @@
+#!/bin/sh
+#
+# PROVIDE: pgwd
+# REQUIRE: DAEMON
+# KEYWORD: nojail
+#
+# Add the following line to /etc/rc.conf to enable pgwd:
+#
+# pgwd_enable="YES"
+#
+# Optional (default shown):
+#
+# pgwd_flags="-config /etc/pgwd/pgwd.conf"
+# pgwd_config="/etc/pgwd/pgwd.conf"
+#
+# When using -kube-postgres or -kube-loki, set KUBECONFIG in pgwd_env:
+#
+# pgwd_env="KUBECONFIG=/root/.kube/config"
+#
+# Log file (default /var/log/pgwd.log):
+#
+# pgwd_logfile="/var/log/pgwd.log"
+
+. /etc/rc.subr
+
+name="pgwd"
+rcvar="${name}_enable"
+
+command="/usr/local/bin/${name}"
+pidfile="/var/run/pgwd.pid"
+required_files="${pgwd_config:-/etc/pgwd/pgwd.conf}"
+
+load_rc_config $name
+: ${pgwd_enable:=NO}
+: ${pgwd_flags:=-config /etc/pgwd/pgwd.conf}
+: ${pgwd_logfile:=/var/log/pgwd.log}
+
+pgwd_prestart()
+{
+	# Ensure log directory exists
+	_logdir="${pgwd_logfile%/*}"
+	case "$_logdir" in
+		"${pgwd_logfile}") _logdir="/var/log" ;;
+		*) ;;
+	esac
+	if [ ! -d "$_logdir" ]; then
+		mkdir -p "$_logdir"
+	fi
+}
+
+pgwd_start()
+{
+	/usr/sbin/daemon -o "${pgwd_logfile}" -P "${pidfile}" -f /usr/local/bin/pgwd ${pgwd_flags}
+}
+
+pgwd_stop()
+{
+	# daemon -P writes the supervisor pid; rc.subr default stop looks for procname "pgwd"
+	# which matches the child, but the pidfile has the supervisor. Kill by pidfile explicitly.
+	if [ -f "${pidfile}" ]; then
+		_pid=$(cat "${pidfile}")
+		kill -TERM "${_pid}" 2>/dev/null
+		sleep 1
+		# Remove stale pidfile if process already exited (e.g. crashed)
+		kill -0 "${_pid}" 2>/dev/null || rm -f "${pidfile}"
+	fi
+}
+
+pgwd_status()
+{
+	if [ -f "${pidfile}" ]; then
+		_pid=$(cat "${pidfile}")
+		if kill -0 "${_pid}" 2>/dev/null; then
+			echo "${name} is running as pid ${_pid}."
+			return 0
+		fi
+	fi
+	echo "${name} is not running."
+	return 1
+}
+
+start_precmd="pgwd_prestart"
+start_cmd="pgwd_start"
+stop_cmd="pgwd_stop"
+status_cmd="pgwd_status"
+
+run_rc_command "$1"

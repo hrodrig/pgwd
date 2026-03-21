@@ -10,7 +10,7 @@ The release tarball (`pgwd_v*_openbsd_amd64.tar.gz`) includes the rc.d script at
 
 ```bash
 # Extract and install binary
-tar xzf pgwd_v0.5.4_openbsd_amd64.tar.gz
+tar xzf pgwd_v0.5.7_openbsd_amd64.tar.gz
 doas install -m755 pgwd /usr/local/bin/
 
 # Copy rc.d script (from tarball)

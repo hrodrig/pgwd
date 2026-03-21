@@ -1,6 +1,6 @@
 .\" pgwd(1) - Postgres Watch Dog
 .\" Manual page for pgwd
-.TH PGWD 1 "2026-03-21" "pgwd v0.5.6" "User Commands"
+.TH PGWD 1 "2026-02-23" "pgwd v0.5.7" "User Commands"
 .SH NAME
 pgwd \- monitor PostgreSQL connections and notify via Slack/Loki
 .SH SYNOPSIS
@@ -141,6 +141,11 @@ Dry run (no notifications):
 .RS
 pgwd \-client my-monitor \-db-url "postgres://..." \-dry-run
 .RE
+.SH FILES
+.I /etc/pgwd/pgwd.conf
+Configuration file (YAML). See contrib/pgwd.conf.example.
+Platform-specific setup (rc.d, systemd): contrib/freebsd/README.md,
+contrib/netbsd/README.md, contrib/dragonflybsd/README.md, contrib/openbsd/README.md.
 .SH EXIT STATUS
 0 on success; non-zero on fatal errors (e.g. DB connection failure).
 .SH SEE ALSO

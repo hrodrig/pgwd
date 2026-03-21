@@ -6,7 +6,7 @@
   <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.5.6-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.5.7-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -45,6 +45,7 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 - [OpenBSD](#openbsd)
 - [FreeBSD](#freebsd)
 - [NetBSD](#netbsd)
+- [DragonFly BSD](#dragonfly-bsd)
 - [Roadmap](#roadmap)
 - [Get involved](#get-involved)
 
@@ -512,6 +513,7 @@ curl -sSL https://raw.githubusercontent.com/hrodrig/pgwd/main/scripts/install.sh
 | **OpenBSD** | tarball with rc.d: see [OpenBSD](#openbsd) |
 | **FreeBSD** | port or tarball: see [FreeBSD](#freebsd) |
 | **NetBSD** | tarball with rc.d: see [NetBSD](#netbsd) |
+| **DragonFly BSD** | tarball with rc.d: see [DragonFly BSD](#dragonfly-bsd) |
 
 Replace `v0.5.0` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets.
 
@@ -991,7 +993,7 @@ make install
 **Install from tarball** (or use the [one-liner](#install) which works on FreeBSD and installs only the binary):
 
 ```bash
-fetch -o /tmp/pgwd.tgz https://github.com/hrodrig/pgwd/releases/download/v0.5.6/pgwd_v0.5.6_freebsd_amd64.tar.gz
+fetch -o /tmp/pgwd.tgz https://github.com/hrodrig/pgwd/releases/download/v0.5.7/pgwd_v0.5.7_freebsd_amd64.tar.gz
 tar -xzf /tmp/pgwd.tgz -C /tmp
 sudo install -m755 /tmp/pgwd /usr/local/bin/
 sudo mkdir -p /usr/local/etc/pgwd
@@ -1020,7 +1022,7 @@ NetBSD uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-kub
 **Install** — tarball includes binary, rc.d script, and config example:
 
 ```bash
-tar xzf pgwd_v0.5.6_netbsd_amd64.tar.gz
+tar xzf pgwd_v0.5.7_netbsd_amd64.tar.gz
 install -m755 pgwd /usr/local/bin/
 install -m555 share/netbsd/rc.d/pgwd /etc/rc.d/pgwd
 mkdir -p /etc/pgwd
@@ -1031,6 +1033,29 @@ service pgwd start
 ```
 
 See `contrib/netbsd/README.md` for details.
+
+[↑ Back to top](#top)
+
+---
+
+## DragonFly BSD
+
+[DragonFly BSD](https://www.dragonflybsd.org) uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-kube-postgres` and `-kube-loki` (external host with kubeconfig; see `contrib/dragonflybsd/README.md`).
+
+**Install** — tarball includes binary, rc.d script, and config example:
+
+```bash
+tar xzf pgwd_v0.5.7_dragonfly_amd64.tar.gz
+install -m755 pgwd /usr/local/bin/
+install -m555 share/dragonfly/rc.d/pgwd /etc/rc.d/pgwd
+mkdir -p /etc/pgwd
+cp etc/pgwd/pgwd.conf.example /etc/pgwd/pgwd.conf
+vi /etc/pgwd/pgwd.conf  # client, db.url, etc.
+echo 'pgwd_enable="YES"' >> /etc/rc.conf
+service pgwd start
+```
+
+See `contrib/dragonflybsd/README.md` for details.
 
 [↑ Back to top](#top)
 

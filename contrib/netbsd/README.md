@@ -17,7 +17,7 @@ Check [Releases](https://github.com/hrodrig/pgwd/releases) for `pgwd_v*_netbsd_a
 
 ```bash
 # Download (use curl; fetch is not in NetBSD base)
-curl -L -o /tmp/pgwd.tar.gz "https://github.com/hrodrig/pgwd/releases/download/v0.5.0/pgwd_v0.5.0_netbsd_amd64.tar.gz"
+curl -L -o /tmp/pgwd.tar.gz "https://github.com/hrodrig/pgwd/releases/download/v0.5.7/pgwd_v0.5.7_netbsd_amd64.tar.gz"
 cd /tmp && tar xzf pgwd.tar.gz
 
 # Install binary
