@@ -8,11 +8,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ### Added
 
+- **FreeBSD port:** `contrib/freebsd/` with Makefile, pkg-plist, pkg-descr, and rc.d script. Install from local port or (when accepted) official ports. See `contrib/freebsd/README.md`.
+- **FreeBSD rc.d:** Daemon with `daemon(8)` for logging to `/var/log/pgwd.log`. Custom stop/status using pidfile (supervisor pid). rc.conf variables: `pgwd_enable`, `pgwd_flags`, `pgwd_config`, `pgwd_env`, `pgwd_logfile`. Supports kube-postgres and kube-loki (external VPS with kubeconfig).
+- **README:** FreeBSD section (port, tarball, config, daemon, cron). Main README badge and FreeBSD tarball URLs updated.
 - **Config file** (YAML): Load settings from `/etc/pgwd/pgwd.conf` (or `-config` / `PGWD_CONFIG`). Keys match `-flag` and `PGWD_*` env vars. Example: `contrib/pgwd.conf.example`.
 - **.deb and .rpm packages:** Install `/etc/pgwd/pgwd.conf` from the example (type `config|noreplace` — not overwritten on upgrade if user modified). Edit before use. Also install systemd units to `/lib/systemd/system/` (pgwd.service, pgwd-once.service, pgwd.timer) — enable with `systemctl enable --now pgwd`. Debian/Ubuntu: prerm stops and disables services before removal; postrm removes `/etc/pgwd` on `apt purge`.
 
 ### Changed
 
+- **contrib/freebsd:** Config example installed to `${PREFIX}/etc/pgwd/` (was `/etc/pgwd/`). Reinstall: `make deinstall`, `make clean`, `make install` to pick up port file changes.
 - **Config file as single source:** When a config file is loaded, env vars (PGWD_*) are ignored; config file is the only source. When no config file exists, env vars apply. CLI flags always override. Removed `EnvironmentFile` from systemd units; use config file only.
 - **Config file layout (breaking):** Reorganized YAML structure: `db` (url, threshold, stale_age, default_threshold_percent), `kube`, `notifications` (loki, slack). Top-level: client, cluster, interval, dry_run, etc.
 - **client required (breaking):** `client` is now mandatory; no fallback to hostname or kube resource. Set in config or `-client`.
@@ -26,20 +30,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 - **OpenBSD pledge:** On OpenBSD, pgwd calls `pledge()` to restrict syscalls (stdio, rpath, inet, dns, proc). Stub on other platforms.
 - **Makefile:** `check-docker` runs before snapshot, release, test-integration, test-e2e-kube, docker-build, docker-scan — fails early with clear message if Docker is not running.
 - **Cursor rule:** `.cursor/rules/man-page-sync.mdc` — keep man page in sync when adding flags or changing version.
-
----
-
-## [0.5.6] - 2026-03-21
-
-### Added
-
-- **FreeBSD port:** `contrib/freebsd/` with Makefile, pkg-plist, pkg-descr, and rc.d script. Install from local port or (when accepted) official ports. See `contrib/freebsd/README.md`.
-- **FreeBSD rc.d:** Daemon with `daemon(8)` for logging to `/var/log/pgwd.log`. Custom stop/status using pidfile (supervisor pid). rc.conf variables: `pgwd_enable`, `pgwd_flags`, `pgwd_config`, `pgwd_env`, `pgwd_logfile`. Supports kube-postgres and kube-loki (external VPS with kubeconfig).
-- **README:** FreeBSD section (port, tarball, config, daemon, cron). Main README badge and FreeBSD tarball URLs updated.
-
-### Changed
-
-- **contrib/freebsd:** Config example installed to `${PREFIX}/etc/pgwd/` (was `/etc/pgwd/`). Reinstall: `make deinstall`, `make clean`, `make install` to pick up port file changes.
 
 ---
 
@@ -252,8 +242,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.5.6...HEAD
-[0.5.6]: https://github.com/hrodrig/pgwd/compare/v0.5.4...v0.5.6
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.5.4...HEAD
 [0.5.4]: https://github.com/hrodrig/pgwd/compare/v0.5.0...v0.5.4
 [0.5.0]: https://github.com/hrodrig/pgwd/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/hrodrig/pgwd/compare/v0.3.6...v0.4.0
