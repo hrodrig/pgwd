@@ -6,7 +6,7 @@
   <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.5.4-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.5.6-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -43,6 +43,7 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 - [systemd](#systemd)
 - [Alpine Linux (OpenRC)](#alpine-linux-openrc)
 - [OpenBSD](#openbsd)
+- [FreeBSD](#freebsd)
 - [Roadmap](#roadmap)
 - [Get involved](#get-involved)
 
@@ -508,6 +509,7 @@ curl -sSL https://raw.githubusercontent.com/hrodrig/pgwd/main/scripts/install.sh
 | **Fedora/RHEL** | `sudo dnf install https://github.com/hrodrig/pgwd/releases/download/v0.5.0/pgwd_v0.5.0_linux_amd64.rpm` |
 | **Alpine** | `wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.0/pgwd_v0.5.0_linux_amd64.tar.gz \| tar -xzf - -C /usr/local/bin` — see [Alpine (OpenRC)](#alpine-linux-openrc) |
 | **OpenBSD** | tarball with rc.d: see [OpenBSD](#openbsd) |
+| **FreeBSD** | port or tarball: see [FreeBSD](#freebsd) |
 
 Replace `v0.5.0` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets.
 
@@ -960,6 +962,50 @@ doas rcctl start pgwd
 ```
 
 See `contrib/openbsd/README.md` for details.
+
+[↑ Back to top](#top)
+
+---
+
+## FreeBSD
+
+FreeBSD uses **ports** or a pre-built tarball. Config: `/etc/pgwd/pgwd.conf`. Supports `-kube-postgres` and `-kube-loki` (external VPS with kubeconfig; see `contrib/freebsd/README.md`).
+
+**Install from port** (when available in official ports):
+
+```bash
+cd /usr/ports/sysutils/pgwd
+make install
+```
+
+**Install from local port** (before it is in official ports):
+
+```bash
+# Clone ports, copy pgwd port, then:
+cd ~/ports/sysutils/pgwd
+make install
+```
+
+**Install from tarball** (or use the [one-liner](#install) which works on FreeBSD and installs only the binary):
+
+```bash
+fetch -o /tmp/pgwd.tgz https://github.com/hrodrig/pgwd/releases/download/v0.5.6/pgwd_v0.5.6_freebsd_amd64.tar.gz
+tar -xzf /tmp/pgwd.tgz -C /tmp
+sudo install -m755 /tmp/pgwd /usr/local/bin/
+sudo mkdir -p /usr/local/etc/pgwd
+sudo install -m444 /tmp/etc/pgwd/pgwd.conf.example /usr/local/etc/pgwd/
+# arm64: replace amd64 with arm64 in the URL
+```
+
+**Config** (required for port or tarball):
+
+```bash
+mkdir -p /etc/pgwd
+cp /usr/local/etc/pgwd/pgwd.conf.example /etc/pgwd/pgwd.conf
+vi /etc/pgwd/pgwd.conf  # client, db.url, etc.
+```
+
+The port installs the binary, man page, LICENSE, config example, and rc.d script to `/usr/local/`. Run as daemon: `echo 'pgwd_enable="YES"' >> /etc/rc.conf && service pgwd start`. See `contrib/freebsd/README.md` for details.
 
 [↑ Back to top](#top)
 

@@ -29,6 +29,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
+## [0.5.6] - 2026-03-21
+
+### Added
+
+- **FreeBSD port:** `contrib/freebsd/` with Makefile, pkg-plist, pkg-descr, and rc.d script. Install from local port or (when accepted) official ports. See `contrib/freebsd/README.md`.
+- **FreeBSD rc.d:** Daemon with `daemon(8)` for logging to `/var/log/pgwd.log`. Custom stop/status using pidfile (supervisor pid). rc.conf variables: `pgwd_enable`, `pgwd_flags`, `pgwd_config`, `pgwd_env`, `pgwd_logfile`. Supports kube-postgres and kube-loki (external VPS with kubeconfig).
+- **README:** FreeBSD section (port, tarball, config, daemon, cron). Main README badge and FreeBSD tarball URLs updated.
+
+### Changed
+
+- **contrib/freebsd:** Config example installed to `${PREFIX}/etc/pgwd/` (was `/etc/pgwd/`). Reinstall: `make deinstall`, `make clean`, `make install` to pick up port file changes.
+
+---
+
 ## [0.5.4] - 2026-03-19
 
 ### Added
@@ -238,7 +252,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.5.4...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.5.6...HEAD
+[0.5.6]: https://github.com/hrodrig/pgwd/compare/v0.5.4...v0.5.6
 [0.5.4]: https://github.com/hrodrig/pgwd/compare/v0.5.0...v0.5.4
 [0.5.0]: https://github.com/hrodrig/pgwd/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/hrodrig/pgwd/compare/v0.3.6...v0.4.0
