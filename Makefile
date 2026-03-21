@@ -22,9 +22,10 @@ help:
 	@echo "Build:"
 	@echo "  build              Build binary for current platform"
 	@echo "  build-all          Cross-compile for Linux, macOS, Windows (output in dist/)"
-	@echo "  build-linux        Cross-compile for Linux (amd64, arm64)"
+	@echo "  build-linux        Cross-compile for Linux (amd64, arm64, riscv64)"
 	@echo "  build-darwin       Cross-compile for macOS (amd64, arm64)"
 	@echo "  build-windows      Cross-compile for Windows (amd64, arm64)"
+	@echo "  build-solaris      Cross-compile for Solaris (amd64)"
 	@echo ""
 	@echo "Install & run:"
 	@echo "  install            Install to \$$GOBIN (go install)"
@@ -61,13 +62,14 @@ build:
 
 # --- Cross-compile: all platforms (output in dist/) ---
 
-.PHONY: build-all build-linux build-darwin build-windows
-build-all: build-linux build-darwin build-windows
+.PHONY: build-all build-linux build-darwin build-windows build-solaris
+build-all: build-linux build-darwin build-windows build-solaris
 
 build-linux:
 	@mkdir -p $(DIST)
 	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(DIST)/$(BINARY)-linux-amd64 ./cmd/pgwd
 	GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(DIST)/$(BINARY)-linux-arm64 ./cmd/pgwd
+	GOOS=linux GOARCH=riscv64 go build $(LDFLAGS) -o $(DIST)/$(BINARY)-linux-riscv64 ./cmd/pgwd
 
 build-darwin:
 	@mkdir -p $(DIST)
@@ -78,6 +80,10 @@ build-windows:
 	@mkdir -p $(DIST)
 	GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(DIST)/$(BINARY)-windows-amd64.exe ./cmd/pgwd
 	GOOS=windows GOARCH=arm64 go build $(LDFLAGS) -o $(DIST)/$(BINARY)-windows-arm64.exe ./cmd/pgwd
+
+build-solaris:
+	@mkdir -p $(DIST)
+	GOOS=solaris GOARCH=amd64 go build $(LDFLAGS) -o $(DIST)/$(BINARY)-solaris-amd64 ./cmd/pgwd
 
 # Install: go install → $GOBIN (default $HOME/go/bin). Custom path: GOBIN=/usr/local/bin make install
 install:

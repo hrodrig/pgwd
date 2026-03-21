@@ -20,9 +20,21 @@ builds:
       - freebsd
       - openbsd
       - netbsd
+      - solaris
     goarch:
       - amd64
       - arm64
+      - riscv64
+    # Ignore GOOS/GOARCH combos not supported by Go (e.g. darwin/riscv64, solaris/arm64, solaris/riscv64)
+    ignore:
+      - goos: darwin
+        goarch: riscv64
+      - goos: windows
+        goarch: riscv64
+      - goos: solaris
+        goarch: arm64
+      - goos: solaris
+        goarch: riscv64
     env:
       - CGO_ENABLED=0
     ldflags:
