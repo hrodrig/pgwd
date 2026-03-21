@@ -866,7 +866,7 @@ Restrict permissions if the config contains secrets: `sudo chmod 600 /etc/pgwd/p
 | `pgwd-once.service` | One-shot — runs pgwd once and exits. Used by the timer | Do not enable directly |
 | `pgwd.timer` | Schedule — triggers pgwd-once every 5 minutes (1 min after boot) | Cron-like: one check every 5 min |
 
-**Two ways to run:** daemon (`pgwd.service`) or timer (`pgwd.timer`). See `contrib/systemd/README.md` for setup details.
+**Two ways to run:** daemon (`pgwd.service`) or timer (`pgwd.timer`). See [contrib/systemd/README.md](contrib/systemd/README.md) for setup details.
 
 **Daemon (long-running)**
 
@@ -942,7 +942,7 @@ rc-service pgwd start
 rc-update add pgwd default
 ```
 
-See `contrib/openrc/README.md` for details.
+See [contrib/openrc/README.md](contrib/openrc/README.md) for details.
 
 [↑ Back to top](#top)
 
@@ -950,7 +950,7 @@ See `contrib/openrc/README.md` for details.
 
 ## OpenBSD
 
-OpenBSD uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-kube-postgres` and `-kube-loki` (external VPS with kubeconfig; see `contrib/openbsd/README.md`).
+OpenBSD uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-kube-postgres` and `-kube-loki` (external VPS with kubeconfig; see [contrib/openbsd/README.md](contrib/openbsd/README.md)).
 
 **Install** — tarball includes binary, rc.d script, and config example:
 
@@ -965,7 +965,7 @@ doas rcctl enable pgwd
 doas rcctl start pgwd
 ```
 
-See `contrib/openbsd/README.md` for details.
+See [contrib/openbsd/README.md](contrib/openbsd/README.md) for details.
 
 [↑ Back to top](#top)
 
@@ -973,7 +973,7 @@ See `contrib/openbsd/README.md` for details.
 
 ## FreeBSD
 
-FreeBSD uses **ports** or a pre-built tarball. Config: `/etc/pgwd/pgwd.conf`. Supports `-kube-postgres` and `-kube-loki` (external VPS with kubeconfig; see `contrib/freebsd/README.md`).
+FreeBSD uses **ports** or a pre-built tarball. Config: `/etc/pgwd/pgwd.conf`. Supports `-kube-postgres` and `-kube-loki` (external VPS with kubeconfig; see [contrib/freebsd/README.md](contrib/freebsd/README.md)).
 
 **Install from port** (when available in official ports):
 
@@ -1009,7 +1009,7 @@ cp /usr/local/etc/pgwd/pgwd.conf.example /etc/pgwd/pgwd.conf
 vi /etc/pgwd/pgwd.conf  # client, db.url, etc.
 ```
 
-The port installs the binary, man page, LICENSE, config example, and rc.d script to `/usr/local/`. Run as daemon: `echo 'pgwd_enable="YES"' >> /etc/rc.conf && service pgwd start`. See `contrib/freebsd/README.md` for details.
+The port installs the binary, man page, LICENSE, config example, and rc.d script to `/usr/local/`. Run as daemon: `echo 'pgwd_enable="YES"' >> /etc/rc.conf && service pgwd start`. See [contrib/freebsd/README.md](contrib/freebsd/README.md) for details.
 
 [↑ Back to top](#top)
 
@@ -1017,7 +1017,7 @@ The port installs the binary, man page, LICENSE, config example, and rc.d script
 
 ## NetBSD
 
-NetBSD uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-kube-postgres` and `-kube-loki` (external host with kubeconfig; see `contrib/netbsd/README.md`).
+NetBSD uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-kube-postgres` and `-kube-loki` (external host with kubeconfig; see [contrib/netbsd/README.md](contrib/netbsd/README.md)).
 
 **Install** — tarball includes binary, rc.d script, and config example:
 
@@ -1032,7 +1032,7 @@ echo 'pgwd=YES' >> /etc/rc.conf
 service pgwd start
 ```
 
-See `contrib/netbsd/README.md` for details.
+See [contrib/netbsd/README.md](contrib/netbsd/README.md) for details.
 
 [↑ Back to top](#top)
 
@@ -1040,7 +1040,7 @@ See `contrib/netbsd/README.md` for details.
 
 ## DragonFly BSD
 
-[DragonFly BSD](https://www.dragonflybsd.org) uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-kube-postgres` and `-kube-loki` (external host with kubeconfig; see `contrib/dragonflybsd/README.md`).
+[DragonFly BSD](https://www.dragonflybsd.org) uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-kube-postgres` and `-kube-loki` (external host with kubeconfig; see [contrib/dragonflybsd/README.md](contrib/dragonflybsd/README.md)).
 
 **Install** — tarball includes binary, rc.d script, and config example:
 
@@ -1055,7 +1055,7 @@ echo 'pgwd_enable="YES"' >> /etc/rc.conf
 service pgwd start
 ```
 
-See `contrib/dragonflybsd/README.md` for details.
+See [contrib/dragonflybsd/README.md](contrib/dragonflybsd/README.md) for details.
 
 [↑ Back to top](#top)
 
