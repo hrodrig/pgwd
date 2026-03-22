@@ -721,6 +721,7 @@ Same placeholders as Slack. Timestamp is the time of the push. You can query in 
 | **Logs sent to Loki but not visible in Grafana** | Grafana queries a specific tenant. pgwd must use the **same** `-notifications-loki-org-id` as Grafana's Loki data source (e.g. `1`, `my-tenant`). Check Grafana data source config or Helm values (`secureJsonData.httpHeaderValue1` for Loki). |
 | **"postgres connect: ..."** | DB unreachable: check host, port, TLS, credentials, and that the pgwd host can reach the Postgres server. |
 | **Stats or stale count errors in logs** | Permissions: the DB user must be able to read `pg_stat_activity` (usually any role can). Check `log.Printf` output for the exact error. |
+| **`systemctl enable --now pgwd` hangs** / **`pgwd.service` inactive, no journal lines** | Often **wait for `network-online.target`** (e.g. `systemd-networkd-wait-online`). Use current units from `contrib/systemd/` (they use `network.target`) or add a drop-in; do not interrupt with Ctrl+C — use `systemctl reset-failed pgwd.service` then `systemctl start pgwd.service`. Details: [contrib/systemd/README.md#troubleshooting](contrib/systemd/README.md#troubleshooting). |
 
 [↑ Back to top](#top)
 
@@ -869,6 +870,8 @@ Restrict permissions if the config contains secrets: `sudo chmod 600 /etc/pgwd/p
 | `pgwd.timer` | Schedule — triggers pgwd-once every 5 minutes (1 min after boot) | Cron-like: one check every 5 min |
 
 **Two ways to run:** daemon (`pgwd.service`) or timer (`pgwd.timer`). See [contrib/systemd/README.md](contrib/systemd/README.md) for setup details.
+
+**Boot ordering:** shipped units start **after `network.target`** (not `network-online.target`) so `systemctl enable --now` does not block on `systemd-networkd-wait-online` — a common issue on minimal or static-IP systems (e.g. Arch). If you need stricter “full Internet up” ordering, add a drop-in; see [contrib/systemd/README.md — Troubleshooting](contrib/systemd/README.md#troubleshooting).
 
 **Daemon (long-running)**
 

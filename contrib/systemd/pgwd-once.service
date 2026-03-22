@@ -9,8 +9,9 @@
 [Unit]
 Description=Postgres Watch Dog (one-shot)
 Documentation=https://github.com/hrodrig/pgwd
-After=network-online.target
-Wants=network-online.target
+# Same as pgwd.service: avoid blocking on network-online.target (see pgwd.service).
+After=network.target
+Wants=network.target
 
 [Service]
 Type=oneshot

@@ -18,6 +18,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ### Changed
 
+- **systemd:** `pgwd.service` and `pgwd-once.service` now order after **`network.target`** instead of **`network-online.target`**, so `systemctl enable --now` does not block on `systemd-networkd-wait-online` (notably on static-IP / minimal installs). README troubleshooting and `contrib/systemd/README.md` document the symptom and a drop-in override.
 - **contrib/freebsd:** Config example installed to `${PREFIX}/etc/pgwd/` (was `/etc/pgwd/`). Reinstall: `make deinstall`, `make clean`, `make install` to pick up port file changes.
 - **Config file as single source:** When a config file is loaded, env vars (PGWD_*) are ignored; config file is the only source. When no config file exists, env vars apply. CLI flags always override. Removed `EnvironmentFile` from systemd units; use config file only.
 - **Config file layout (breaking):** Reorganized YAML structure: `db` (url, threshold, stale_age, default_threshold_percent), `kube`, `notifications` (loki, slack). Top-level: client, cluster, interval, dry_run, etc.

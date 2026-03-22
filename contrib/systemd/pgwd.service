@@ -9,8 +9,11 @@
 [Unit]
 Description=Postgres Watch Dog (daemon)
 Documentation=https://github.com/hrodrig/pgwd
-After=network-online.target
-Wants=network-online.target
+# Use network.target (not network-online.target): Wants=network-online pulls in
+# systemd-networkd-wait-online (or similar) and can block systemctl enable --now
+# for a long time or leave a stale job if interrupted — especially on static IP setups.
+After=network.target
+Wants=network.target
 
 [Service]
 Type=simple
