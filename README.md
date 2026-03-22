@@ -6,7 +6,7 @@
   <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.5.8-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.5.10-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -510,16 +510,16 @@ curl -sSL https://raw.githubusercontent.com/hrodrig/pgwd/main/scripts/install.sh
 | Platform | Command |
 |----------|---------|
 | **Homebrew (macOS)** | `brew install hrodrig/pgwd/pgwd` |
-| **Debian/Ubuntu** | `wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v0.5.8/pgwd_v0.5.8_linux_amd64.deb && sudo dpkg -i /tmp/pgwd.deb` |
-| **Fedora / RHEL / AlmaLinux / Rocky / Oracle Linux** | Same `.rpm`: `sudo dnf install https://github.com/hrodrig/pgwd/releases/download/v0.5.8/pgwd_v0.5.8_linux_amd64.rpm` |
-| **Alpine** | `wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.8/pgwd_v0.5.8_linux_amd64.tar.gz \| tar -xzf - -C /usr/local/bin` — see [Alpine (OpenRC)](#alpine-linux-openrc) |
+| **Debian/Ubuntu** | `wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.deb && sudo dpkg -i /tmp/pgwd.deb` |
+| **Fedora / RHEL / AlmaLinux / Rocky / Oracle Linux** | Same `.rpm`: `sudo dnf install https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.rpm` |
+| **Alpine** | `wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.tar.gz \| tar -xzf - -C /usr/local/bin` — see [Alpine (OpenRC)](#alpine-linux-openrc) |
 | **OpenBSD** | tarball with rc.d: see [OpenBSD](#openbsd) |
 | **FreeBSD** | port or tarball: see [FreeBSD](#freebsd) |
 | **NetBSD** | tarball with rc.d: see [NetBSD](#netbsd) |
 | **DragonFly BSD** | tarball with rc.d: see [DragonFly BSD](#dragonfly-bsd) |
 | **illumos / Solaris** | tarball with SMF: see [Solaris](#solaris) |
 
-Replace `v0.5.8` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets. If a tag is not published yet, build packages locally with `make snapshot` and install the `.rpm` / `.deb` from `dist/`. **AlmaLinux 8/9:** see [AlmaLinux](#almalinux).
+Replace `v0.5.10` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets. If a tag is not published yet, build packages locally with `make snapshot` and install the `.rpm` / `.deb` from `dist/`. **AlmaLinux 8/9:** see [AlmaLinux](#almalinux).
 
 **Pre-built binaries:** [Releases](https://github.com/hrodrig/pgwd/releases) provide binaries (tar.gz, zip), `.deb`, and `.rpm` packages for Linux, macOS, and Windows (amd64 and arm64). The `.deb` and `.rpm` packages include the man page (`man pgwd`) and install `/etc/pgwd/pgwd.conf` (edit before use). The `.rpm` is the same artifact for Fedora, RHEL, AlmaLinux, Rocky Linux, and Oracle Linux (`dnf`); **AlmaLinux** + **systemd** were validated (install, `pgwd -dry-run -interval 0`, `systemctl enable --now pgwd.service`).
 
@@ -534,7 +534,7 @@ make install
 # Install man page: make install-man  (MANDIR=/usr/share/man for system-wide)
 ```
 
-**Release (GitHub):** See [Release steps](#release-steps) below for the full workflow. Quick: from `main`, `git tag v0.5.8`, `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
+**Release (GitHub):** See [Release steps](#release-steps) below for the full workflow. Quick: from `main`, `git tag v0.5.10`, `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
 
 ### Release steps
 
@@ -788,7 +788,7 @@ When you use `-db-threshold-levels 75,85,95` (default), pgwd fires one alert per
 **Published image (each release):** Multi-arch images (linux/amd64, linux/arm64) are published to [GitHub Container Registry](https://github.com/hrodrig/pgwd/pkgs/container/pgwd) as `ghcr.io/hrodrig/pgwd`. Use a version tag or `latest`:
 
 ```bash
-docker pull ghcr.io/hrodrig/pgwd:v0.5.8
+docker pull ghcr.io/hrodrig/pgwd:v0.5.10
 # or
 docker pull ghcr.io/hrodrig/pgwd:latest
 ```
@@ -814,13 +814,13 @@ This runs `docker build` with `--build-arg VERSION=...`, `--build-arg COMMIT=...
 
 **Validate the image**
 
-Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.5.8`), or `pgwd` if you built locally with `make docker-build`:
+Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.5.10`), or `pgwd` if you built locally with `make docker-build`:
 
 ```bash
 # Help (no DB needed)
 docker run --rm ghcr.io/hrodrig/pgwd:latest -h
 
-# Version (should show e.g. pgwd v0.5.8 (commit ..., built ...))
+# Version (should show e.g. pgwd v0.5.10 (commit ..., built ...))
 docker run --rm ghcr.io/hrodrig/pgwd:latest --version
 
 # Expect "missing database URL" (validates startup path)
@@ -926,13 +926,13 @@ To change the interval, edit the timer: `OnUnitActiveSec=5min` → e.g. `OnUnitA
 **Install from GitHub** (replace version / arch):
 
 ```bash
-sudo dnf install -y "https://github.com/hrodrig/pgwd/releases/download/v0.5.8/pgwd_v0.5.8_linux_amd64.rpm"
+sudo dnf install -y "https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.rpm"
 ```
 
 **Local `.rpm`** (e.g. from `make snapshot` → `dist/`, when a release is not on GitHub yet):
 
 ```bash
-sudo dnf install -y ./pgwd_v0.5.8_linux_amd64.rpm
+sudo dnf install -y ./pgwd_v0.5.10_linux_amd64.rpm
 ```
 
 **Configure and test**
@@ -954,10 +954,10 @@ sudo systemctl status pgwd.service
 
 Arch Linux uses **systemd**. There is no official **`pacman`** package in the Arch repos yet; install the **Linux release tarball** from [Releases](https://github.com/hrodrig/pgwd/releases) or a community **[AUR](https://aur.archlinux.org/)** package (e.g. `pgwd-bin`) when one exists — verify the PKGBUILD and checksums.
 
-**Tarball install** — extract the archive, then install the binary and config layout (replace `v0.5.8` / `amd64` as needed):
+**Tarball install** — extract the archive, then install the binary and config layout (replace `v0.5.10` / `amd64` as needed):
 
 ```bash
-wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.8/pgwd_v0.5.8_linux_amd64.tar.gz | tar -xzf -
+wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.tar.gz | tar -xzf -
 sudo install -Dm755 pgwd /usr/local/bin/pgwd
 sudo ln -sf /usr/local/bin/pgwd /usr/bin/pgwd
 sudo install -Dm644 share/man/man1/pgwd.1 /usr/local/share/man/man1/pgwd.1
@@ -991,7 +991,7 @@ Alpine uses **OpenRC** (rc.d), not systemd. Config: `/etc/pgwd/pgwd.conf`.
 **Install** — tar.gz (binario estático, musl-compatible):
 
 ```bash
-wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.8/pgwd_v0.5.8_linux_amd64.tar.gz | tar -xzf - -C /usr/local/bin
+wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.tar.gz | tar -xzf - -C /usr/local/bin
 # arm64: replace amd64 with arm64
 ```
 
@@ -1027,7 +1027,7 @@ OpenBSD uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-ku
 **Install** — tarball includes binary, rc.d script, and config example:
 
 ```bash
-tar xzf pgwd_v0.5.4_openbsd_amd64.tar.gz
+tar xzf pgwd_v0.5.10_openbsd_amd64.tar.gz
 doas install -m755 pgwd /usr/local/bin/
 doas install -m555 share/openbsd/rc.d/pgwd /etc/rc.d/pgwd
 doas mkdir -p /etc/pgwd
@@ -1065,7 +1065,7 @@ make install
 **Install from tarball** (or use the [one-liner](#install) which works on FreeBSD and installs only the binary):
 
 ```bash
-fetch -o /tmp/pgwd.tgz https://github.com/hrodrig/pgwd/releases/download/v0.5.8/pgwd_v0.5.8_freebsd_amd64.tar.gz
+fetch -o /tmp/pgwd.tgz https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_freebsd_amd64.tar.gz
 tar -xzf /tmp/pgwd.tgz -C /tmp
 sudo install -m755 /tmp/pgwd /usr/local/bin/
 sudo mkdir -p /usr/local/etc/pgwd
@@ -1094,7 +1094,7 @@ NetBSD uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-kub
 **Install** — tarball includes binary, rc.d script, and config example:
 
 ```bash
-tar xzf pgwd_v0.5.8_netbsd_amd64.tar.gz
+tar xzf pgwd_v0.5.10_netbsd_amd64.tar.gz
 install -m755 pgwd /usr/local/bin/
 install -m555 share/netbsd/rc.d/pgwd /etc/rc.d/pgwd
 mkdir -p /etc/pgwd
@@ -1117,7 +1117,7 @@ See [contrib/netbsd/README.md](contrib/netbsd/README.md) for details.
 **Install** — tarball includes binary, rc.d script, and config example:
 
 ```bash
-tar xzf pgwd_v0.5.8_dragonfly_amd64.tar.gz
+tar xzf pgwd_v0.5.10_dragonfly_amd64.tar.gz
 install -m755 pgwd /usr/local/bin/
 install -m555 share/dragonfly/rc.d/pgwd /etc/rc.d/pgwd
 mkdir -p /etc/pgwd
@@ -1142,7 +1142,7 @@ See [contrib/dragonflybsd/README.md](contrib/dragonflybsd/README.md) for details
 **Install** — tarball includes binary, SMF manifest, method script, and config example:
 
 ```bash
-curl -L -o /tmp/pgwd.tar.gz "https://github.com/hrodrig/pgwd/releases/download/v0.5.8/pgwd_v0.5.8_solaris_amd64.tar.gz"
+curl -L -o /tmp/pgwd.tar.gz "https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_solaris_amd64.tar.gz"
 cd /tmp && tar xzf pgwd.tar.gz
 
 pfexec mkdir -p /usr/local/bin /lib/svc/manifest/site /etc/pgwd

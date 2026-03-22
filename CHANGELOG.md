@@ -6,6 +6,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+## [0.5.10] - 2026-03-24
+
 ### Added
 
 - **README:** **AlmaLinux** section — `dnf install` from URL or local `.rpm`, config, `systemctl`, pointer to systemd docs.
