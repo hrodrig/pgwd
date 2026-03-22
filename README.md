@@ -41,6 +41,7 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 - [FAQ](#faq)
 - [Docker](#docker)
 - [systemd](#systemd)
+- [Arch Linux](#arch-linux)
 - [Alpine Linux (OpenRC)](#alpine-linux-openrc)
 - [OpenBSD](#openbsd)
 - [FreeBSD](#freebsd)
@@ -912,6 +913,40 @@ From source: copy `contrib/systemd/pgwd-once.service` and `contrib/systemd/pgwd.
 To change the interval, edit the timer: `OnUnitActiveSec=5min` → e.g. `OnUnitActiveSec=10min`, then `sudo systemctl daemon-reload`.
 
 **Optional:** Run the service as a dedicated user: create `useradd -r -s /bin/false pgwd`, then in the unit add `User=pgwd` and `Group=pgwd`. Ensure that user can read the config file.
+
+[↑ Back to top](#top)
+
+---
+
+## Arch Linux
+
+Arch Linux uses **systemd**. There is no official **`pacman`** package in the Arch repos yet; install the **Linux release tarball** from [Releases](https://github.com/hrodrig/pgwd/releases) or a community **[AUR](https://aur.archlinux.org/)** package (e.g. `pgwd-bin`) when one exists — verify the PKGBUILD and checksums.
+
+**Tarball install** — extract the archive, then install the binary and config layout (replace `v0.5.8` / `amd64` as needed):
+
+```bash
+wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.8/pgwd_v0.5.8_linux_amd64.tar.gz | tar -xzf -
+sudo install -Dm755 pgwd /usr/local/bin/pgwd
+sudo ln -sf /usr/local/bin/pgwd /usr/bin/pgwd
+sudo install -Dm644 share/man/man1/pgwd.1 /usr/local/share/man/man1/pgwd.1
+sudo mkdir -p /etc/pgwd
+sudo cp etc/pgwd/pgwd.conf.example /etc/pgwd/pgwd.conf
+sudo chmod 600 /etc/pgwd/pgwd.conf
+# Edit: client, db.url, notifications, interval, etc.
+```
+
+**systemd units** are not inside the tarball; copy them from a **git clone** of this repo (or raw files from GitHub):
+
+```bash
+# From the repository root (paths relative to clone)
+sudo install -Dm644 contrib/systemd/pgwd.service /usr/lib/systemd/system/pgwd.service
+sudo install -Dm644 contrib/systemd/pgwd-once.service /usr/lib/systemd/system/pgwd-once.service
+sudo install -Dm644 contrib/systemd/pgwd.timer /usr/lib/systemd/system/pgwd.timer
+sudo systemctl daemon-reload
+sudo systemctl enable --now pgwd.service
+```
+
+**Networking:** for **static IP** with **systemd-networkd**, set `Address=.../24` (or your prefix); a bare address defaults to `/32` and breaks the default route. Shipped units order after **`network.target`** so `systemctl enable --now` does not block on **`network-online.target`** — see [contrib/systemd/README.md](contrib/systemd/README.md).
 
 [↑ Back to top](#top)
 
