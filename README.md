@@ -41,6 +41,7 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 - [FAQ](#faq)
 - [Docker](#docker)
 - [systemd](#systemd)
+- [AlmaLinux](#almalinux)
 - [Arch Linux](#arch-linux)
 - [Alpine Linux (OpenRC)](#alpine-linux-openrc)
 - [OpenBSD](#openbsd)
@@ -518,7 +519,7 @@ curl -sSL https://raw.githubusercontent.com/hrodrig/pgwd/main/scripts/install.sh
 | **DragonFly BSD** | tarball with rc.d: see [DragonFly BSD](#dragonfly-bsd) |
 | **illumos / Solaris** | tarball with SMF: see [Solaris](#solaris) |
 
-Replace `v0.5.8` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets. If a tag is not published yet, build packages locally with `make snapshot` and install the `.rpm` / `.deb` from `dist/`.
+Replace `v0.5.8` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets. If a tag is not published yet, build packages locally with `make snapshot` and install the `.rpm` / `.deb` from `dist/`. **AlmaLinux 8/9:** see [AlmaLinux](#almalinux).
 
 **Pre-built binaries:** [Releases](https://github.com/hrodrig/pgwd/releases) provide binaries (tar.gz, zip), `.deb`, and `.rpm` packages for Linux, macOS, and Windows (amd64 and arm64). The `.deb` and `.rpm` packages include the man page (`man pgwd`) and install `/etc/pgwd/pgwd.conf` (edit before use). The `.rpm` is the same artifact for Fedora, RHEL, AlmaLinux, Rocky Linux, and Oracle Linux (`dnf`); **AlmaLinux** + **systemd** were validated (install, `pgwd -dry-run -interval 0`, `systemctl enable --now pgwd.service`).
 
@@ -913,6 +914,37 @@ From source: copy `contrib/systemd/pgwd-once.service` and `contrib/systemd/pgwd.
 To change the interval, edit the timer: `OnUnitActiveSec=5min` → e.g. `OnUnitActiveSec=10min`, then `sudo systemctl daemon-reload`.
 
 **Optional:** Run the service as a dedicated user: create `useradd -r -s /bin/false pgwd`, then in the unit add `User=pgwd` and `Group=pgwd`. Ensure that user can read the config file.
+
+[↑ Back to top](#top)
+
+---
+
+## AlmaLinux
+
+[AlmaLinux](https://almalinux.org/) is **RHEL-compatible**: **systemd**, **`dnf`**, and the same **`.rpm`** as Fedora, RHEL, Rocky Linux, and Oracle Linux. Packages install the binary to `/usr/bin/pgwd`, config to `/etc/pgwd/pgwd.conf`, man page, and units under `/usr/lib/systemd/system/` (paths may match your major version).
+
+**Install from GitHub** (replace version / arch):
+
+```bash
+sudo dnf install -y "https://github.com/hrodrig/pgwd/releases/download/v0.5.8/pgwd_v0.5.8_linux_amd64.rpm"
+```
+
+**Local `.rpm`** (e.g. from `make snapshot` → `dist/`, when a release is not on GitHub yet):
+
+```bash
+sudo dnf install -y ./pgwd_v0.5.8_linux_amd64.rpm
+```
+
+**Configure and test**
+
+```bash
+sudo nano /etc/pgwd/pgwd.conf   # client, db.url, notifications, interval, etc.
+pgwd -config /etc/pgwd/pgwd.conf -dry-run -interval 0
+sudo systemctl enable --now pgwd.service
+sudo systemctl status pgwd.service
+```
+
+**Timer** instead of daemon: `sudo systemctl enable --now pgwd.timer` (set `interval: 0` in config for one-shot per tick). See [systemd](#systemd) and [contrib/systemd/README.md](contrib/systemd/README.md).
 
 [↑ Back to top](#top)
 

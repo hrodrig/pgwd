@@ -8,6 +8,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ### Added
 
+- **README:** **AlmaLinux** section — `dnf install` from URL or local `.rpm`, config, `systemctl`, pointer to systemd docs.
 - **README:** **Arch Linux** section — tarball install, systemd units from `contrib/systemd/`, AUR note, static IP `/24` and `network.target` pointers.
 - **README:** Install table names AlmaLinux, Rocky Linux, and Oracle Linux alongside Fedora/RHEL for the same `.rpm`/`dnf` one-liner; notes `make snapshot` when a GitHub tag is not published yet; documents AlmaLinux + systemd validation (dry-run and `pgwd.service`).
 - **FreeBSD port:** `contrib/freebsd/` with Makefile, pkg-plist, pkg-descr, and rc.d script. Install from local port or (when accepted) official ports. See `contrib/freebsd/README.md`.
