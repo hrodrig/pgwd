@@ -17,7 +17,7 @@ Check [Releases](https://github.com/hrodrig/pgwd/releases) for `pgwd_v*_netbsd_a
 
 ```bash
 # Download (use curl; fetch is not in NetBSD base)
-curl -L -o /tmp/pgwd.tar.gz "https://github.com/hrodrig/pgwd/releases/download/v0.5.7/pgwd_v0.5.7_netbsd_amd64.tar.gz"
+curl -L -o /tmp/pgwd.tar.gz "https://github.com/hrodrig/pgwd/releases/download/v0.5.8/pgwd_v0.5.8_netbsd_amd64.tar.gz"
 cd /tmp && tar xzf pgwd.tar.gz
 
 # Install binary
@@ -49,9 +49,9 @@ mkdir -p /usr/local/bin /etc/pgwd
 From your Mac, copy files:
 
 ```bash
-scp -P 2294 pgwd-netbsd root@YOUR_NETBSD_IP:/usr/local/bin/pgwd
-scp -P 2294 contrib/netbsd/rc.d/pgwd root@YOUR_NETBSD_IP:/etc/rc.d/pgwd
-scp -P 2294 contrib/pgwd.conf.example root@YOUR_NETBSD_IP:/etc/pgwd/pgwd.conf
+scp -P 22 pgwd-netbsd root@YOUR_NETBSD_IP:/usr/local/bin/pgwd
+scp -P 22 contrib/netbsd/rc.d/pgwd root@YOUR_NETBSD_IP:/etc/rc.d/pgwd
+scp -P 22 contrib/pgwd.conf.example root@YOUR_NETBSD_IP:/etc/pgwd/pgwd.conf
 ```
 
 On NetBSD, set permissions:
@@ -147,14 +147,14 @@ Add these to `/etc/rc.conf` or `/etc/rc.conf.d/pgwd` to customize the daemon:
 
 **Example** — default config path:
 
-```
+```conf
 pgwd=YES
 pgwd_flags="-config /etc/pgwd/pgwd.conf"
 ```
 
 **Example** — custom config and kube-postgres:
 
-```
+```conf
 pgwd=YES
 pgwd_flags="-config /etc/pgwd/prod.conf"
 pgwd_env="KUBECONFIG=/root/.kube/config"

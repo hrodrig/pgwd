@@ -1,0 +1,17 @@
+#!/bin/sh
+#
+# SMF method script for pgwd (Postgres Watch Dog).
+# Install to /lib/svc/method/pgwd
+#
+# Clear SMF env vars before exec (per SMF docs for persistent processes)
+unset SMF_FMRI SMF_METHOD SMF_RESTARTER SMF_ZONENAME
+
+case "$1" in
+start)
+  exec /usr/local/bin/pgwd -config /etc/pgwd/pgwd.conf
+  ;;
+*)
+  echo "Usage: $0 start"
+  exit 1
+  ;;
+esac

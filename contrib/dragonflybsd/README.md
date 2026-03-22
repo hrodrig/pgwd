@@ -10,7 +10,7 @@ The release tarball (`pgwd_v*_dragonfly_amd64.tar.gz`) includes the rc.d script 
 
 ```bash
 # Download (curl or fetch)
-curl -L -o /tmp/pgwd.tar.gz "https://github.com/hrodrig/pgwd/releases/download/v0.5.7/pgwd_v0.5.7_dragonfly_amd64.tar.gz"
+curl -L -o /tmp/pgwd.tar.gz "https://github.com/hrodrig/pgwd/releases/download/v0.5.8/pgwd_v0.5.8_dragonfly_amd64.tar.gz"
 cd /tmp && tar xzf pgwd.tar.gz
 
 # Install binary and rc.d script

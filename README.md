@@ -6,7 +6,7 @@
   <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.5.7-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.5.8-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -46,6 +46,7 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 - [FreeBSD](#freebsd)
 - [NetBSD](#netbsd)
 - [DragonFly BSD](#dragonfly-bsd)
+- [Solaris](#solaris)
 - [Roadmap](#roadmap)
 - [Get involved](#get-involved)
 
@@ -514,6 +515,7 @@ curl -sSL https://raw.githubusercontent.com/hrodrig/pgwd/main/scripts/install.sh
 | **FreeBSD** | port or tarball: see [FreeBSD](#freebsd) |
 | **NetBSD** | tarball with rc.d: see [NetBSD](#netbsd) |
 | **DragonFly BSD** | tarball with rc.d: see [DragonFly BSD](#dragonfly-bsd) |
+| **illumos / Solaris** | tarball with SMF: see [Solaris](#solaris) |
 
 Replace `v0.5.0` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets.
 
@@ -993,7 +995,7 @@ make install
 **Install from tarball** (or use the [one-liner](#install) which works on FreeBSD and installs only the binary):
 
 ```bash
-fetch -o /tmp/pgwd.tgz https://github.com/hrodrig/pgwd/releases/download/v0.5.7/pgwd_v0.5.7_freebsd_amd64.tar.gz
+fetch -o /tmp/pgwd.tgz https://github.com/hrodrig/pgwd/releases/download/v0.5.8/pgwd_v0.5.8_freebsd_amd64.tar.gz
 tar -xzf /tmp/pgwd.tgz -C /tmp
 sudo install -m755 /tmp/pgwd /usr/local/bin/
 sudo mkdir -p /usr/local/etc/pgwd
@@ -1022,7 +1024,7 @@ NetBSD uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-kub
 **Install** — tarball includes binary, rc.d script, and config example:
 
 ```bash
-tar xzf pgwd_v0.5.7_netbsd_amd64.tar.gz
+tar xzf pgwd_v0.5.8_netbsd_amd64.tar.gz
 install -m755 pgwd /usr/local/bin/
 install -m555 share/netbsd/rc.d/pgwd /etc/rc.d/pgwd
 mkdir -p /etc/pgwd
@@ -1045,7 +1047,7 @@ See [contrib/netbsd/README.md](contrib/netbsd/README.md) for details.
 **Install** — tarball includes binary, rc.d script, and config example:
 
 ```bash
-tar xzf pgwd_v0.5.7_dragonfly_amd64.tar.gz
+tar xzf pgwd_v0.5.8_dragonfly_amd64.tar.gz
 install -m755 pgwd /usr/local/bin/
 install -m555 share/dragonfly/rc.d/pgwd /etc/rc.d/pgwd
 mkdir -p /etc/pgwd
@@ -1056,6 +1058,36 @@ service pgwd start
 ```
 
 See [contrib/dragonflybsd/README.md](contrib/dragonflybsd/README.md) for details.
+
+[↑ Back to top](#top)
+
+---
+
+## Solaris
+
+[illumos](https://illumos.org) (OmniOS, OpenIndiana, SmartOS) and [Oracle Solaris](https://www.oracle.com/solaris) use **SMF (Service Management Facility)**, not systemd or rc.d. Config: `/etc/pgwd/pgwd.conf`. Supports `-kube-postgres` and `-kube-loki` (external host with kubeconfig; see [contrib/solaris/README.md](contrib/solaris/README.md)).
+
+**Requires illumos or Solaris 11.4+**; 11.3 and earlier are not supported (Go runtime needs `pipe2()`, added in 11.4). See [contrib/solaris/README.md](contrib/solaris/README.md#supported-versions) for details.
+
+**Install** — tarball includes binary, SMF manifest, method script, and config example:
+
+```bash
+curl -L -o /tmp/pgwd.tar.gz "https://github.com/hrodrig/pgwd/releases/download/v0.5.8/pgwd_v0.5.8_solaris_amd64.tar.gz"
+cd /tmp && tar xzf pgwd.tar.gz
+
+pfexec mkdir -p /usr/local/bin /lib/svc/manifest/site /etc/pgwd
+pfexec cp pgwd /usr/local/bin/pgwd && pfexec chmod 755 /usr/local/bin/pgwd
+pfexec cp share/solaris/smf/pgwd /lib/svc/method/pgwd && pfexec chmod 555 /lib/svc/method/pgwd
+pfexec cp share/solaris/smf/pgwd.xml /lib/svc/manifest/site/pgwd.xml && pfexec chmod 444 /lib/svc/manifest/site/pgwd.xml
+pfexec cp etc/pgwd/pgwd.conf.example /etc/pgwd/pgwd.conf
+
+# Edit config, then import and enable (FMRI: svc:/application/pgwd:default)
+pfexec vi /etc/pgwd/pgwd.conf
+pfexec svccfg import /lib/svc/manifest/site/pgwd.xml
+pfexec svcadm enable svc:/application/pgwd:default
+```
+
+See [contrib/solaris/README.md](contrib/solaris/README.md) for details.
 
 [↑ Back to top](#top)
 

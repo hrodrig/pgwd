@@ -64,6 +64,10 @@ archives:
         dst: share/netbsd/rc.d/pgwd
       - src: contrib/dragonflybsd/rc.d/pgwd
         dst: share/dragonfly/rc.d/pgwd
+      - src: contrib/solaris/smf/pgwd
+        dst: share/solaris/smf/pgwd
+      - src: contrib/solaris/smf/pgwd.xml
+        dst: share/solaris/smf/pgwd.xml
       - src: contrib/pgwd.conf.example
         dst: etc/pgwd/pgwd.conf.example
 

@@ -34,6 +34,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
+## [0.5.8] - 2026-03-22
+
+### Changed
+
+- **illumos / Solaris:** Install commands use `cp` + `chmod` (illumos `install` differs from GNU). FMRI `svc:/application/pgwd:default`; added troubleshooting for wrong FMRI, `svcs -v`, log path via `svcs -L`. Emphasized illumos as primary path. Version 0.5.8: VERSION, README badge, contrib READMEs, FreeBSD port, man page.
+
+---
+
 ## [0.5.7] - 2026-02-23
 
 ### Added
@@ -258,7 +266,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.5.7...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.5.8...HEAD
+[0.5.8]: https://github.com/hrodrig/pgwd/compare/v0.5.7...v0.5.8
 [0.5.7]: https://github.com/hrodrig/pgwd/compare/v0.5.4...v0.5.7
 [0.5.4]: https://github.com/hrodrig/pgwd/compare/v0.5.0...v0.5.4
 [0.5.0]: https://github.com/hrodrig/pgwd/compare/v0.4.0...v0.5.0
