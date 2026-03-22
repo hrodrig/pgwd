@@ -1,6 +1,6 @@
 # systemd unit for pgwd (one-shot, used by pgwd.timer).
 # Copy to /etc/systemd/system/ together with pgwd.timer.
-# Config: same as daemon, use /etc/pgwd.env or /etc/pgwd/pgwd.env.
+# Config: /etc/pgwd/pgwd.conf (or -config for custom path). No env file.
 #
 #   sudo cp contrib/systemd/pgwd-once.service contrib/systemd/pgwd.timer /etc/systemd/system/
 #   sudo systemctl daemon-reload
@@ -9,14 +9,13 @@
 [Unit]
 Description=Postgres Watch Dog (one-shot)
 Documentation=https://github.com/hrodrig/pgwd
-After=network-online.target
-Wants=network-online.target
+# Same as pgwd.service: avoid blocking on network-online.target (see pgwd.service).
+After=network.target
+Wants=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/local/bin/pgwd
-
-EnvironmentFile=-/etc/pgwd/pgwd.env
-EnvironmentFile=-/etc/pgwd.env
+# .deb installs to /usr/bin; manual install often to /usr/local/bin.
+ExecStart=/usr/bin/pgwd
 
 # No Restart= for oneshot; the timer will run again on schedule.

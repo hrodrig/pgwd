@@ -9,7 +9,7 @@ sequenceDiagram
     participant Postgres
     participant Slack as Slack/Loki
 
-    User->>pgwd: pgwd -db-url ... -slack-webhook ... (or -loki-url)
+    User->>pgwd: pgwd -db-url ... -notifications-slack-webhook ... (or -notifications-loki-url)
     Note over pgwd: validations, build senders (before Pool)
     pgwd->>Postgres: Pool(ctx, dbURL)
     Postgres-->>pgwd: error (e.g. connection refused, timeout)

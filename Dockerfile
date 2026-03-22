@@ -12,7 +12,8 @@ RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=${VERSION} -X main.Co
 # Minimal runtime: only ca-certificates for HTTPS (Slack/Loki). wget and nc are BusyBox applets
 # (symlinks), not separate apk packages, so we cannot apk del them; we remove the symlinks with rm.
 # curl is not in the base image.
-FROM alpine:3.23
+# Use Alpine 3.21: OpenSSL 3.3.6 (CVE-2026-2673 affects 3.5/3.6 only). 3.23 has 3.5.5.
+FROM alpine:3.21
 LABEL org.opencontainers.image.title="pgwd"
 LABEL org.opencontainers.image.description="Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki"
 LABEL org.opencontainers.image.source="https://github.com/hrodrig/pgwd"

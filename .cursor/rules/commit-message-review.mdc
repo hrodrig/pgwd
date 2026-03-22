@@ -1,0 +1,29 @@
+---
+description: Always show proposed commit message and wait for user approval before committing
+alwaysApply: true
+---
+
+# Commit message review
+
+Before running `git commit` (or `git commit --amend`):
+
+1. **Show the proposed commit message** to the user in full.
+2. **Wait for explicit approval** before executing the commit.
+3. Do not commit until the user confirms or requests changes to the message.
+
+Example flow:
+
+```
+Proposed commit message:
+---
+FreeBSD port with rc.d daemon (v0.5.6)
+
+- contrib/freebsd: Makefile, pkg-plist, pkg-descr, rc.d script
+- rc.d: daemon(8) for logging, custom stop/status via pidfile
+...
+---
+
+Approve? (user can say yes, or ask to edit)
+```
+
+If the user asks to commit without prior review, still show the message first and confirm before running the command.

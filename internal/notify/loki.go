@@ -63,18 +63,24 @@ func buildLokiLabels(l *Loki, ev Event) map[string]string {
 	if ev.Cluster != "" {
 		labels["cluster"] = ev.Cluster
 	}
+	if ev.Client != "" {
+		labels["client"] = ev.Client
+	}
 	return labels
 }
 
 func buildLokiLine(ev Event) string {
 	prefix := "pgwd:"
-	if ev.Cluster != "" || ev.Database != "" {
+	if ev.Cluster != "" || ev.Database != "" || ev.Client != "" {
 		var parts []string
 		if ev.Cluster != "" {
 			parts = append(parts, fmt.Sprintf("cluster=%s", ev.Cluster))
 		}
 		if ev.Database != "" {
 			parts = append(parts, fmt.Sprintf("database=%s", ev.Database))
+		}
+		if ev.Client != "" {
+			parts = append(parts, fmt.Sprintf("client=%s", ev.Client))
 		}
 		prefix = fmt.Sprintf("pgwd [%s]:", strings.Join(parts, " "))
 	}

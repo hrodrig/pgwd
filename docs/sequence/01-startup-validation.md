@@ -12,8 +12,16 @@ sequenceDiagram
     participant Slack as Slack/Loki
 
     User->>pgwd: run pgwd (CLI args)
-    pgwd->>Env: read PGWD_* vars
-    pgwd->>pgwd: config.FromEnv() + flag.Parse() (CLI overrides)
+    alt config file exists and loads
+        pgwd->>pgwd: FromFile(path) → loaded (env vars ignored)
+    else no config file
+        pgwd->>Env: ApplyDefaults + ApplyEnv (PGWD_* vars)
+    end
+    pgwd->>pgwd: flag.Parse() (CLI overrides)
+    pgwd->>pgwd: validate: client required
+    alt missing client
+        pgwd->>User: log.Fatal, exit 1
+    end
     pgwd->>pgwd: validate: DB URL present
     alt missing DB URL
         pgwd->>User: log.Fatal, exit 1

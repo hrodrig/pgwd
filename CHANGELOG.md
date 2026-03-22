@@ -6,9 +6,75 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+## [0.5.10] - 2026-03-24
+
 ### Added
 
-- (none yet)
+- **README:** **AlmaLinux** section — `dnf install` from URL or local `.rpm`, config, `systemctl`, pointer to systemd docs.
+- **README:** **Arch Linux** section — tarball install, systemd units from `contrib/systemd/`, AUR note, static IP `/24` and `network.target` pointers.
+- **README:** Install table names AlmaLinux, Rocky Linux, and Oracle Linux alongside Fedora/RHEL for the same `.rpm`/`dnf` one-liner; notes `make snapshot` when a GitHub tag is not published yet; documents AlmaLinux + systemd validation (dry-run and `pgwd.service`).
+- **FreeBSD port:** `contrib/freebsd/` with Makefile, pkg-plist, pkg-descr, and rc.d script. Install from local port or (when accepted) official ports. See `contrib/freebsd/README.md`.
+- **FreeBSD rc.d:** Daemon with `daemon(8)` for logging to `/var/log/pgwd.log`. Custom stop/status using pidfile (supervisor pid). rc.conf variables: `pgwd_enable`, `pgwd_flags`, `pgwd_config`, `pgwd_env`, `pgwd_logfile`. Supports kube-postgres and kube-loki (external VPS with kubeconfig).
+- **NetBSD rc.d:** `contrib/netbsd/rc.d/pgwd` script. Tarball `pgwd_v*_netbsd_amd64.tar.gz` includes rc.d script and config example. rc.conf: `pgwd=YES`, `pgwd_flags`, `pgwd_env`. See `contrib/netbsd/README.md`.
+- **README:** FreeBSD section (port, tarball, config, daemon, cron). Main README badge and FreeBSD tarball URLs updated.
+- **Config file** (YAML): Load settings from `/etc/pgwd/pgwd.conf` (or `-config` / `PGWD_CONFIG`). Keys match `-flag` and `PGWD_*` env vars. Example: `contrib/pgwd.conf.example`.
+- **.deb and .rpm packages:** Install `/etc/pgwd/pgwd.conf` from the example (type `config|noreplace` — not overwritten on upgrade if user modified). Edit before use. Also install systemd units to `/lib/systemd/system/` (pgwd.service, pgwd-once.service, pgwd.timer) — enable with `systemctl enable --now pgwd`. Debian/Ubuntu: prerm stops and disables services before removal; postrm removes `/etc/pgwd` on `apt purge`.
+
+### Changed
+
+- **systemd:** `pgwd.service` and `pgwd-once.service` now order after **`network.target`** instead of **`network-online.target`**, so `systemctl enable --now` does not block on `systemd-networkd-wait-online` (notably on static-IP / minimal installs). README troubleshooting and `contrib/systemd/README.md` document the symptom and a drop-in override.
+- **contrib/freebsd:** Config example installed to `${PREFIX}/etc/pgwd/` (was `/etc/pgwd/`). Reinstall: `make deinstall`, `make clean`, `make install` to pick up port file changes.
+- **Config file as single source:** When a config file is loaded, env vars (PGWD_*) are ignored; config file is the only source. When no config file exists, env vars apply. CLI flags always override. Removed `EnvironmentFile` from systemd units; use config file only.
+- **Config file layout (breaking):** Reorganized YAML structure: `db` (url, threshold, stale_age, default_threshold_percent), `kube`, `notifications` (loki, slack). Top-level: client, cluster, interval, dry_run, etc.
+- **client required (breaking):** `client` is now mandatory; no fallback to hostname or kube resource. Set in config or `-client`.
+- **cluster from kubeconfig:** Cluster name is computed from kubeconfig when `-kube-postgres` is set. Removed `cluster` from config file and CLI; not configurable.
+- **Notification CLI flags and env vars renamed (breaking):** `-loki-url` → `-notifications-loki-url`, `-slack-webhook` → `-notifications-slack-webhook`, etc. Env: `PGWD_LOKI_URL` → `PGWD_NOTIFICATIONS_LOKI_URL`, `PGWD_SLACK_WEBHOOK` → `PGWD_NOTIFICATIONS_SLACK_WEBHOOK`, etc. Aligns CLI and env with YAML structure (`notifications.loki.*`, `notifications.slack.*`).
+- **DB threshold env vars renamed (breaking):** `PGWD_THRESHOLD_TOTAL` → `PGWD_DB_THRESHOLD_TOTAL`, `PGWD_THRESHOLD_ACTIVE` → `PGWD_DB_THRESHOLD_ACTIVE`, `PGWD_THRESHOLD_IDLE` → `PGWD_DB_THRESHOLD_IDLE`, `PGWD_THRESHOLD_STALE` → `PGWD_DB_THRESHOLD_STALE`, `PGWD_THRESHOLD_LEVELS` → `PGWD_DB_THRESHOLD_LEVELS`, `PGWD_STALE_AGE` → `PGWD_DB_STALE_AGE`, `PGWD_DEFAULT_THRESHOLD_PERCENT` → `PGWD_DB_DEFAULT_THRESHOLD_PERCENT`. Aligns env with YAML structure (`db.threshold.*`, `db.stale_age`, `db.default_threshold_percent`).
+- **DB threshold CLI flags renamed (breaking):** `-threshold-total` → `-db-threshold-total`, `-threshold-active` → `-db-threshold-active`, `-threshold-idle` → `-db-threshold-idle`, `-threshold-stale` → `-db-threshold-stale`, `-threshold-levels` → `-db-threshold-levels`, `-stale-age` → `-db-stale-age`, `-default-threshold-percent` → `-db-default-threshold-percent`. Aligns CLI with YAML and env (`db.*`).
+- **Man page** (`man pgwd`): `contrib/man/man1/pgwd.1` with all options, examples, and env vars. `make install-man` (MANDIR defaults to /usr/local/share/man). `.deb` and `.rpm` packages include the man page in `/usr/share/man/man1/`. Homebrew cask installs the man page automatically.
+- **Release tarball:** LICENSE included as `share/doc/pgwd/LICENSE` for Alpine and other packagers (MIT compliance).
+- **scripts/install.sh:** One-liner installer for Linux, macOS, and BSD (downloads latest release, extracts to BINDIR).
+- **OpenBSD pledge:** On OpenBSD, pgwd calls `pledge()` to restrict syscalls (stdio, rpath, inet, dns, proc). Stub on other platforms.
+- **Makefile:** `check-docker` runs before snapshot, release, test-integration, test-e2e-kube, docker-build, docker-scan — fails early with clear message if Docker is not running.
+- **Cursor rule:** `.cursor/rules/man-page-sync.mdc` — keep man page in sync when adding flags or changing version.
+
+---
+
+## [0.5.8] - 2026-03-22
+
+### Changed
+
+- **illumos / Solaris:** Install commands use `cp` + `chmod` (illumos `install` differs from GNU). FMRI `svc:/application/pgwd:default`; added troubleshooting for wrong FMRI, `svcs -v`, log path via `svcs -L`. Emphasized illumos as primary path. Version 0.5.8: VERSION, README badge, contrib READMEs, FreeBSD port, man page.
+
+---
+
+## [0.5.7] - 2026-02-23
+
+### Added
+
+- **DragonFly BSD rc.d:** `contrib/dragonflybsd/rc.d/pgwd` script. Tarball `pgwd_v*_dragonfly_amd64.tar.gz` includes rc.d script and config example. rc.conf: `pgwd_enable="YES"`, `pgwd_flags`, `pgwd_env`. Uses `daemon(8)` like FreeBSD. See `contrib/dragonflybsd/README.md`.
+- **Solaris and Linux riscv64:** GoReleaser builds for `solaris/amd64` and `linux/riscv64`. Makefile: `build-solaris`, `build-linux` (riscv64). Ignore rules for unsupported GOOS/GOARCH combos.
+- **Man page FILES section:** Platform-specific setup references (contrib/freebsd, netbsd, dragonflybsd, openbsd READMEs).
+
+### Changed
+
+- **AGENTS.md:** Commit message review rule — show proposed message and wait for approval before `git commit`.
+- **Version 0.5.7:** VERSION, README badge, contrib READMEs, FreeBSD port.
+
+---
+
+## [0.5.4] - 2026-03-19
+
+### Added
+
+- **Alpine Linux (OpenRC):** `contrib/openrc/pgwd.initd` init script. See `contrib/openrc/README.md`. Main README: Alpine section with install and daemon setup.
+- **OpenBSD rc.d:** `contrib/openbsd/pgwd` script for rc.d. Tarball `pgwd_v*_openbsd_amd64.tar.gz` includes rc.d script and config example. See `contrib/openbsd/README.md`. Main README: OpenBSD section. Logging: set `pgwd_logger="daemon.info"` in rc.conf.local to send output to syslog (`tail -f /var/log/daemon`).
+- **OpenBSD + Kubernetes:** When using `-kube-postgres` or `-kube-loki`, pgwd skips pledge on OpenBSD so kubectl can run (pledge would block exec). Documented in `contrib/openbsd/README.md` with anonymous config example (external VPS, kubeconfig, port-forward to Postgres and Loki).
+- **Loki client label:** `client` stream label and log line prefix when set. Enables Grafana filtering by instance (e.g. `{app="pgwd", client="pgwd-vps-01"}`).
+
+### Changed
+
+- **Docker:** Runtime base image `alpine:3.23` → `alpine:3.21` to avoid CVE-2026-2673 (OpenSSL 3.5/3.6; 3.21 uses 3.3.6, not affected).
 
 ---
 
@@ -34,7 +100,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 - **README:** Log rotation (logrotate) for cron logs — examples for `/var/log/pgwd.log` and `~/log/pgwd-cron.log` with `su username groupname` for logs in user home.
 - **README:** Usage examples updated to use `-threshold-levels` (3-tier) as primary; `-threshold-total` and `-threshold-active` deprecated. Table and examples now show levels, idle, stale.
 - **README:** TOC, logo/banner, "Back to top" links, and FAQ section (expandable) for better navigation and discoverability.
-- **-kube-loki** (`PGWD_KUBE_LOKI`): Connect to Loki via kubectl port-forward when Loki is inside the cluster and pgwd runs outside (e.g. VM with cron). Same format as `-kube-postgres`: `namespace/svc/name` (e.g. `monitoring/svc/loki`). Mutually exclusive with `-loki-url`. Use `-kube-loki-local-port` and `-kube-loki-remote-port` (default 3100) when Loki uses a different port.
+- **-kube-loki** (`PGWD_KUBE_LOKI`): Connect to Loki via kubectl port-forward when Loki is inside the cluster and pgwd runs outside (e.g. VM with cron). Same format as `-kube-postgres`: `namespace/svc/name` (e.g. `monitoring/svc/loki`). Mutually exclusive with `-notifications-loki-url`. Use `-kube-loki-local-port` and `-kube-loki-remote-port` (default 3100) when Loki uses a different port.
 - **E2E kube test:** Now deploys Loki and runs `pgwd -kube-loki -force-notification` to validate the full path. `testing/k8s/loki.yaml` added.
 - **docs:** Sequence diagrams audit ([docs/sequence/AUDIT.md](docs/sequence/AUDIT.md)) mapping each diagram step to code; README and docs/README link to it.
 - **Cursor rule:** `.cursor/rules/diagrams-mermaid.mdc` — validate Mermaid rendering when adding/editing diagrams; avoid backticks, semicolons, and colons inside message text; keep diagrams in sync with code (see AUDIT.md).
@@ -206,7 +272,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.5.8...HEAD
+[0.5.8]: https://github.com/hrodrig/pgwd/compare/v0.5.7...v0.5.8
+[0.5.7]: https://github.com/hrodrig/pgwd/compare/v0.5.4...v0.5.7
+[0.5.4]: https://github.com/hrodrig/pgwd/compare/v0.5.0...v0.5.4
 [0.5.0]: https://github.com/hrodrig/pgwd/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/hrodrig/pgwd/compare/v0.3.6...v0.4.0
 [0.3.6]: https://github.com/hrodrig/pgwd/compare/v0.3.1...v0.3.6

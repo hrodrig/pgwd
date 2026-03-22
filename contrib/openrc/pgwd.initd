@@ -1,0 +1,15 @@
+#!/sbin/openrc-run
+# OpenRC init script for pgwd (Alpine Linux).
+# Config: /etc/pgwd/pgwd.conf (edit before enabling).
+#
+#   rc-service pgwd start
+#   rc-update add pgwd default
+
+command="/usr/bin/pgwd"
+command_args="-config /etc/pgwd/pgwd.conf"
+command_background="yes"
+pidfile="/run/pgwd.pid"
+
+depend() {
+	need net
+}

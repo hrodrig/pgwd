@@ -66,15 +66,19 @@ func queryLoki(ctx context.Context, queryBase string, logql string) ([]string, e
 	if err != nil {
 		return nil, err
 	}
+	return extractLinesFromResp(out), nil
+}
+
+func extractLinesFromResp(resp *lokiQueryResponse) []string {
 	var lines []string
-	for _, r := range out.Data.Result {
+	for _, r := range resp.Data.Result {
 		for _, v := range r.Values {
 			if len(v) >= 2 {
 				lines = append(lines, v[1])
 			}
 		}
 	}
-	return lines, nil
+	return lines
 }
 
 func TestLoki_Integration(t *testing.T) {
@@ -99,29 +103,24 @@ func TestLoki_Integration(t *testing.T) {
 	// Allow Loki to ingest
 	time.Sleep(500 * time.Millisecond)
 
-	// Query Loki (queryLoki derives query_range URL from push URL)
-	lines, err := queryLoki(ctx, pushURL, `{app="pgwd"}`)
+	// Query Loki (queryLokiRaw derives query_range URL from push URL)
+	resp, err := queryLokiRaw(ctx, pushURL, `{app="pgwd"}`)
 	if err != nil {
-		t.Fatalf("queryLoki: %v", err)
+		t.Fatalf("queryLokiRaw: %v", err)
 	}
+	lines := extractLinesFromResp(resp)
 	if len(lines) == 0 {
 		t.Fatal("no log lines found in Loki for app=pgwd")
 	}
 
-	// Find our test line (threshold=test, delivery check)
-	var found bool
-	for _, line := range lines {
-		if strings.Contains(line, "pgwd:") &&
-			strings.Contains(line, "total=5") &&
-			strings.Contains(line, "active=2") &&
-			strings.Contains(line, "idle=3") &&
-			strings.Contains(line, "max_connections=20") &&
-			strings.Contains(line, "delivery check") {
-			found = true
-			break
-		}
-	}
-	if !found {
+	// Show raw response (same format as e2e-kube)
+	respJSON, _ := json.Marshal(resp)
+	t.Logf("Verifying log reached Loki...")
+	t.Logf("--- Loki query response (raw) ---")
+	t.Logf("%s", string(respJSON))
+	t.Logf("--- end ---")
+
+	if !hasDeliveryCheckLine(lines) {
 		t.Errorf("expected log line with pgwd:, total=5, active=2, idle=3, max_connections=20, delivery check; got lines: %v", lines)
 	}
 }
@@ -169,6 +168,21 @@ func TestLoki_Integration_ShowPayload(t *testing.T) {
 	}
 	respJSON, _ := json.MarshalIndent(resp, "", "  ")
 	t.Logf("--- Response from Loki (GET query_range?query={app=\"pgwd\"}) ---\n%s", string(respJSON))
+}
+
+// hasDeliveryCheckLine returns true if any line contains the expected delivery-check fields.
+func hasDeliveryCheckLine(lines []string) bool {
+	for _, line := range lines {
+		if strings.Contains(line, "pgwd:") &&
+			strings.Contains(line, "total=5") &&
+			strings.Contains(line, "active=2") &&
+			strings.Contains(line, "idle=3") &&
+			strings.Contains(line, "max_connections=20") &&
+			strings.Contains(line, "delivery check") {
+			return true
+		}
+	}
+	return false
 }
 
 func getEnvSkip(t *testing.T, key, desc string) string {

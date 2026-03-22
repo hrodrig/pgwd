@@ -25,10 +25,9 @@ type Config struct {
 	KubeLokiLocalPort  int    // local port for Loki port-forward (default 3100)
 	KubeLokiRemotePort int    // remote port on the Loki service (default 3100)
 
-	// Optional context for notifications (Slack health-check style): cluster name, client (service/pod or hostname).
-	// When -kube-postgres is set, Client and namespace are derived from it; Cluster can be detected from kubeconfig or set via PGWD_CLUSTER.
-	Cluster string
-	Client  string
+	// Optional context for notifications (Slack health-check style): client (custom name for this monitor).
+	// Cluster is computed from kubeconfig when -kube-postgres is set; not configurable.
+	Client string
 
 	// Thresholds (0 = disabled)
 	ThresholdTotal  int // Deprecated: use ThresholdLevels; will be removed in v1.0.0
@@ -57,6 +56,20 @@ type Config struct {
 	ValidateK8sAccess bool
 }
 
+// ConfigPath returns the config file path: -config flag, PGWD_CONFIG, or DefaultConfigPath.
+// Call before flag.Parse for other flags; parses -config and --config from os.Args.
+func ConfigPath() string {
+	if v := os.Getenv("PGWD_CONFIG"); v != "" {
+		return v
+	}
+	for i := 1; i < len(os.Args)-1; i++ {
+		if (os.Args[i] == "-config" || os.Args[i] == "--config") && os.Args[i+1] != "" {
+			return os.Args[i+1]
+		}
+	}
+	return DefaultConfigPath
+}
+
 func env(key, def string) string {
 	if v := os.Getenv("PGWD_" + key); v != "" {
 		return v
@@ -81,6 +94,117 @@ func envBool(key string, def bool) bool {
 	return v == "1" || v == "true" || v == "yes"
 }
 
+// ApplyEnv overrides cfg with environment variables (PGWD_*) when set.
+// Call after loading from file; CLI flags override env.
+func ApplyEnv(cfg *Config) {
+	applyEnvDBAndContext(cfg)
+	applyEnvKube(cfg)
+	applyEnvThresholds(cfg)
+	applyEnvNotifiers(cfg)
+	applyEnvBehaviour(cfg)
+}
+
+func applyEnvDBAndContext(cfg *Config) {
+	if v := env("DB_URL", ""); v != "" {
+		cfg.DBURL = v
+	}
+	if v := env("CLIENT", ""); v != "" {
+		cfg.Client = v
+	}
+}
+
+func applyEnvKube(cfg *Config) {
+	if v := env("KUBE_POSTGRES", ""); v != "" {
+		cfg.KubePostgres = v
+	}
+	if v := env("KUBE_CONTEXT", ""); v != "" {
+		cfg.KubeContext = v
+	}
+	if v := envInt("KUBE_LOCAL_PORT", -1); v >= 0 {
+		cfg.KubeLocalPort = v
+	}
+	if v := env("KUBE_PASSWORD_VAR", ""); v != "" {
+		cfg.KubePasswordVar = v
+	}
+	if v := env("KUBE_PASSWORD_CONTAINER", ""); v != "" {
+		cfg.KubePasswordContainer = v
+	}
+	if v := env("KUBE_LOKI", ""); v != "" {
+		cfg.KubeLoki = v
+	}
+	if v := envInt("KUBE_LOKI_LOCAL_PORT", -1); v >= 0 {
+		cfg.KubeLokiLocalPort = v
+	}
+	if v := envInt("KUBE_LOKI_REMOTE_PORT", -1); v >= 0 {
+		cfg.KubeLokiRemotePort = v
+	}
+}
+
+func applyEnvThresholds(cfg *Config) {
+	if v := envInt("DB_THRESHOLD_TOTAL", -1); v >= 0 {
+		cfg.ThresholdTotal = v
+	}
+	if v := envInt("DB_THRESHOLD_ACTIVE", -1); v >= 0 {
+		cfg.ThresholdActive = v
+	}
+	if v := envInt("DB_THRESHOLD_IDLE", -1); v >= 0 {
+		cfg.ThresholdIdle = v
+	}
+	if v := envInt("DB_STALE_AGE", -1); v >= 0 {
+		cfg.StaleAge = v
+	}
+	if v := envInt("DB_THRESHOLD_STALE", -1); v >= 0 {
+		cfg.ThresholdStale = v
+	}
+	if v := env("DB_THRESHOLD_LEVELS", ""); v != "" {
+		cfg.ThresholdLevels = v
+	}
+	if v := envInt("DB_DEFAULT_THRESHOLD_PERCENT", -1); v >= 0 {
+		cfg.DefaultThresholdPercent = v
+	}
+}
+
+func applyEnvNotifiers(cfg *Config) {
+	if v := env("NOTIFICATIONS_SLACK_WEBHOOK", ""); v != "" {
+		cfg.SlackWebhook = v
+	}
+	if v := env("NOTIFICATIONS_LOKI_URL", ""); v != "" {
+		cfg.LokiURL = v
+	}
+	if v := env("NOTIFICATIONS_LOKI_LABELS", ""); v != "" {
+		cfg.LokiLabels = v
+	}
+	if v := env("NOTIFICATIONS_LOKI_ORG_ID", ""); v != "" {
+		cfg.LokiOrgID = v
+	}
+	if v := env("NOTIFICATIONS_LOKI_BEARER_TOKEN", ""); v != "" {
+		cfg.LokiBearerToken = v
+	}
+}
+
+func applyEnvBehaviour(cfg *Config) {
+	if v, ok := os.LookupEnv("PGWD_INTERVAL"); ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.Interval = n
+		}
+	}
+	if _, ok := os.LookupEnv("PGWD_DRY_RUN"); ok {
+		cfg.DryRun = envBool("DRY_RUN", false)
+	}
+	if _, ok := os.LookupEnv("PGWD_FORCE_NOTIFICATION"); ok {
+		cfg.ForceNotification = envBool("FORCE_NOTIFICATION", false)
+	}
+	if _, ok := os.LookupEnv("PGWD_NOTIFY_ON_CONNECT_FAILURE"); ok {
+		cfg.NotifyOnConnectFailure = envBool("NOTIFY_ON_CONNECT_FAILURE", false)
+	}
+	if v := envInt("TEST_MAX_CONNECTIONS", -1); v >= 0 {
+		cfg.TestMaxConnections = v
+	}
+	if _, ok := os.LookupEnv("PGWD_VALIDATE_K8S_ACCESS"); ok {
+		cfg.ValidateK8sAccess = envBool("VALIDATE_K8S_ACCESS", false)
+	}
+}
+
 // FromEnv builds config from environment variables (PGWD_*).
 func FromEnv() Config {
 	return Config{
@@ -93,24 +217,23 @@ func FromEnv() Config {
 		KubeLoki:                env("KUBE_LOKI", ""),
 		KubeLokiLocalPort:       envInt("KUBE_LOKI_LOCAL_PORT", 3100),
 		KubeLokiRemotePort:      envInt("KUBE_LOKI_REMOTE_PORT", 3100),
-		Cluster:                 env("CLUSTER", ""),
 		Client:                  env("CLIENT", ""),
-		ThresholdTotal:          envInt("THRESHOLD_TOTAL", 0),
-		ThresholdActive:         envInt("THRESHOLD_ACTIVE", 0),
-		ThresholdIdle:           envInt("THRESHOLD_IDLE", 0),
-		StaleAge:                envInt("STALE_AGE", 0),
-		ThresholdStale:          envInt("THRESHOLD_STALE", 0),
-		SlackWebhook:            env("SLACK_WEBHOOK", ""),
-		LokiURL:                 env("LOKI_URL", ""),
-		LokiLabels:              env("LOKI_LABELS", ""),
-		LokiOrgID:               env("LOKI_ORG_ID", ""),
-		LokiBearerToken:         env("LOKI_BEARER_TOKEN", ""),
+		ThresholdTotal:          envInt("DB_THRESHOLD_TOTAL", 0),
+		ThresholdActive:         envInt("DB_THRESHOLD_ACTIVE", 0),
+		ThresholdIdle:           envInt("DB_THRESHOLD_IDLE", 0),
+		StaleAge:                envInt("DB_STALE_AGE", 0),
+		ThresholdStale:          envInt("DB_THRESHOLD_STALE", 0),
+		SlackWebhook:            env("NOTIFICATIONS_SLACK_WEBHOOK", ""),
+		LokiURL:                 env("NOTIFICATIONS_LOKI_URL", ""),
+		LokiLabels:              env("NOTIFICATIONS_LOKI_LABELS", ""),
+		LokiOrgID:               env("NOTIFICATIONS_LOKI_ORG_ID", ""),
+		LokiBearerToken:         env("NOTIFICATIONS_LOKI_BEARER_TOKEN", ""),
 		Interval:                envInt("INTERVAL", 0),
 		DryRun:                  envBool("DRY_RUN", false),
 		ForceNotification:       envBool("FORCE_NOTIFICATION", false),
 		NotifyOnConnectFailure:  envBool("NOTIFY_ON_CONNECT_FAILURE", false),
-		DefaultThresholdPercent: envInt("DEFAULT_THRESHOLD_PERCENT", 80),
-		ThresholdLevels:         env("THRESHOLD_LEVELS", DefaultThresholdLevels),
+		DefaultThresholdPercent: envInt("DB_DEFAULT_THRESHOLD_PERCENT", 80),
+		ThresholdLevels:         env("DB_THRESHOLD_LEVELS", DefaultThresholdLevels),
 		TestMaxConnections:      envInt("TEST_MAX_CONNECTIONS", 0),
 		ValidateK8sAccess:       envBool("VALIDATE_K8S_ACCESS", false),
 	}

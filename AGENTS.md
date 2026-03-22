@@ -6,7 +6,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 
 - **What it is:** Go CLI that monitors PostgreSQL connection counts (total, active, idle, stale) and notifies via Slack and/or Loki when configured thresholds are exceeded.
 - **Entrypoint:** `cmd/pgwd/main.go`. Packages: `internal/config`, `internal/postgres`, `internal/notify` (Slack, Loki).
-- **Config:** CLI flags and env vars (`PGWD_*`). No config file yet. CLI overrides env.
+- **Config:** Config file (YAML) at `/etc/pgwd/pgwd.conf` or `-config` / `PGWD_CONFIG`. One config = one Postgres; for multiple instances, use one config per instance (cron with one entry per config is common). When the file loads, env vars are ignored; otherwise `ApplyDefaults` + `ApplyEnv` (`PGWD_*`). CLI flags always override. Structure: `db` (url, threshold, stale_age), `kube`, `notifications` (loki, slack). `client` is required. See `internal/config`, `internal/config/file.go`, `contrib/pgwd.conf.example`.
 - **Kubernetes:** Optional `-kube-postgres namespace/svc/name` (or `pod/name`) runs `kubectl port-forward` and connects to localhost; URL password `DISCOVER_MY_PASSWORD` reads password from pod env. Optional `-kube-loki namespace/svc/loki` runs port-forward to Loki when Loki is inside the cluster and pgwd runs outside. Requires `kubectl` in PATH (pgwd checks at startup and exits with a clear error if missing). See `internal/kube`.
 - **Connect failure:** When Postgres connection fails, pgwd always sends a `connect_failure` (or `too_many_clients` if the error is "too many clients already") event to all notifiers if any are configured and not `-dry-run`. No extra flag is required. Senders are built before connecting so the alert can be sent on failure.
 
@@ -33,6 +33,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 ## Git flow
 
 - **Branches:** Work on `develop`. `main` is production and is only updated from `develop` at release time (see `.cursor/rules/git-flow.mdc`).
+- **Commits:** Always show the proposed commit message and wait for user approval before running `git commit`. See `.cursor/rules/commit-message-review.mdc`.
 - **Releases:** Before releasing: run **`make release-check`** (lint, test, test-integration, docker-scan). All must pass — they are MANDATORY. Then merge `develop` → `main`, and on `main`: create annotated tag (e.g. `git tag -a v0.2.0 -m "Release 0.2.0"`), push tag, run `make release` (requires goreleaser). `make release` runs `release-check` first. Do not commit features directly to `main`. See `.cursor/rules/release-tests.mdc`.
 - **Versioning:** Semantic versioning (MAJOR.MINOR.PATCH) for tags.
 
@@ -45,13 +46,17 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 ## Repository structure
 
 - `cmd/pgwd/` — main package.
-- `internal/config/` — config from env and CLI.
+- `internal/config/` — config from file (YAML), env (`PGWD_*`), and CLI. `file.go`: FromFile, ApplyDefaults.
 - `internal/postgres/` — pool, stats, stale count, max_connections.
 - `internal/notify/` — Slack and Loki senders, event type.
 - `internal/kube/` — Kubernetes port-forward, pod resolution, password discovery; `RequireKubectl()` at startup when `-kube-postgres` is set.
 - `docs/` — sequence diagrams (Mermaid), VHS demo tape.
 - `contrib/systemd/` — systemd units (daemon, timer, one-shot).
 - `tools/` — scripts for scanning before merging to main: `tools/scan.sh` (govulncheck, optional Grype). See `tools/README.md`. CI runs govulncheck in the Security workflow.
+
+## Skills
+
+- **golang-pro** (`.agents/skills/golang-pro/SKILL.md`): Use when implementing concurrent Go patterns (goroutines, channels), designing interfaces, writing table-driven tests, or optimizing performance. Covers generics, context propagation, error wrapping, and idiomatic Go. References: `references/concurrency.md`, `references/interfaces.md`, `references/generics.md`, `references/testing.md`, `references/project-structure.md`.
 
 ## Other instructions
 

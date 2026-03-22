@@ -5,6 +5,10 @@
 
 version: 2
 
+before:
+  hooks:
+    - sh -c 'gzip -c contrib/man/man1/pgwd.1 > contrib/man/man1/pgwd.1.gz'
+
 builds:
   - id: pgwd
     main: ./cmd/pgwd
@@ -13,9 +17,27 @@ builds:
       - linux
       - darwin
       - windows
+      - freebsd
+      - openbsd
+      - netbsd
+      - dragonfly
+      - solaris
     goarch:
       - amd64
       - arm64
+      - riscv64
+    # Ignore GOOS/GOARCH combos not supported by Go (e.g. darwin/riscv64, solaris/arm64, solaris/riscv64)
+    ignore:
+      - goos: darwin
+        goarch: riscv64
+      - goos: windows
+        goarch: riscv64
+      - goos: solaris
+        goarch: arm64
+      - goos: solaris
+        goarch: riscv64
+      - goos: dragonfly
+        goarch: riscv64
     env:
       - CGO_ENABLED=0
     ldflags:
@@ -31,6 +53,23 @@ archives:
       - goos: windows
         format: zip
     name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - src: contrib/man/man1/pgwd.1
+        dst: share/man/man1/pgwd.1
+      - src: LICENSE
+        dst: share/doc/pgwd/LICENSE
+      - src: contrib/openbsd/pgwd
+        dst: share/openbsd/rc.d/pgwd
+      - src: contrib/netbsd/rc.d/pgwd
+        dst: share/netbsd/rc.d/pgwd
+      - src: contrib/dragonflybsd/rc.d/pgwd
+        dst: share/dragonfly/rc.d/pgwd
+      - src: contrib/solaris/smf/pgwd
+        dst: share/solaris/smf/pgwd
+      - src: contrib/solaris/smf/pgwd.xml
+        dst: share/solaris/smf/pgwd.xml
+      - src: contrib/pgwd.conf.example
+        dst: etc/pgwd/pgwd.conf.example
 
 checksum:
   name_template: "checksums.txt"
@@ -38,6 +77,9 @@ checksum:
 nfpms:
   - id: default
     package_name: pgwd
+    scripts:
+      preremove: contrib/deb/prerm.sh
+      postremove: contrib/deb/postrm.sh
     file_name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}"
     description: Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki
     vendor: "Hermes Rodríguez"
@@ -48,6 +90,21 @@ nfpms:
       - rpm
     builds:
       - pgwd
+    contents:
+      - src: contrib/man/man1/pgwd.1.gz
+        dst: /usr/share/man/man1/
+      # Config: install example as /etc/pgwd/pgwd.conf; user must edit (client, db.url, notifications).
+      # config|noreplace: on upgrade, do not overwrite if user modified the file.
+      - src: contrib/pgwd.conf.example
+        dst: /etc/pgwd/pgwd.conf
+        type: config|noreplace
+      # systemd units: daemon, one-shot, timer. User enables with: systemctl enable --now pgwd
+      - src: contrib/systemd/pgwd.service
+        dst: /lib/systemd/system/pgwd.service
+      - src: contrib/systemd/pgwd-once.service
+        dst: /lib/systemd/system/pgwd-once.service
+      - src: contrib/systemd/pgwd.timer
+        dst: /lib/systemd/system/pgwd.timer
 
 snapshot:
   version_template: "{{ incpatch .Version }}-next"
@@ -95,6 +152,8 @@ homebrew_casks:
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     url:
       verified: "github.com/hrodrig/pgwd/"
+    manpages:
+      - share/man/man1/pgwd.1
     hooks:
       post:
         install: |

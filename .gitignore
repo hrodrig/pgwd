@@ -32,6 +32,8 @@
 !contrib/**
 !tools/
 !tools/**
+!scripts/
+!scripts/**
 !docs/
 !docs/***
 !testing/
@@ -41,6 +43,9 @@
 # CodeQL local run (database and results; do not commit)
 codeql-db/
 codeql-results.sarif
+
+# Generated man page (created by goreleaser before hook)
+contrib/man/man1/pgwd.1.gz
 
 # Never track macOS metadata
 .DS_Store

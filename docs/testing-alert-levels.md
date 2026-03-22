@@ -23,7 +23,7 @@ With default 3-tier levels (75%, 85%, 95%):
 ### 1. Get current connection count
 
 ```bash
-pgwd -db-url "postgres://..." -dry-run
+pgwd -client my-monitor -db-url "postgres://..." -dry-run
 ```
 
 Or use `-kube-postgres` if applicable. Note the `total` value (e.g. 1638).
@@ -45,21 +45,21 @@ Use your real connection URL and notifiers (Loki, Slack). Replace `TOTAL` with y
 **Attention (75%):**
 
 ```bash
-pgwd -db-url "postgres://..." -loki-url "http://..." -loki-org-id "mytenant" \
+pgwd -client my-monitor -db-url "postgres://..." -notifications-loki-url "http://..." -notifications-loki-org-id "mytenant" \
   -test-max-connections $((TOTAL * 100 / 75))
 ```
 
 **Alert (85%):**
 
 ```bash
-pgwd -db-url "postgres://..." -loki-url "http://..." -loki-org-id "mytenant" \
+pgwd -client my-monitor -db-url "postgres://..." -notifications-loki-url "http://..." -notifications-loki-org-id "mytenant" \
   -test-max-connections $((TOTAL * 100 / 85))
 ```
 
 **Danger (95%):**
 
 ```bash
-pgwd -db-url "postgres://..." -loki-url "http://..." -loki-org-id "mytenant" \
+pgwd -client my-monitor -db-url "postgres://..." -notifications-loki-url "http://..." -notifications-loki-org-id "mytenant" \
   -test-max-connections $((TOTAL * 100 / 95))
 ```
 
@@ -69,18 +69,18 @@ If `total=1638`:
 
 ```bash
 # Attention
-pgwd -kube-postgres myns/svc/postgres -kube-loki myns/svc/loki \
-  -db-url "postgres://..." -loki-org-id "mytenant" \
+pgwd -client my-monitor -kube-postgres myns/svc/postgres -kube-loki myns/svc/loki \
+  -db-url "postgres://..." -notifications-loki-org-id "mytenant" \
   -test-max-connections 2184
 
 # Alert
-pgwd -kube-postgres myns/svc/postgres -kube-loki myns/svc/loki \
-  -db-url "postgres://..." -loki-org-id "mytenant" \
+pgwd -client my-monitor -kube-postgres myns/svc/postgres -kube-loki myns/svc/loki \
+  -db-url "postgres://..." -notifications-loki-org-id "mytenant" \
   -test-max-connections 1927
 
 # Danger
-pgwd -kube-postgres myns/svc/postgres -kube-loki myns/svc/loki \
-  -db-url "postgres://..." -loki-org-id "mytenant" \
+pgwd -client my-monitor -kube-postgres myns/svc/postgres -kube-loki myns/svc/loki \
+  -db-url "postgres://..." -notifications-loki-org-id "mytenant" \
   -test-max-connections 1724
 ```
 
@@ -94,7 +94,7 @@ Each run sends one notification to Loki (and Slack if configured) with the corre
 
 ## Custom threshold levels
 
-If you use `-threshold-levels 70,85,90` instead of the default 75,85,95, adjust the formula:
+If you use `-db-threshold-levels 70,85,90` instead of the default 75,85,95, adjust the formula:
 
 - attention at 70%: `test_max = total / 0.70`
 - alert at 85%: `test_max = total / 0.85`

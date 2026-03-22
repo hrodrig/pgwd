@@ -1,0 +1,39 @@
+---
+description: Keep contrib/man/man1/pgwd.1 in sync with flags and version
+globs: cmd/pgwd/main.go, internal/config/config.go, contrib/man/man1/pgwd.1, VERSION
+alwaysApply: false
+---
+
+# Man page sync
+
+When changing flags, config, or version, update **`contrib/man/man1/pgwd.1`** so `man pgwd` stays accurate.
+
+## When to update
+
+| Change | Action in pgwd.1 |
+|--------|------------------|
+| **New flag** | Add `.TP` block in OPTIONS with CLI name, env var, and brief description |
+| **Removed/deprecated flag** | Remove or mark deprecated in OPTIONS |
+| **Flag description change** | Update the corresponding `.TP` block |
+| **VERSION bump** | Update `.TH PGWD 1` line: date and version (e.g. `"2026-03-13" "pgwd v0.5.0"`) |
+| **New example** | Add to EXAMPLES section |
+
+## Format reference
+
+```troff
+.TP
+.BR \-flag\-name " \fIarg\fR"
+Description. Env: PGWD_FLAG_NAME.
+```
+
+## Checklist before release
+
+- [ ] All flags in `main.go` / `config.go` are documented in pgwd.1 OPTIONS
+- [ ] `.TH` line has current date and version
+- [ ] EXAMPLES reflect current usage (e.g. -kube-loki if applicable)
+
+## Verify
+
+```bash
+MANPATH="$(pwd)/contrib/man:$(man -w)" man pgwd
+```

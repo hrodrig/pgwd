@@ -1,0 +1,158 @@
+.\" pgwd(1) - Postgres Watch Dog
+.\" Manual page for pgwd
+.TH PGWD 1 "2026-03-24" "pgwd v0.5.10" "User Commands"
+.SH NAME
+pgwd \- monitor PostgreSQL connections and notify via Slack/Loki
+.SH SYNOPSIS
+.B pgwd
+[\fIoptions\fR]
+.SH DESCRIPTION
+.B pgwd
+(Postgres Watch Dog) is a Go CLI that monitors PostgreSQL connection counts
+(total, active, idle, stale) and notifies via Slack and/or Loki when
+configured thresholds are exceeded. It does not terminate connections; it
+only observes and alerts.
+.PP
+All options can be set via config file, CLI flag, or environment variable
+(prefix
+.BR PGWD_ ).
+When a config file is loaded, env vars are ignored; config file is the single source.
+When no config file exists, env vars apply. CLI flags always override.
+Use
+.BR \-config
+to specify a custom config path (default:
+.I /etc/pgwd/pgwd.conf ).
+See
+.I contrib/pgwd.conf.example .
+.SH OPTIONS
+.TP
+.BR \-config " \fIpath\fR"
+Config file path (YAML). Default: /etc/pgwd/pgwd.conf. Env: PGWD_CONFIG.
+.TP
+.BR \-db\-url " \fIurl\fR"
+PostgreSQL connection URL (required). Env: PGWD_DB_URL.
+.TP
+.BR \-kube\-postgres " \fInamespace/type/name\fR"
+Connect via kubectl port-forward (e.g. default/svc/postgres). Env: PGWD_KUBE_POSTGRES.
+.TP
+.BR \-kube\-loki " \fInamespace/type/name\fR"
+Connect to Loki via kubectl port-forward when Loki is inside the cluster.
+Mutually exclusive with \-notifications-loki-url. Env: PGWD_KUBE_LOKI.
+.TP
+.BR \-kube\-loki\-local\-port " \fIN\fR"
+Local port for Loki port-forward (default 3100). Env: PGWD_KUBE_LOKI_LOCAL_PORT.
+.TP
+.BR \-kube\-loki\-remote\-port " \fIN\fR"
+Remote port on Loki service (default 3100). Env: PGWD_KUBE_LOKI_REMOTE_PORT.
+.TP
+.BR \-kube\-context " \fIcontext\fR"
+Kubectl context to use (empty = current). Env: PGWD_KUBE_CONTEXT.
+.TP
+.BR \-kube\-local\-port " \fIN\fR"
+Local port for Postgres port-forward (default 5432). Env: PGWD_KUBE_LOCAL_PORT.
+.TP
+.BR \-kube\-password\-var " \fIvar\fR"
+Pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD). Env: PGWD_KUBE_PASSWORD_VAR.
+.TP
+.BR \-kube\-password\-container " \fIname\fR"
+Container name in pod for password discovery. Env: PGWD_KUBE_PASSWORD_CONTAINER.
+.TP
+.BR \-validate\-k8s\-access
+Validate kubectl connectivity and list pods, then exit. Env: PGWD_VALIDATE_K8S_ACCESS.
+.TP
+.BR \-client " \fIname\fR"
+Custom name for this monitor instance — REQUIRED. Identifies which monitor sent the alert. Cluster name is computed from kubeconfig when using \-kube-postgres; not configurable. Env: PGWD_CLIENT.
+.TP
+.BR \-db\-threshold\-total " \fIN\fR"
+Alert when total connections >= N. Deprecated: use \-db-threshold-levels; will be removed in v1.0.0. Env: PGWD_DB_THRESHOLD_TOTAL.
+.TP
+.BR \-db\-threshold\-active " \fIN\fR"
+Alert when active connections >= N. Deprecated: use \-db-threshold-levels; will be removed in v1.0.0. Env: PGWD_DB_THRESHOLD_ACTIVE.
+.TP
+.BR \-db\-threshold\-levels " \fI75,85,95\fR"
+Comma-separated percentages for 3-tier alerts (attention/alert/danger). Default: 75,85,95. Env: PGWD_DB_THRESHOLD_LEVELS.
+.TP
+.BR \-db\-threshold\-idle " \fIN\fR"
+Alert when idle connections >= N. Env: PGWD_DB_THRESHOLD_IDLE.
+.TP
+.BR \-db\-stale\-age " \fIN\fR"
+Consider connection stale if open longer than N seconds. Env: PGWD_DB_STALE_AGE.
+.TP
+.BR \-db\-threshold\-stale " \fIN\fR"
+Alert when stale connections >= N. Env: PGWD_DB_THRESHOLD_STALE.
+.TP
+.BR \-notifications\-slack\-webhook " \fIurl\fR"
+Slack Incoming Webhook URL. Env: PGWD_NOTIFICATIONS_SLACK_WEBHOOK.
+.TP
+.BR \-notifications\-loki\-url " \fIurl\fR"
+Loki push API URL (e.g. http://localhost:3100/loki/api/v1/push). Env: PGWD_NOTIFICATIONS_LOKI_URL.
+.TP
+.BR \-notifications\-loki\-labels " \fIkey=val,...\fR"
+Loki labels (e.g. app=pgwd,env=prod). Env: PGWD_NOTIFICATIONS_LOKI_LABELS.
+.TP
+.BR \-notifications\-loki\-org\-id " \fIid\fR"
+Loki X-Scope-OrgID header (multi-tenancy). Env: PGWD_NOTIFICATIONS_LOKI_ORG_ID.
+.TP
+.BR \-notifications\-loki\-bearer\-token " \fItoken\fR"
+Loki Authorization: Bearer token. Env: PGWD_NOTIFICATIONS_LOKI_BEARER_TOKEN.
+.TP
+.BR \-interval " \fIN\fR"
+Run every N seconds; 0 = run once. Env: PGWD_INTERVAL.
+.TP
+.BR \-dry\-run
+Only print stats, do not send notifications. Env: PGWD_DRY_RUN.
+.TP
+.BR \-force\-notification
+Always send a test notification to validate delivery. Env: PGWD_FORCE_NOTIFICATION.
+.TP
+.BR \-notify\-on\-connect\-failure
+Send an alert to notifiers when Postgres connection fails (infrastructure alert). Env: PGWD_NOTIFY_ON_CONNECT_FAILURE.
+.TP
+.BR \-db\-default\-threshold\-percent " \fIN\fR"
+When one of total/active is 0, set it to this % of max_connections (1-100, default 80). Env: PGWD_DB_DEFAULT_THRESHOLD_PERCENT.
+.TP
+.BR \-test\-max\-connections " \fIN\fR"
+Override server max_connections for testing alerts. Env: PGWD_TEST_MAX_CONNECTIONS.
+.TP
+.BR \-version
+Print version and exit.
+.SH EXAMPLES
+.TP
+Minimal one-shot with Slack:
+.RS
+pgwd \-client my-monitor \-db-url "postgres://user:pass@localhost:5432/mydb" \e
+     \-notifications-slack-webhook "https://hooks.slack.com/services/..."
+.RE
+.TP
+Daemon every 60s with Loki:
+.RS
+pgwd \-client my-monitor \-db-url "postgres://..." \-notifications-loki-url "http://localhost:3100/loki/api/v1/push" \e
+     \-interval 60
+.RE
+.TP
+Postgres and Loki in Kubernetes (cluster from kubeconfig):
+.RS
+pgwd \-client my-monitor \-kube-postgres default/svc/postgres \-kube-loki monitoring/svc/loki \e
+     \-db-url "postgres://postgres:DISCOVER_MY_PASSWORD@localhost:5432/mydb" \e
+     \-notifications-slack-webhook "https://..."
+.RE
+.TP
+Dry run (no notifications):
+.RS
+pgwd \-client my-monitor \-db-url "postgres://..." \-dry-run
+.RE
+.SH FILES
+.I /etc/pgwd/pgwd.conf
+Configuration file (YAML). See contrib/pgwd.conf.example.
+Platform-specific setup (rc.d, systemd, SMF): contrib/freebsd/README.md,
+contrib/netbsd/README.md, contrib/dragonflybsd/README.md, contrib/openbsd/README.md,
+contrib/solaris/README.md.
+.SH EXIT STATUS
+0 on success; non-zero on fatal errors (e.g. DB connection failure).
+.SH SEE ALSO
+.BR kubectl (1),
+.BR postgres (1)
+.PP
+Full documentation: https://github.com/hrodrig/pgwd
+.SH AUTHOR
+Hermes Rodríguez <https://github.com/hrodrig>
