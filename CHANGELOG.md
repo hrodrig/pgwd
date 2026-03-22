@@ -8,6 +8,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ### Added
 
+- **README:** Install table names AlmaLinux, Rocky Linux, and Oracle Linux alongside Fedora/RHEL for the same `.rpm`/`dnf` one-liner; notes `make snapshot` when a GitHub tag is not published yet; documents AlmaLinux + systemd validation (dry-run and `pgwd.service`).
 - **FreeBSD port:** `contrib/freebsd/` with Makefile, pkg-plist, pkg-descr, and rc.d script. Install from local port or (when accepted) official ports. See `contrib/freebsd/README.md`.
 - **FreeBSD rc.d:** Daemon with `daemon(8)` for logging to `/var/log/pgwd.log`. Custom stop/status using pidfile (supervisor pid). rc.conf variables: `pgwd_enable`, `pgwd_flags`, `pgwd_config`, `pgwd_env`, `pgwd_logfile`. Supports kube-postgres and kube-loki (external VPS with kubeconfig).
 - **NetBSD rc.d:** `contrib/netbsd/rc.d/pgwd` script. Tarball `pgwd_v*_netbsd_amd64.tar.gz` includes rc.d script and config example. rc.conf: `pgwd=YES`, `pgwd_flags`, `pgwd_env`. See `contrib/netbsd/README.md`.
