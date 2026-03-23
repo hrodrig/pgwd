@@ -110,6 +110,44 @@ interval: 60
 	}
 }
 
+func TestFromFile_DatabasesSingle(t *testing.T) {
+	// Canonical single-DB: databases with one entry (no deprecated db).
+	dir := t.TempDir()
+	path := filepath.Join(dir, "pgwd.conf")
+	content := `
+client: monitor-01
+interval: 60
+databases:
+  - url: postgres://localhost:5432/mydb
+    stale_age: 0
+    threshold:
+      levels: "75,85,95"
+`
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, loaded, err := FromFile(path)
+	if err != nil {
+		t.Fatalf("FromFile: %v", err)
+	}
+	if !loaded {
+		t.Fatal("expected loaded=true")
+	}
+	if len(cfg.Databases) != 1 {
+		t.Fatalf("Databases: expected 1 entry, got %d", len(cfg.Databases))
+	}
+	t0 := cfg.Databases[0]
+	if t0.URL != "postgres://localhost:5432/mydb" {
+		t.Errorf("URL: got %q", t0.URL)
+	}
+	if t0.ThresholdLevels != "75,85,95" {
+		t.Errorf("ThresholdLevels: got %q", t0.ThresholdLevels)
+	}
+	if t0.DefaultThresholdPercent != 80 {
+		t.Errorf("DefaultThresholdPercent (default): got %d", t0.DefaultThresholdPercent)
+	}
+}
+
 func TestFromFile_DatabasesMulti(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "pgwd.conf")

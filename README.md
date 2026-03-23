@@ -113,7 +113,7 @@ pgwd loads settings from (in order): **config file** → **environment variables
 | Environment | `PGWD_*` |
 | CLI | `-flag` |
 
-**Config file** (YAML) — keys match `-flag` and `PGWD_*` env vars. See `contrib/pgwd.conf.example`. Single DB: use `db:`; multi-DB in daemon mode: use `databases:`. For many diverse instances (different clusters, kube contexts), one config per instance with cron is often simpler.
+**Config file** (YAML) — keys match `-flag` and `PGWD_*` env vars. See `contrib/pgwd.conf.example`. Use `databases:` for one or more Postgres (canonical). Legacy `db:` is deprecated and will be removed in v1.0. For kube.postgres, use `db:` until per-db kube support exists.
 
 ```bash
 # Use default path /etc/pgwd/pgwd.conf
@@ -125,6 +125,8 @@ PGWD_CONFIG=/path/to/pgwd.conf pgwd
 ```
 
 **CLI overrides env, env overrides config file.** Use env for secrets and overrides; use config file for base settings.
+
+**`-db-url` override (one-shot):** When the config file has `databases:` (multi-DB), passing `-db-url` and `-interval 0` runs against that single URL only, ignoring the databases from config for that run. Useful for quick ad-hoc checks without editing the config.
 
 ### Using only environment variables
 

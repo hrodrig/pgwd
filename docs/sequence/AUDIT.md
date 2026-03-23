@@ -10,6 +10,8 @@ Last audit: checked each diagram against `cmd/pgwd/main.go` and `internal/notify
 | config file exists and loads | `config.FromFile(path)` 567; if loaded, env vars ignored |
 | no config file: ApplyDefaults + ApplyEnv | 571–573 `ApplyDefaults()`, `ApplyEnv()` |
 | flag.Parse (CLI overrides) | 577 `parseFlags()` |
+| opt -db-url + -interval 0 and config has databases: override to single target | 611–614 `cfg.Databases = nil` when DBURL && Interval<=0 && UsesDatabases() |
+| targets := Targets() | 629 `cfg.Targets()` |
 | validate client required | `validateClient()` 106–109 |
 | validate DB URL present | `validateDBURL()` 112–116 |
 | validate stale-age if threshold-stale | `validateStale()` 118–122 |

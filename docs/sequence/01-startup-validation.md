@@ -18,11 +18,15 @@ sequenceDiagram
         pgwd->>Env: ApplyDefaults + ApplyEnv (PGWD_* vars)
     end
     pgwd->>pgwd: flag.Parse() (CLI overrides)
+    opt -db-url + -interval 0 and config has databases:
+        pgwd->>pgwd: override: use single target from -db-url (ignore databases)
+    end
+    pgwd->>pgwd: targets := Targets() (single from DBURL or list from Databases)
     pgwd->>pgwd: validate: client required
     alt missing client
         pgwd->>User: log.Fatal, exit 1
     end
-    pgwd->>pgwd: validate: DB URL present
+    pgwd->>pgwd: validate: DB URL present (when single target; skip when databases)
     alt missing DB URL
         pgwd->>User: log.Fatal, exit 1
     end

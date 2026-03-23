@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"net/url"
 	"os"
 	"strings"
@@ -117,6 +118,7 @@ func fileConfigToConfig(fc fileConfig) Config {
 			c.Databases = append(c.Databases, t)
 		}
 	} else if fc.DB.URL != "" {
+		log.Printf("pgwd: config key 'db' is deprecated; use 'databases: [{ url: ... }]' instead. Support will be removed in v1.0.")
 		t := mergeDBTarget(fc.Client, fc.DB, fc.DB)
 		c.Databases = []DatabaseTarget{t}
 	}
@@ -142,6 +144,13 @@ func mergeDBTarget(baseClient string, base, over fileConfigDB) DatabaseTarget {
 		t.Client = baseClient + "-" + databaseNameFromURL(t.URL)
 	} else if t.Client == "" {
 		t.Client = databaseNameFromURL(t.URL)
+	}
+	// Apply global defaults when base and override both leave zero/empty.
+	if t.DefaultThresholdPercent == 0 {
+		t.DefaultThresholdPercent = 80
+	}
+	if t.ThresholdLevels == "" {
+		t.ThresholdLevels = DefaultThresholdLevels
 	}
 	return t
 }

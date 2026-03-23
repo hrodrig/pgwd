@@ -600,6 +600,12 @@ func main() {
 		os.Exit(0)
 	}
 	logConfigTrace(path, loaded, hasCLIArgs)
+
+	// -db-url override: when config has databases, CLI -db-url + one-shot (interval 0) uses single target from CLI.
+	if cfg.DBURL != "" && cfg.Interval <= 0 && cfg.UsesDatabases() {
+		cfg.Databases = nil // Targets() will use DBURL as single target
+	}
+
 	if cfg.ValidateK8sAccess {
 		ctx := context.Background()
 		if err := kube.ValidateKubernetesAccess(ctx, cfg.KubeContext); err != nil {
