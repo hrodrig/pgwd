@@ -137,6 +137,8 @@ dockers_v2:
       org.opencontainers.image.description: "Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki"
       org.opencontainers.image.source: "https://github.com/hrodrig/pgwd"
       org.opencontainers.image.version: "{{ .Version }}"
+    annotations:
+      org.opencontainers.image.description: "Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki"
 
 # Homebrew: publish cask to tap so users can "brew install hrodrig/pgwd/pgwd"
 # Create repo https://github.com/hrodrig/homebrew-pgwd first. For CI, set HOMEBREW_TAP_TOKEN (PAT with repo scope).
