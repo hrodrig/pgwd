@@ -17,10 +17,12 @@ import (
 	"time"
 
 	"github.com/hrodrig/pgwd/internal/config"
+	"github.com/hrodrig/pgwd/internal/httpsrv"
 	"github.com/hrodrig/pgwd/internal/kube"
 	"github.com/hrodrig/pgwd/internal/notify"
 	"github.com/hrodrig/pgwd/internal/openbsd"
 	"github.com/hrodrig/pgwd/internal/postgres"
+	"github.com/hrodrig/pgwd/internal/store"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -71,8 +73,8 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.BoolVar(&cfg.ForceNotification, "force-notification", cfg.ForceNotification, "Always send a test notification to validate delivery/format (PGWD_FORCE_NOTIFICATION)")
 	flag.IntVar(&cfg.DefaultThresholdPercent, "db-default-threshold-percent", cfg.DefaultThresholdPercent, "When one of total/active is 0, set it to this % of max_connections (1-100, default 80) (PGWD_DB_DEFAULT_THRESHOLD_PERCENT)")
 	flag.StringVar(&cfg.ThresholdLevels, "db-threshold-levels", cfg.ThresholdLevels, "When both total and active are 0: comma-separated percentages for 3-tier alerts, e.g. 75,85,95 (attention/alert/danger). Only highest level fires. (PGWD_DB_THRESHOLD_LEVELS)")
-	flag.StringVar(&cfg.KubePostgres, "kube-postgres", cfg.KubePostgres, "Connect via kubectl port-forward: namespace/type/name (e.g. default/svc/postgres) (PGWD_KUBE_POSTGRES)")
-	flag.StringVar(&cfg.KubeLoki, "kube-loki", cfg.KubeLoki, "Connect to Loki via kubectl port-forward when Loki is inside the cluster: namespace/type/name (e.g. monitoring/svc/loki) (PGWD_KUBE_LOKI)")
+	flag.StringVar(&cfg.KubePostgres, "kube-postgres", cfg.KubePostgres, "Connect via port-forward (client-go): namespace/type/name (e.g. default/svc/postgres) (PGWD_KUBE_POSTGRES)")
+	flag.StringVar(&cfg.KubeLoki, "kube-loki", cfg.KubeLoki, "Connect to Loki via port-forward when Loki is inside the cluster: namespace/type/name (e.g. monitoring/svc/loki) (PGWD_KUBE_LOKI)")
 	flag.StringVar(&cfg.KubeContext, "kube-context", cfg.KubeContext, "Kubectl context to use (empty = current context) (PGWD_KUBE_CONTEXT)")
 	flag.IntVar(&cfg.KubeLocalPort, "kube-local-port", cfg.KubeLocalPort, "Local port for kube port-forward (default 5432) (PGWD_KUBE_LOCAL_PORT)")
 	flag.IntVar(&cfg.KubeLokiLocalPort, "kube-loki-local-port", cfg.KubeLokiLocalPort, "Local port for Loki port-forward (default 3100) (PGWD_KUBE_LOKI_LOCAL_PORT)")
@@ -82,7 +84,7 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.StringVar(&cfg.Client, "client", cfg.Client, "Client name for this monitor instance — REQUIRED (PGWD_CLIENT); identifies which monitor sent the alert")
 	flag.BoolVar(&cfg.NotifyOnConnectFailure, "notify-on-connect-failure", cfg.NotifyOnConnectFailure, "Send an alert to notifiers when Postgres connection fails (infrastructure alert) (PGWD_NOTIFY_ON_CONNECT_FAILURE)")
 	flag.IntVar(&cfg.TestMaxConnections, "test-max-connections", cfg.TestMaxConnections, "Override server max_connections for defaults and display (for testing alerts; 0 = use server) (PGWD_TEST_MAX_CONNECTIONS)")
-	flag.BoolVar(&cfg.ValidateK8sAccess, "validate-k8s-access", cfg.ValidateK8sAccess, "Validate kubectl connectivity and list pods, then exit. Use -kube-context to select context. (PGWD_VALIDATE_K8S_ACCESS)")
+	flag.BoolVar(&cfg.ValidateK8sAccess, "validate-k8s-access", cfg.ValidateK8sAccess, "Validate cluster connectivity and list pods, then exit. Use -kube-context to select context. (PGWD_VALIDATE_K8S_ACCESS)")
 	flag.Parse()
 	return *showVersionFlag
 }
@@ -523,26 +525,138 @@ func sendEvents(ctx context.Context, senders []notify.Sender, cfg *config.Config
 	}
 }
 
-func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, senders []notify.Sender, cluster, client, ns, db string) func() {
+// runCheckResult is returned by doRunCheck for store integration.
+type runCheckResult struct {
+	Stats            postgres.ConnectionStats
+	MaxConn          int
+	Events           []notify.Event
+	StaleCount       int   // from target StaleAge (for alerts)
+	StaleCountForStore int // from SqliteStaleAge if >0, else StaleCount (for store)
+}
+
+func doRunCheck(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, cluster, client, ns, db string) (runCheckResult, error) {
+	var res runCheckResult
+	stats, err := postgres.Stats(ctx, pool)
+	if err != nil {
+		return res, err
+	}
+	res.Stats = stats
+	res.MaxConn, _ = postgres.MaxConnections(ctx, pool)
+	if cfg.TestMaxConnections > 0 {
+		res.MaxConn = cfg.TestMaxConnections
+	}
+	if cfg.StaleAge > 0 {
+		res.StaleCount, _ = postgres.StaleCount(ctx, pool, cfg.StaleAge)
+	}
+	// Stale count for store: use sqlite.stale_age if set, else same as alerts
+	staleAgeForStore := cfg.SqliteStaleAge
+	if staleAgeForStore <= 0 {
+		staleAgeForStore = cfg.StaleAge
+	}
+	if staleAgeForStore > 0 {
+		res.StaleCountForStore, _ = postgres.StaleCount(ctx, pool, staleAgeForStore)
+	} else {
+		res.StaleCountForStore = res.StaleCount
+	}
+	res.Events = collectEvents(ctx, pool, cfg, stats, res.MaxConn, cluster, client, ns, db)
+	return res, nil
+}
+
+func allStringsEqual(sl []string, v string) bool {
+	for _, s := range sl {
+		if s != v {
+			return false
+		}
+	}
+	return true
+}
+
+func stateAndThresholdFromEvents(events []notify.Event) (state, threshold string) {
+	if len(events) == 0 {
+		return "ok", ""
+	}
+	state, threshold = "attention", events[0].Threshold
+	for _, e := range events {
+		if e.Threshold == "connect_failure" || e.Threshold == "too_many_clients" {
+			return "connect_failure", e.Threshold
+		}
+		if e.Level == "danger" {
+			return "danger", e.Threshold
+		}
+		if e.Level == "alert" {
+			state, threshold = "alert", e.Threshold
+		}
+	}
+	return state, threshold
+}
+
+func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, senders []notify.Sender, st *store.Store, cluster, client, ns, db string) func() {
 	return func() {
-		stats, err := postgres.Stats(ctx, pool)
+		res, err := doRunCheck(ctx, pool, cfg, cluster, client, ns, db)
 		if err != nil {
 			log.Printf("stats: %v", err)
 			return
 		}
-		maxConn, _ := postgres.MaxConnections(ctx, pool)
-		if cfg.TestMaxConnections > 0 {
-			maxConn = cfg.TestMaxConnections
-		}
 		if cfg.DryRun {
-			if maxConn > 0 {
-				log.Printf("total=%d active=%d idle=%d max_connections=%d", stats.Total, stats.Active, stats.Idle, maxConn)
+			if res.MaxConn > 0 {
+				log.Printf("total=%d active=%d idle=%d max_connections=%d", res.Stats.Total, res.Stats.Active, res.Stats.Idle, res.MaxConn)
 			} else {
-				log.Printf("total=%d active=%d idle=%d", stats.Total, stats.Active, stats.Idle)
+				log.Printf("total=%d active=%d idle=%d", res.Stats.Total, res.Stats.Active, res.Stats.Idle)
 			}
 		}
-		events := collectEvents(ctx, pool, cfg, stats, maxConn, cluster, client, ns, db)
-		sendEvents(ctx, senders, cfg, events)
+		state, thr := stateAndThresholdFromEvents(res.Events)
+		// Hysteresis: require confirm_alert consecutive bad checks before sending alerts
+		if st != nil && cfg.ConfirmAlert > 1 && state != "ok" {
+			last, _ := st.LastStates(ctx, client, cluster, db, cfg.ConfirmAlert-1)
+			if len(last) < cfg.ConfirmAlert-1 || !allStringsEqual(last, state) {
+				// Not enough consecutive bad → filter out non-urgent events (connect_failure/too_many_clients always send)
+				var filtered []notify.Event
+				for _, e := range res.Events {
+					if e.Threshold == "connect_failure" || e.Threshold == "too_many_clients" {
+						filtered = append(filtered, e)
+					}
+				}
+				res.Events = filtered
+			}
+		}
+		sendEvents(ctx, senders, cfg, res.Events)
+		if st != nil {
+			if err := st.Insert(ctx, store.Record{
+				Client: client, Cluster: cluster, Namespace: ns, Database: db,
+				Total: res.Stats.Total, Active: res.Stats.Active, Idle: res.Stats.Idle, Stale: res.StaleCountForStore,
+				MaxConnections: res.MaxConn, State: state, Threshold: thr,
+			}); err != nil {
+				log.Printf("store insert: %v", err)
+			} else if state == "ok" && cfg.ConfirmOk >= 1 {
+				// Resolution: require confirm_ok consecutive ok, and we must have been in bad state before
+				last, _ := st.LastStates(ctx, client, cluster, db, cfg.ConfirmOk+1)
+				if len(last) >= cfg.ConfirmOk+1 {
+					allRecentOk := true
+					for i := 0; i < cfg.ConfirmOk && i < len(last); i++ {
+						if last[i] != "ok" {
+							allRecentOk = false
+							break
+						}
+					}
+					prevWasBad := last[cfg.ConfirmOk] != "ok" && last[cfg.ConfirmOk] != ""
+					if allRecentOk && prevWasBad {
+						ev := notify.Event{
+							Stats:          res.Stats,
+							Threshold:      "resolution",
+							ThresholdValue: 0,
+							Message:        fmt.Sprintf("PostgreSQL connections returned to normal. total=%d active=%d idle=%d", res.Stats.Total, res.Stats.Active, res.Stats.Idle),
+							Level:          "ok",
+							MaxConnections: res.MaxConn,
+							Cluster:        cluster,
+							Client:         client,
+							Namespace:      ns,
+							Database:       db,
+						}
+						sendEvents(ctx, senders, cfg, []notify.Event{ev})
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -635,6 +749,30 @@ func main() {
 	senders := buildSenders(&cfg)
 	targets := cfg.Targets()
 
+	var st *store.Store
+	if cfg.SqlitePath != "" {
+		var err error
+		st, err = store.Open(cfg.SqlitePath, cfg.SqliteMaxMetrics)
+		if err != nil {
+			log.Fatalf("sqlite: %v", err)
+		}
+		defer st.Close()
+	}
+	if cfg.HTTPListen != "" {
+		httpSrv := httpsrv.New(&cfg, st)
+		if err := httpSrv.Start(); err != nil {
+			log.Fatalf("http: %v", err)
+		}
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := httpSrv.Stop(shutdownCtx); err != nil {
+				log.Printf("http shutdown: %v", err)
+			}
+		}()
+		log.Printf("pgwd: HTTP listening on %s (%s%s)", cfg.HTTPListen, cfg.HTTPBasePath, cfg.HTTPHealthPath)
+	}
+
 	runOne := func(t config.DatabaseTarget) {
 		targetCfg := cfg.ConfigForTarget(t)
 		runCluster, runClient, runNamespace, runDatabase := runContextStrings(ctx, targetCfg, t.URL)
@@ -655,7 +793,7 @@ func main() {
 			log.Printf("threshold config error [%s]: %v", t.Client, err)
 			return
 		}
-		run := makeRunFunc(ctx, pool, targetCfg, senders, runCluster, runClient, runNamespace, runDatabase)
+		run := makeRunFunc(ctx, pool, targetCfg, senders, st, runCluster, runClient, runNamespace, runDatabase)
 		run()
 	}
 

@@ -245,3 +245,103 @@ databases:
 		t.Errorf("analytics ThresholdLevels (inherited): got %q", a.ThresholdLevels)
 	}
 }
+
+func TestFromFile_Sqlite(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "pgwd.conf")
+	content := `
+client: monitor
+interval: 60
+databases:
+  - url: postgres://localhost/mydb
+sqlite:
+  path: /var/lib/pgwd/pgwd.db
+  max_metrics: 50000
+`
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, loaded, err := FromFile(path)
+	if err != nil {
+		t.Fatalf("FromFile: %v", err)
+	}
+	if !loaded {
+		t.Fatal("expected loaded=true")
+	}
+	if cfg.SqlitePath != "/var/lib/pgwd/pgwd.db" {
+		t.Errorf("SqlitePath: got %q", cfg.SqlitePath)
+	}
+	if cfg.SqliteMaxMetrics != 50000 {
+		t.Errorf("SqliteMaxMetrics: got %d", cfg.SqliteMaxMetrics)
+	}
+}
+
+func TestFromFile_SqliteDefaultMaxMetrics(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "pgwd.conf")
+	content := `
+client: monitor
+databases:
+  - url: postgres://localhost/mydb
+sqlite:
+  path: /tmp/pgwd.db
+`
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := FromFile(path)
+	if err != nil {
+		t.Fatalf("FromFile: %v", err)
+	}
+	if cfg.SqliteMaxMetrics != 10000 {
+		t.Errorf("SqliteMaxMetrics (default): got %d", cfg.SqliteMaxMetrics)
+	}
+}
+
+func TestFromFile_ConfirmAndHttp(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "pgwd.conf")
+	content := `
+client: monitor
+databases:
+  - url: postgres://localhost/mydb
+confirm_alert: 3
+confirm_ok: 2
+sqlite:
+  path: /var/lib/pgwd/pgwd.db
+  stale_age: 300
+http:
+  listen: ":8080"
+  base_path: "/api/pgwd/v1"
+  healthz_path: "/health"
+  metrics_path: "/m"
+`
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := FromFile(path)
+	if err != nil {
+		t.Fatalf("FromFile: %v", err)
+	}
+	if cfg.ConfirmAlert != 3 {
+		t.Errorf("ConfirmAlert: got %d", cfg.ConfirmAlert)
+	}
+	if cfg.ConfirmOk != 2 {
+		t.Errorf("ConfirmOk: got %d", cfg.ConfirmOk)
+	}
+	if cfg.SqliteStaleAge != 300 {
+		t.Errorf("SqliteStaleAge: got %d", cfg.SqliteStaleAge)
+	}
+	if cfg.HTTPListen != ":8080" {
+		t.Errorf("HTTPListen: got %q", cfg.HTTPListen)
+	}
+	if cfg.HTTPBasePath != "/api/pgwd/v1" {
+		t.Errorf("HTTPBasePath: got %q", cfg.HTTPBasePath)
+	}
+	if cfg.HTTPHealthPath != "/health" {
+		t.Errorf("HTTPHealthPath: got %q", cfg.HTTPHealthPath)
+	}
+	if cfg.HTTPMetricsPath != "/m" {
+		t.Errorf("HTTPMetricsPath: got %q", cfg.HTTPMetricsPath)
+	}
+}

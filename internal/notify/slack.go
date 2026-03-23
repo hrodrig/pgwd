@@ -24,6 +24,8 @@ func slackHeader(ev Event, ts string) string {
 		h = ":warning: *pgwd* – Connection failure\n"
 	case "too_many_clients":
 		h = ":rotating_light: *pgwd* – URGENT: too many clients (DB saturated)\n"
+	case "resolution":
+		h = ":green_circle: *pgwd* – Resolved: connections returned to normal\n"
 	default:
 		if ev.Level != "" {
 			switch ev.Level {
@@ -74,6 +76,8 @@ func slackConnLine(ev Event) string {
 		line += " (connection failed)"
 	case "too_many_clients":
 		line += " (too many clients — DB saturated)"
+	case "resolution":
+		line += " (returned to normal)"
 	default:
 		line += fmt.Sprintf(" (limit %s=%d)", ev.Threshold, ev.ThresholdValue)
 	}
@@ -92,7 +96,7 @@ func slackColor(ev Event) string {
 		}
 	}
 	switch ev.Threshold {
-	case "test":
+	case "test", "resolution":
 		return "good"
 	case "connect_failure", "too_many_clients":
 		return "danger"

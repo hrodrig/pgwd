@@ -29,13 +29,13 @@ type Config struct {
 	// Databases (multi-DB mode); when non-empty, DBURL is ignored. From file only.
 	Databases []DatabaseTarget
 
-	// Kubernetes: connect to Postgres via kubectl port-forward (optional)
+	// Kubernetes: connect to Postgres via port-forward (client-go, optional)
 	KubePostgres          string // e.g. "default/svc/postgres" or "default/pod/postgres-0"
-	KubeContext           string // kubectl context to use (empty = current context)
+	KubeContext           string // kubeconfig context to use (empty = current context)
 	KubeLocalPort         int    // local port for port-forward (default 5432)
 	KubePasswordVar       string // pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD)
 	KubePasswordContainer string // container name in pod if not default
-	// Kubernetes: connect to Loki via kubectl port-forward when Loki is inside the cluster (optional)
+	// Kubernetes: connect to Loki via port-forward when Loki is inside the cluster (optional)
 	KubeLoki           string // e.g. "monitoring/svc/loki" — same format as kube-postgres
 	KubeLokiLocalPort  int    // local port for Loki port-forward (default 3100)
 	KubeLokiRemotePort int    // remote port on the Loki service (default 3100)
@@ -67,8 +67,23 @@ type Config struct {
 	ThresholdLevels         string // comma-separated percentages for 3-tier alerts, e.g. "75,85,95" (attention/alert/danger). Used when both total and active are 0.
 	// TestMaxConnections: if > 0, use instead of server max_connections for defaults and display (for testing alerts).
 	TestMaxConnections int
-	// ValidateK8sAccess: if true, validate kubectl connectivity and list pods, then exit. Uses KubeContext if set.
+	// ValidateK8sAccess: if true, validate cluster connectivity and list pods, then exit. Uses KubeContext if set.
 	ValidateK8sAccess bool
+
+	// SQLite: persistent store for metrics (resolution notifications, /metrics). Optional.
+	SqlitePath       string // e.g. /var/lib/pgwd/pgwd.db
+	SqliteMaxMetrics int    // max rows; FIFO eviction when exceeded (default 10000)
+	SqliteStaleAge   int    // seconds for stale count in store; 0 = use db.stale_age or 0 (independent of alert stale)
+
+	// Hysteresis: require N consecutive checks before alert/resolution (avoids brief spikes/false recoveries).
+	ConfirmAlert int // consecutive "bad" checks before sending alert (default 1)
+	ConfirmOk    int // consecutive "ok" checks before resolution notification (default 1)
+
+	// HTTP: metrics and health endpoint for Kubernetes probes. Optional.
+	HTTPListen    string // e.g. ":8080"; empty = disabled
+	HTTPBasePath  string // e.g. "/api/pgwd/v1"; paths relative to this
+	HTTPHealthPath string // e.g. "/healthz" → base_path + health_path
+	HTTPMetricsPath string // e.g. "/metrics" → base_path + metrics_path
 }
 
 // ConfigPath returns the config file path: -config flag, PGWD_CONFIG, or DefaultConfigPath.
@@ -116,7 +131,48 @@ func ApplyEnv(cfg *Config) {
 	applyEnvKube(cfg)
 	applyEnvThresholds(cfg)
 	applyEnvNotifiers(cfg)
+	applyEnvSqliteAndHTTP(cfg)
 	applyEnvBehaviour(cfg)
+}
+
+func applyEnvSqliteAndHTTP(cfg *Config) {
+	if v := env("SQLITE_PATH", ""); v != "" {
+		cfg.SqlitePath = v
+	}
+	if v := envInt("SQLITE_MAX_METRICS", -1); v >= 0 {
+		cfg.SqliteMaxMetrics = v
+	}
+	if v := envInt("SQLITE_STALE_AGE", -1); v >= 0 {
+		cfg.SqliteStaleAge = v
+	}
+	if v := envInt("CONFIRM_ALERT", -1); v >= 0 {
+		cfg.ConfirmAlert = v
+	}
+	if v := envInt("CONFIRM_OK", -1); v >= 0 {
+		cfg.ConfirmOk = v
+	}
+	if v := env("HTTP_LISTEN", ""); v != "" {
+		cfg.HTTPListen = v
+		// Apply defaults for paths when only HTTP_LISTEN is set
+		if cfg.HTTPBasePath == "" {
+			cfg.HTTPBasePath = "/api/pgwd/v1"
+		}
+		if cfg.HTTPHealthPath == "" {
+			cfg.HTTPHealthPath = "/healthz"
+		}
+		if cfg.HTTPMetricsPath == "" {
+			cfg.HTTPMetricsPath = "/metrics"
+		}
+	}
+	if v := env("HTTP_BASE_PATH", ""); v != "" {
+		cfg.HTTPBasePath = v
+	}
+	if v := env("HTTP_HEALTHZ_PATH", ""); v != "" {
+		cfg.HTTPHealthPath = v
+	}
+	if v := env("HTTP_METRICS_PATH", ""); v != "" {
+		cfg.HTTPMetricsPath = v
+	}
 }
 
 func applyEnvDBAndContext(cfg *Config) {
@@ -251,6 +307,15 @@ func FromEnv() Config {
 		ThresholdLevels:         env("DB_THRESHOLD_LEVELS", DefaultThresholdLevels),
 		TestMaxConnections:      envInt("TEST_MAX_CONNECTIONS", 0),
 		ValidateK8sAccess:       envBool("VALIDATE_K8S_ACCESS", false),
+		SqlitePath:              env("SQLITE_PATH", ""),
+		SqliteMaxMetrics:        envInt("SQLITE_MAX_METRICS", 0),
+		SqliteStaleAge:          envInt("SQLITE_STALE_AGE", 0),
+		ConfirmAlert:            envInt("CONFIRM_ALERT", 1),
+		ConfirmOk:               envInt("CONFIRM_OK", 1),
+		HTTPListen:              env("HTTP_LISTEN", ""),
+		HTTPBasePath:            env("HTTP_BASE_PATH", ""),
+		HTTPHealthPath:          env("HTTP_HEALTHZ_PATH", ""),
+		HTTPMetricsPath:         env("HTTP_METRICS_PATH", ""),
 	}
 }
 

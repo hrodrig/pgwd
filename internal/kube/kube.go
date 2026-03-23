@@ -1,77 +1,109 @@
 package kube
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/portforward"
+	"k8s.io/client-go/tools/remotecommand"
+	"k8s.io/client-go/transport/spdy"
 )
 
 const discoverPasswordPlaceholder = "DISCOVER_MY_PASSWORD"
 
-// contextArgs returns kubectl args to select the given context; empty slice if kubeContext is empty.
-func contextArgs(kubeContext string) []string {
-	if kubeContext == "" {
-		return nil
+// getConfig loads rest.Config from kubeconfig. kubeContext empty = current context.
+func getConfig(kubeContext string) (*rest.Config, error) {
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	if p := os.Getenv("KUBECONFIG"); p != "" {
+		loadingRules.Precedence = append([]string{p}, loadingRules.Precedence...)
 	}
-	return []string{"--context", kubeContext}
+	overrides := &clientcmd.ConfigOverrides{}
+	if kubeContext != "" {
+		overrides.CurrentContext = kubeContext
+	}
+	clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides)
+	return clientConfig.ClientConfig()
 }
 
-// kubectlCmd returns *exec.Cmd to run kubectl with the given args.
-func kubectlCmd(ctx context.Context, args []string) (*exec.Cmd, error) {
-	kubectl, err := exec.LookPath("kubectl")
+// getConfigAndClientset returns rest.Config and clientset for the given context.
+func getConfigAndClientset(kubeContext string) (*rest.Config, *kubernetes.Clientset, error) {
+	config, err := getConfig(kubeContext)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return exec.CommandContext(ctx, kubectl, args...), nil
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, nil, err
+	}
+	return config, clientset, nil
 }
 
-// RequireKubectl returns an error if kubectl is not found in PATH. Call this when -kube-postgres or -kube-loki is set.
+// RequireKubectl is deprecated and no longer checks for kubectl. Kept for backward compatibility.
+// pgwd now uses client-go natively; no kubectl required.
 func RequireKubectl() error {
-	_, err := exec.LookPath("kubectl")
-	if err != nil {
-		return fmt.Errorf("kubectl not found in PATH (required for -kube-postgres / -kube-loki): %w", err)
-	}
 	return nil
 }
 
-// ValidateKubernetesAccess checks kubectl is in PATH, runs kubectl get pods -A (with optional context),
-// and streams output to stdout. Returns error if kubectl fails or the cluster is unreachable.
+// ValidateKubernetesAccess lists pods across all namespaces to verify cluster connectivity.
 func ValidateKubernetesAccess(ctx context.Context, kubeContext string) error {
-	args := append(contextArgs(kubeContext), "get", "pods", "-A")
-	cmd, err := kubectlCmd(ctx, args)
+	_, clientset, err := getConfigAndClientset(kubeContext)
 	if err != nil {
-		return fmt.Errorf("kubectl not found in PATH: %w", err)
+		return fmt.Errorf("load kubeconfig: %w", err)
 	}
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("kubectl get pods failed: %w", err)
+	opts := metav1.ListOptions{Limit: 10}
+	_, err = clientset.CoreV1().Pods(corev1.NamespaceAll).List(ctx, opts)
+	if err != nil {
+		return fmt.Errorf("list pods failed: %w", err)
+	}
+	// Stream a subset to stdout (mimic kubectl get pods -A brevity)
+	pods, _ := clientset.CoreV1().Pods(corev1.NamespaceAll).List(ctx, metav1.ListOptions{Limit: 20})
+	for _, p := range pods.Items {
+		fmt.Fprintf(os.Stdout, "%-50s %s\n", p.Namespace+"/"+p.Name, p.Status.Phase)
 	}
 	return nil
 }
 
-// ClusterName returns the current (or given) context's cluster name from kubeconfig (e.g. for Slack notifications). Empty string on error or when not set. kubeContext empty = current context.
+// ClusterName returns the current (or given) context's cluster name from kubeconfig.
 func ClusterName(ctx context.Context, kubeContext string) string {
-	args := append(contextArgs(kubeContext), "config", "view", "--minify", "-o", "jsonpath={.clusters[0].name}")
-	cmd, err := kubectlCmd(ctx, args)
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	if p := os.Getenv("KUBECONFIG"); p != "" {
+		loadingRules.Precedence = append([]string{p}, loadingRules.Precedence...)
+	}
+	overrides := &clientcmd.ConfigOverrides{}
+	if kubeContext != "" {
+		overrides.CurrentContext = kubeContext
+	}
+	raw, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides).RawConfig()
 	if err != nil {
 		return ""
 	}
-	out, err := cmd.Output()
-	if err != nil || len(out) == 0 {
+	ctxName := raw.CurrentContext
+	if kubeContext != "" {
+		ctxName = kubeContext
+	}
+	ctxObj, ok := raw.Contexts[ctxName]
+	if !ok || ctxObj.Cluster == "" {
 		return ""
 	}
-	return strings.TrimSpace(string(out))
+	return ctxObj.Cluster
 }
 
 // ParseKubePostgres parses "namespace/type/name" (e.g. "default/svc/postgres" or "default/pod/postgres-0").
-// Returns namespace, resource (e.g. "svc/postgres"), and error if format is invalid.
 func ParseKubePostgres(s string) (namespace, resource string, err error) {
 	parts := strings.SplitN(s, "/", 3)
 	if len(parts) != 3 {
@@ -87,57 +119,36 @@ func ParseKubePostgres(s string) (namespace, resource string, err error) {
 	return namespace, resType + "/" + name, nil
 }
 
-// runKubectlWithStderr runs kubectl and returns stdout, stderr, and error.
-func runKubectlWithStderr(ctx context.Context, args []string) ([]byte, []byte, error) {
-	cmd, err := kubectlCmd(ctx, args)
-	if err != nil {
-		return nil, nil, fmt.Errorf("kubectl not found in PATH: %w", err)
-	}
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
-	return out, []byte(stderr.String()), err
-}
-
-func resolvePodFromService(ctx context.Context, kubeContext, namespace, svcName string) (string, error) {
-	run := func(a []string) ([]byte, []byte, error) { return runKubectlWithStderr(ctx, a) }
+func resolvePodFromService(ctx context.Context, clientset *kubernetes.Clientset, namespace, svcName string) (string, error) {
 	// Try endpoints first: get first address targetRef name
-	args := append(contextArgs(kubeContext), "get", "endpoints", "-n", namespace, svcName, "-o", "jsonpath={.subsets[0].addresses[0].targetRef.name}")
-	out, stderr, err := run(args)
-	if err == nil && len(out) > 0 {
-		return strings.TrimSpace(string(out)), nil
-	}
-	kubectlErr := err
-	if len(stderr) > 0 {
-		kubectlErr = fmt.Errorf("%w (kubectl: %s)", err, strings.TrimSpace(string(stderr)))
-	}
-	// Fallback: get service selector, then get first pod
-	args = append(contextArgs(kubeContext), "get", "svc", "-n", namespace, svcName, "-o", "go-template={{range $k,$v := .spec.selector}}{{$k}}={{$v}},{{end}}")
-	out, stderr, err = run(args)
-	if err != nil || len(out) == 0 {
-		if len(stderr) > 0 {
-			kubectlErr = fmt.Errorf("%w (kubectl: %s)", err, strings.TrimSpace(string(stderr)))
-		} else if err != nil {
-			kubectlErr = err
+	ep, err := clientset.CoreV1().Endpoints(namespace).Get(ctx, svcName, metav1.GetOptions{})
+	if err == nil && len(ep.Subsets) > 0 && len(ep.Subsets[0].Addresses) > 0 {
+		if ref := ep.Subsets[0].Addresses[0].TargetRef; ref != nil && ref.Kind == "Pod" {
+			return ref.Name, nil
 		}
-		return "", fmt.Errorf("could not get pod from service %s (no endpoints or selector): %w", svcName, kubectlErr)
 	}
-	selector := strings.TrimSuffix(strings.TrimSpace(string(out)), ",")
-	if selector == "" {
+	// Fallback: get service selector, then list pods
+	svc, err := clientset.CoreV1().Services(namespace).Get(ctx, svcName, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("get service %s: %w", svcName, err)
+	}
+	if len(svc.Spec.Selector) == 0 {
 		return "", fmt.Errorf("service %s has no selector", svcName)
 	}
-	args = append(contextArgs(kubeContext), "get", "pods", "-n", namespace, "-l", selector, "-o", "jsonpath={.items[0].metadata.name}")
-	out, stderr, err = run(args)
-	if err != nil || len(out) == 0 {
-		if len(stderr) > 0 {
-			return "", fmt.Errorf("no pods found for service %s (selector %s): %w (kubectl: %s)", svcName, selector, err, strings.TrimSpace(string(stderr)))
-		}
-		return "", fmt.Errorf("no pods found for service %s (selector %s): %w", svcName, selector, err)
+	list, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: metav1.FormatLabelSelector(&metav1.LabelSelector{MatchLabels: svc.Spec.Selector}),
+		Limit:        1,
+	})
+	if err != nil {
+		return "", fmt.Errorf("list pods for service %s: %w", svcName, err)
 	}
-	return strings.TrimSpace(string(out)), nil
+	if len(list.Items) == 0 {
+		return "", fmt.Errorf("no pods found for service %s", svcName)
+	}
+	return list.Items[0].Name, nil
 }
 
-// ResolvePod returns the pod name. If resource is "pod/name", returns name. If "svc/name", looks up a pod via endpoints or service selector.
+// ResolvePod returns the pod name. If resource is "pod/name", returns name. If "svc/name", looks up a pod.
 func ResolvePod(ctx context.Context, kubeContext, namespace, resource string) (string, error) {
 	if strings.HasPrefix(resource, "pod/") {
 		return strings.TrimPrefix(resource, "pod/"), nil
@@ -145,23 +156,47 @@ func ResolvePod(ctx context.Context, kubeContext, namespace, resource string) (s
 	if !strings.HasPrefix(resource, "svc/") {
 		return "", fmt.Errorf("resource must be pod/name or svc/name, got %q", resource)
 	}
-	return resolvePodFromService(ctx, kubeContext, namespace, strings.TrimPrefix(resource, "svc/"))
+	_, clientset, err := getConfigAndClientset(kubeContext)
+	if err != nil {
+		return "", err
+	}
+	return resolvePodFromService(ctx, clientset, namespace, strings.TrimPrefix(resource, "svc/"))
 }
 
-// GetPasswordFromPod reads the given env var (and PGPASSWORD as fallback) from the pod's container.
+// GetPasswordFromPod reads the given env var from the pod's container.
 func GetPasswordFromPod(ctx context.Context, kubeContext, namespace, podName, container, envVar string) (string, error) {
-	args := append(contextArgs(kubeContext), "exec", "-n", namespace, podName)
-	if container != "" {
-		args = append(args, "-c", container)
-	}
-	args = append(args, "--", "printenv", envVar)
-	cmd, err := kubectlCmd(ctx, args)
+	config, clientset, err := getConfigAndClientset(kubeContext)
 	if err != nil {
-		return "", fmt.Errorf("kubectl not found in PATH: %w", err)
+		return "", err
 	}
-	out, err := cmd.Output()
-	if err == nil && len(out) > 0 {
-		return strings.TrimSpace(string(out)), nil
+	req := clientset.CoreV1().RESTClient().Post().
+		Resource("pods").Namespace(namespace).Name(podName).
+		SubResource("exec")
+	opts := &corev1.PodExecOptions{
+		Command:   []string{"printenv", envVar},
+		Stdout:    true,
+		Stderr:    true,
+		TTY:       false,
+	}
+	if container != "" {
+		opts.Container = container
+	}
+	req.VersionedParams(opts, scheme.ParameterCodec)
+	var buf bytes.Buffer
+	executor, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
+	if err != nil {
+		return "", err
+	}
+	err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
+		Stdout: &buf,
+		Stderr: &buf,
+	})
+	if err != nil {
+		return "", fmt.Errorf("exec in pod %s: %w", podName, err)
+	}
+	out := strings.TrimSpace(buf.String())
+	if out != "" {
+		return out, nil
 	}
 	if envVar != "PGPASSWORD" {
 		return GetPasswordFromPod(ctx, kubeContext, namespace, podName, container, "PGPASSWORD")
@@ -169,46 +204,76 @@ func GetPasswordFromPod(ctx context.Context, kubeContext, namespace, podName, co
 	return "", fmt.Errorf("could not find %s or PGPASSWORD in pod %s", envVar, podName)
 }
 
-// StartPortForward runs kubectl port-forward to localPort:5432 (Postgres). Returns a cleanup function. Call it on exit.
+// StartPortForward runs port-forward to localPort:5432 (Postgres).
 func StartPortForward(ctx context.Context, kubeContext, namespace, resource string, localPort int) (cleanup func(), err error) {
 	return StartPortForwardTo(ctx, kubeContext, namespace, resource, localPort, 5432)
 }
 
-// StartPortForwardTo runs kubectl port-forward in the background (localPort:remotePort) and waits for the local port to be listening.
-// Use remotePort 5432 for Postgres, 3100 for Loki. Returns a cleanup function that kills the port-forward process.
+// StartPortForwardTo runs port-forward in the background (localPort:remotePort) and waits for the local port to be listening.
 func StartPortForwardTo(ctx context.Context, kubeContext, namespace, resource string, localPort, remotePort int) (cleanup func(), err error) {
-	addr := fmt.Sprintf("%d:%d", localPort, remotePort)
-	args := append(contextArgs(kubeContext), "port-forward", "-n", namespace, resource, addr)
-	cmd, err := kubectlCmd(ctx, args)
-	if err != nil {
-		return nil, fmt.Errorf("kubectl not found in PATH: %w", err)
-	}
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start port-forward: %w", err)
-	}
-	cleanup = func() {
-		_ = cmd.Process.Kill()
-		_, _ = cmd.Process.Wait()
-	}
-	// Wait for port to be reachable
-	for i := 0; i < 40; i++ {
-		select {
-		case <-ctx.Done():
-			cleanup()
-			return nil, ctx.Err()
-		default:
-			conn, err := net.DialTimeout("tcp", fmt.Sprintf("127.0.0.1:%d", localPort), 200*time.Millisecond)
-			if err == nil {
-				conn.Close()
-				return cleanup, nil
-			}
+	podName := resource
+	if strings.HasPrefix(resource, "svc/") {
+		podName, err = ResolvePod(ctx, kubeContext, namespace, resource)
+		if err != nil {
+			return nil, err
 		}
-		time.Sleep(250 * time.Millisecond)
+	} else if strings.HasPrefix(resource, "pod/") {
+		podName = strings.TrimPrefix(resource, "pod/")
+	} else {
+		return nil, fmt.Errorf("resource must be pod/name or svc/name, got %q", resource)
 	}
-	cleanup()
-	return nil, fmt.Errorf("port %d did not become ready in time (port-forward may have failed)", localPort)
+
+	config, err := getConfig(kubeContext)
+	if err != nil {
+		return nil, fmt.Errorf("load kubeconfig: %w", err)
+	}
+
+	path := fmt.Sprintf("/api/v1/namespaces/%s/pods/%s/portforward", namespace, podName)
+	fwdURL, err := url.Parse(config.Host)
+	if err != nil {
+		return nil, fmt.Errorf("parse host: %w", err)
+	}
+	fwdURL.Path = path
+	fwdURL.RawQuery = ""
+
+	transport, upgrader, err := spdy.RoundTripperFor(config)
+	if err != nil {
+		return nil, fmt.Errorf("spdy round tripper: %w", err)
+	}
+	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, "POST", fwdURL)
+
+	stopCh := make(chan struct{})
+	readyCh := make(chan struct{})
+	var errOut bytes.Buffer
+	pf, err := portforward.New(dialer, []string{fmt.Sprintf("%d:%d", localPort, remotePort)}, stopCh, readyCh, io.Discard, &errOut)
+	if err != nil {
+		return nil, fmt.Errorf("create port-forward: %w", err)
+	}
+
+	go func() {
+		if err := pf.ForwardPorts(); err != nil && ctx.Err() == nil {
+			fmt.Fprintf(os.Stderr, "pgwd: port-forward: %v\n", err)
+		}
+	}()
+
+	cleanupFn := func() {
+		close(stopCh)
+		pf.Close()
+	}
+
+	select {
+	case <-readyCh:
+		return cleanupFn, nil
+	case <-ctx.Done():
+		cleanupFn()
+		return nil, ctx.Err()
+	case <-time.After(10 * time.Second):
+		cleanupFn()
+		if errOut.Len() > 0 {
+			return nil, fmt.Errorf("port %d did not become ready in time: %s", localPort, errOut.String())
+		}
+		return nil, fmt.Errorf("port %d did not become ready in time (port-forward may have failed)", localPort)
+	}
 }
 
 // DiscoverPasswordPlaceholder returns the placeholder string used in DBURL to trigger password discovery from the pod.

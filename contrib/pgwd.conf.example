@@ -3,6 +3,9 @@
 # Use databases: for one or more Postgres. Legacy db: is deprecated (still works, emits warning).
 # When config file is loaded, env vars (PGWD_*) are ignored. CLI flags override.
 #
+# RECOMMENDED: Use daemon mode (interval > 0) for sqlite, http, resolution notifications,
+# and hysteresis. One-shot/timer mode runs once per tick — no history, no /metrics, no resolution.
+#
 # YAML ↔ CLI mapping (CLI overrides config):
 #   client                    → -client
 #   interval                  → -interval
@@ -83,8 +86,38 @@ databases:
 #     total: 0
 
 # -----------------------------------------------------------------------------
-# Kubernetes (optional). Use when Postgres and/or Loki run inside a cluster.
+# SQLite & state (for resolution notifications and /metrics)
 # -----------------------------------------------------------------------------
+# REQUIRES daemon mode (interval > 0). One-shot/timer: no history, no resolution, no /metrics.
+# sqlite:
+#   path: /var/lib/pgwd/pgwd.db   # state and metrics history
+#   max_metrics: 10000            # FIFO eviction when exceeded
+#   stale_age: 300                # optional; seconds for stale count in store (0 = use db.stale_age)
+#
+# -----------------------------------------------------------------------------
+# State stability (hysteresis)
+# -----------------------------------------------------------------------------
+# confirm_alert: 2   # consecutive "bad" checks before sending alert (avoid brief spikes)
+# confirm_ok: 2      # consecutive "ok" checks before "returned to normal" resolution notification
+#
+# -----------------------------------------------------------------------------
+# HTTP server (/metrics, /healthz for Kubernetes probes). REQUIRES daemon mode.
+# -----------------------------------------------------------------------------
+# http:
+#   listen: ":8080"
+#   base_path: "/api/pgwd/v1"     # paths are relative to this
+#   healthz_path: "/healthz"      # → /api/pgwd/v1/healthz
+#   metrics_path: "/metrics"     # → /api/pgwd/v1/metrics
+#
+# -----------------------------------------------------------------------------
+# Kubernetes (optional)
+# -----------------------------------------------------------------------------
+# Two modes:
+# - pgwd INSIDE K8s (Deployment): use databases[].url with in-cluster DNS
+#   (e.g. postgres://...@postgres.default.svc.cluster.local:5432/mydb).
+#   No kubectl. No kube.postgres.
+# - pgwd OUTSIDE K8s (VM, cron): use kube.postgres + port-forward (client-go, no kubectl).
+#
 kube:
   context: ""
   local_port: 5432

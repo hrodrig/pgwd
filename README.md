@@ -221,6 +221,8 @@ pgwd -db-url "postgres://..." \
 | **0** | One-shot — check once, then exit |
 | **> 0** (e.g. 60) | Daemon — check every N seconds until Ctrl+C or SIGTERM |
 
+**Recommendation: use daemon mode** (`interval` > 0) when you need resolution notifications, hysteresis (`confirm_ok`, `confirm_alert`), the HTTP server (`/metrics`, `/healthz`), or SQLite metrics history. In one-shot or timer mode, pgwd runs once per tick and exits — there is no state history, so resolution alerts, Prometheus scraping, and hysteresis do not apply.
+
 ```bash
 # One-shot: run once, then exit (ideal for cron)
 pgwd -db-url "postgres://..." -notifications-slack-webhook "https://..."
@@ -252,28 +254,29 @@ pgwd -db-url "postgres://..." -notifications-loki-url "http://localhost:3100/lok
 | Scenario | Suggestion |
 |----------|------------|
 | **Many Postgres instances** | Use `databases:` in one config (daemon mode) for multiple direct URLs, or one config per instance with cron when instances are diverse (different clusters, kube contexts). |
-| **Cron check every 5 min** | One-shot (`interval` 0 or unset), one or more thresholds, Slack or Loki. Run from cron every 5 minutes. |
-| **Long-running watcher** | Daemon with `-interval 60` (or 120). Run under systemd/supervisor; stop with SIGTERM. |
+| **Cron check every 5 min** | One-shot (`interval` 0 or unset), one or more thresholds, Slack or Loki. Run from cron every 5 minutes. No resolution alerts, /metrics, or hysteresis. |
+| **Long-running watcher** | Daemon with `-interval 60` (or 120). Run under systemd/supervisor; stop with SIGTERM. **Recommended** for resolution notifications, Prometheus /metrics, and hysteresis. |
 | **Detect connection leaks** | Use `stale-age` + `threshold-stale` (e.g. 600 and 1). Alert when any connection stays open longer than 10 min. |
 | **Pre-production test** | `-dry-run` and low thresholds to see current counts without sending alerts. |
 | **Validate notifications** | `-force-notification` with Slack/Loki: sends one test message regardless of thresholds. Use one-shot to confirm delivery, format, and how messages look. (If the connection to Postgres fails, pgwd always sends a connect-failure alert when a notifier is configured.) |
 | **Test alerts without low max_connections** | Use `-test-max-connections N` (e.g. 20) with `-force-notification` or low thresholds: thresholds and messages use N as “max_connections”, while stats stay real. Notifications show “(test override)” so total can exceed N. See [docs/testing-alert-levels.md](docs/testing-alert-levels.md) for a procedure to trigger attention/alert/danger against production without changing Postgres config. |
 | **Zero config (use defaults)** | Only set `-db-url` and a notifier; pgwd uses 3-tier levels (75,85,95%) by default. Use `-db-threshold-levels` to customize or `-db-default-threshold-percent` when using explicit thresholds. |
 | **Multiple environments** | Set `PGWD_*` in env per environment; override `-db-url` or `-notifications-loki-labels` per deploy. |
-| **Postgres in Kubernetes** | Use `-kube-postgres namespace/svc/name` (or `namespace/pod/name`). pgwd runs `kubectl port-forward` and connects to localhost. Optionally put `DISCOVER_MY_PASSWORD` in the URL to read the password from the pod's env (e.g. `POSTGRES_PASSWORD`). Requires `kubectl` in PATH. |
+| **Postgres in Kubernetes** | **pgwd inside K8s:** Use direct URLs (`postgres://...@postgres.namespace.svc.cluster.local:5432/mydb`). **pgwd outside K8s:** Use `-kube-postgres namespace/svc/name`; requires kubeconfig (no kubectl binary). |
 | **Alert when Postgres is unreachable** | If you configure a notifier (Slack/Loki), pgwd **always** sends an alert when the connection fails (e.g. refused, timeout, or "too many clients"). No extra flag needed. |
 
 ### Running from cron
 
-**Daemon or cron.** For multiple Postgres with direct URLs, use `databases:` in one config with a daemon. When instances are diverse (different clusters, kube contexts), cron with one config per instance is often simpler: one cron entry per config, no daemon to manage.
+**Daemon or cron.** For multiple Postgres with direct URLs, use `databases:` in one config with a daemon. When instances are diverse (different clusters, kube contexts), cron with one config per instance is often simpler: one cron entry per config, no daemon to manage. **Note:** Cron (one-shot per tick) does not support resolution notifications, /metrics, or hysteresis — use the daemon (`pgwd.service`) if you need those.
 
 Cron runs with a **minimal environment** (e.g. `PATH=/usr/bin:/bin`). Two things to keep in mind:
 
-1. **`-kube-postgres` and PATH:** If you use `-kube-postgres`, cron must see `kubectl` in PATH. Set `PATH` in the cron line or in a wrapper script so it includes the directory where `kubectl` lives (e.g. `/usr/local/bin`):
+1. **`-kube-postgres` and kubeconfig:** If you use `-kube-postgres`, cron must have access to a valid kubeconfig. Set `KUBECONFIG` in the cron environment or ensure `~/.kube/config` exists:
 
    ```bash
-   # In crontab: set PATH before the command
+   # In crontab: set PATH and KUBECONFIG
    PATH=/usr/local/bin:/usr/bin:/bin
+   KUBECONFIG=/path/to/kubeconfig
    */5 * * * * /usr/local/bin/pgwd -kube-postgres default/svc/postgres -db-url "postgres://..." -notifications-slack-webhook "https://..."
    ```
 
@@ -285,7 +288,7 @@ Cron runs with a **minimal environment** (e.g. `PATH=/usr/bin:/bin`). Two things
    exec /usr/local/bin/pgwd "$@"
    ```
 
-2. **Seeing errors:** If `kubectl` is not found, pgwd exits immediately with a clear message to stderr. Cron often mails stderr to the user; otherwise redirect stdout and stderr to a log file so you can see why the job failed:
+2. **Seeing errors:** If kubeconfig is missing or invalid, pgwd exits with a clear message. Cron often mails stderr to the user; otherwise redirect stdout and stderr to a log file so you can see why the job failed:
 
    ```bash
    */5 * * * * /usr/local/bin/pgwd -db-url "postgres://..." -notifications-slack-webhook "https://..." >> /var/log/pgwd.log 2>&1
@@ -401,19 +404,65 @@ Adjust `KUBECONFIG`, webhook URL, namespace, service names, database names, and 
 
 ## Kubernetes
 
-When Postgres runs inside a Kubernetes cluster, use **`-kube-postgres`** so pgwd connects via `kubectl port-forward` (no separate script or manual port-forward).
+**Two deployment models:** Choose based on where pgwd runs.
+
+| Where pgwd runs | How to connect | kubectl needed? |
+|-----------------|----------------|------------------|
+| **Inside the cluster** (Deployment, daemon) | Direct URLs: `postgres://...@postgres.namespace.svc.cluster.local:5432/mydb`, `http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push` | **No** |
+| **Outside the cluster** (VM, cron) | `-kube-postgres` / `-kube-loki` with port-forward (client-go, no kubectl) | **No** |
+
+### pgwd inside Kubernetes (recommended for daemon mode)
+
+When you run pgwd as a Deployment (Docker image in K8s), use **direct service URLs**. No kubectl in the container.
+
+- **Postgres:** `databases[].url` with in-cluster DNS, e.g. `postgres://user:pass@postgres.default.svc.cluster.local:5432/mydb` (shorter: `postgres-service.namespace:5432`).
+- **Loki:** `notifications.loki.url` with in-cluster DNS, e.g. `http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push`.
+- **Passwords:** From a Secret via env (`PGWD_*` or `-config`). No `DISCOVER_MY_PASSWORD` — that requires cluster access (pgwd outside K8s) to read the Postgres pod env.
+- **HTTP:** Set `http.listen: ":8080"` for `/healthz` and `/metrics` (liveness, Prometheus).
+
+Simplest: use env vars from Secrets (no config file). Example Deployment env:
+
+```yaml
+env:
+  - name: PGWD_DB_URL
+    valueFrom:
+      secretKeyRef:
+        name: pgwd-db
+        key: url
+  - name: PGWD_CLIENT
+    value: "pgwd-prod"
+  - name: PGWD_INTERVAL
+    value: "60"
+  - name: PGWD_NOTIFICATIONS_SLACK_WEBHOOK
+    valueFrom:
+      secretKeyRef:
+        name: pgwd-secrets
+        key: slack-webhook
+  - name: PGWD_HTTP_LISTEN
+    value: ":8080"
+  - name: PGWD_SQLITE_PATH
+    value: "/var/lib/pgwd/pgwd.db"
+  - name: PGWD_NOTIFICATIONS_LOKI_URL
+    value: "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+```
+
+When using a config file, template it with Helm/Kustomize so the DB URL (with password) is injected from a Secret.
+
+### pgwd outside Kubernetes (port-forward via client-go)
+
+When pgwd runs on a host (VM, cron) and Postgres/Loki are inside the cluster, use **`-kube-postgres`** and **`-kube-loki`**. pgwd uses **client-go** natively — no kubectl binary required. A valid **kubeconfig** (e.g. `~/.kube/config` or `KUBECONFIG`) is needed.
 
 **Format:** `-kube-postgres <namespace>/<type>/<name>` with `type` = `svc` or `pod`, e.g. `default/svc/postgres` or `default/pod/postgres-0`.
 
 - Set **`PGWD_DB_URL`** with host **`localhost`** and the same port as **`-kube-local-port`** (default 5432). Example: `postgres://user:pass@localhost:5432/mydb`.
-- **Password from the pod:** If the URL password is the literal **`DISCOVER_MY_PASSWORD`**, pgwd reads the password from the Postgres pod's environment (`POSTGRES_PASSWORD` by default, or `PGPASSWORD`). Use **`-kube-password-var`** to choose the env var and **`-kube-password-container`** if the Postgres container is not the default.
-- **Requires:** `kubectl` in PATH and a valid kubeconfig. pgwd checks for `kubectl` before any kube step and exits with a clear error if it is missing. pgwd starts the port-forward, connects, and stops it on exit. **When running from cron**, set PATH so `kubectl` is findable (see [Running from cron](#running-from-cron) above).
-- **Multiple contexts:** If your kubeconfig has several contexts (e.g. dev, staging, prod), use **`-kube-context`** (or `PGWD_KUBE_CONTEXT`) to select which cluster to use. All kubectl operations (port-forward, pod resolution, password discovery, cluster name) use that context.
-- **Validate connectivity:** Use **`-validate-k8s-access`** to check kubectl connectivity and list pods before running with `-kube-postgres`. No DB or notifier required. Useful to confirm context and access before a real run.
-- **Loki inside the cluster:** When pgwd runs on a host outside the cluster (e.g. VM with cron) and Loki is inside the cluster, use **`-kube-loki namespace/svc/loki`** instead of `-notifications-loki-url`. pgwd runs `kubectl port-forward` to Loki and sends notifications to localhost. Use `-kube-loki-local-port` (default 3100) and `-kube-loki-remote-port` (default 3100) if Loki uses a different port. Mutually exclusive with `-notifications-loki-url` (use one or the other).
+- **Password from the pod:** If the URL password is the literal **`DISCOVER_MY_PASSWORD`**, pgwd reads the password from the Postgres pod's environment (`POSTGRES_PASSWORD` by default, or `PGPASSWORD`). Use **`-kube-password-var`** and **`-kube-password-container`** if needed.
+- **Requires:** A valid kubeconfig (file or `KUBECONFIG` env). **When running from cron**, ensure `KUBECONFIG` is set or `~/.kube/config` exists and is readable.
+- **Multiple contexts:** Use **`-kube-context`** (or `PGWD_KUBE_CONTEXT`) to select context.
+- **Validate connectivity:** Use **`-validate-k8s-access`** to check cluster access before a real run.
+- **Loki inside the cluster:** Use **`-kube-loki namespace/svc/loki`** instead of `-notifications-loki-url`. pgwd port-forwards to Loki. Mutually exclusive with `-notifications-loki-url`.
 
 ```bash
-# Validate kubectl connectivity (no DB or notifier needed)
+# Validate cluster connectivity (no DB or notifier needed)
 pgwd -validate-k8s-access
 # With specific context:
 pgwd -kube-context prod -validate-k8s-access
@@ -455,15 +504,15 @@ All parameters can be set via **config file**, **CLI**, or **environment variabl
 |-----|-----|-------------|
 | `-config` | `PGWD_CONFIG` | Config file path (YAML). Default `/etc/pgwd/pgwd.conf`. See `contrib/pgwd.conf.example`. |
 | `-db-url` | `PGWD_DB_URL` | PostgreSQL connection URL (required). With `-kube-postgres`, use host localhost and port matching `-kube-local-port`. |
-| `-kube-postgres` | `PGWD_KUBE_POSTGRES` | Connect via kubectl port-forward: `namespace/type/name` (e.g. `default/svc/postgres`). Requires kubectl in PATH. |
-| `-kube-loki` | `PGWD_KUBE_LOKI` | Connect to Loki via kubectl port-forward when Loki is inside the cluster: `namespace/type/name` (e.g. `monitoring/svc/loki`). Mutually exclusive with `-notifications-loki-url`. |
+| `-kube-postgres` | `PGWD_KUBE_POSTGRES` | Connect via port-forward (client-go): `namespace/type/name` (e.g. `default/svc/postgres`). Requires kubeconfig. |
+| `-kube-loki` | `PGWD_KUBE_LOKI` | Connect to Loki via port-forward when Loki is inside the cluster: `namespace/type/name` (e.g. `monitoring/svc/loki`). Mutually exclusive with `-notifications-loki-url`. |
 | `-kube-loki-local-port` | `PGWD_KUBE_LOKI_LOCAL_PORT` | Local port for Loki port-forward (default 3100). |
 | `-kube-loki-remote-port` | `PGWD_KUBE_LOKI_REMOTE_PORT` | Remote port on the Loki service (default 3100). Use when Loki listens on a different port. |
 | `-kube-context` | `PGWD_KUBE_CONTEXT` | Kubectl context to use (empty = current context). Use when you have multiple contexts in kubeconfig and want to target a specific cluster. |
 | `-kube-local-port` | `PGWD_KUBE_LOCAL_PORT` | Local port for port-forward (default 5432). Use different ports to run multiple pgwd against different Postgres in the cluster. |
 | `-kube-password-var` | `PGWD_KUBE_PASSWORD_VAR` | Pod env var name when URL password is `DISCOVER_MY_PASSWORD` (default `POSTGRES_PASSWORD`). |
 | `-kube-password-container` | `PGWD_KUBE_PASSWORD_CONTAINER` | Container name in pod for password discovery (default: primary container). |
-| `-validate-k8s-access` | `PGWD_VALIDATE_K8S_ACCESS` | Validate kubectl connectivity and list pods, then exit. Use `-kube-context` to select context. No DB or notifier required. |
+| `-validate-k8s-access` | `PGWD_VALIDATE_K8S_ACCESS` | Validate cluster connectivity and list pods, then exit. Use `-kube-context` to select context. No DB or notifier required. |
 | `-client` | `PGWD_CLIENT` | **Required.** Custom name for this monitor instance (e.g. prod-db-primary). Identifies which monitor sent the alert when multiple instances run. Cluster name is computed from kubeconfig when using `-kube-postgres`; not configurable. |
 | `-db-threshold-total` | `PGWD_DB_THRESHOLD_TOTAL` | Alert when total connections ≥ N. **Deprecated:** use `-db-threshold-levels`; will be removed in v1.0.0. |
 | `-db-threshold-active` | `PGWD_DB_THRESHOLD_ACTIVE` | Alert when active connections ≥ N. **Deprecated:** use `-db-threshold-levels`; will be removed in v1.0.0. |
@@ -718,7 +767,7 @@ Same placeholders as Slack. Timestamp is the time of the push. You can query in 
 | **"no notifier configured"** | Set `PGWD_NOTIFICATIONS_SLACK_WEBHOOK`, `PGWD_NOTIFICATIONS_LOKI_URL`, or `PGWD_KUBE_LOKI` (or use `-dry-run` to skip notifications). |
 | **"force-notification requires at least one notifier"** | Use `-force-notification` together with `-notifications-slack-webhook` and/or `-notifications-loki-url` or `-kube-loki`. |
 | **"notify-on-connect-failure requires at least one notifier"** | You set `-notify-on-connect-failure` but have no notifier. Add `-notifications-slack-webhook` and/or `-notifications-loki-url` or `-kube-loki`. (Connect failure is always notified when a notifier is configured; the flag is optional.) |
-| **"kubectl not found in PATH"** | When using `-kube-postgres` or `-kube-loki`, ensure `kubectl` is installed and on your `PATH` (e.g. `which kubectl`). pgwd exits with this message before attempting port-forward or password discovery. |
+| **"load kubeconfig" / cluster unreachable** | When using `-kube-postgres` or `-kube-loki`, ensure a valid kubeconfig exists (`KUBECONFIG` env or `~/.kube/config`). pgwd uses client-go; no kubectl binary required. |
 | **"when using -db-threshold-stale, -db-stale-age must be > 0"** | Set `-db-stale-age N` (e.g. 600) when using `-db-threshold-stale`. |
 | **Slack/Loki not receiving alerts** | Run once with `-force-notification` to send a test message. Check webhook URL, network/firewall, and that the app can reach Slack/Loki. |
 | **Loki: 401 Unauthorized** | Loki requires auth. Set `-notifications-loki-org-id 1` (multi-tenancy) or `-notifications-loki-bearer-token <token>` (or env `PGWD_NOTIFICATIONS_LOKI_ORG_ID` / `PGWD_NOTIFICATIONS_LOKI_BEARER_TOKEN`). |
@@ -742,7 +791,7 @@ pgwd uses `max_connections` (from Postgres) to compute percentage-based threshol
 <details>
 <summary><strong>Can I run pgwd from cron?</strong></summary>
 
-Yes. Use one-shot mode (`PGWD_INTERVAL=0` or omit it). Run pgwd every 5 minutes (or your preferred interval). Ensure `PATH` includes `kubectl` if you use `-kube-postgres`. See [Running from cron](#running-from-cron) for details and log rotation.
+Yes. Use one-shot mode (`PGWD_INTERVAL=0` or omit it). Run pgwd every 5 minutes (or your preferred interval). Set `KUBECONFIG` if you use `-kube-postgres` (pgwd uses client-go; no kubectl needed). See [Running from cron](#running-from-cron) for details and log rotation. **Resolution notifications, /metrics, and hysteresis require daemon mode** — use `pgwd.service` instead.
 </details>
 
 <details>
@@ -760,13 +809,13 @@ Use `-force-notification`: pgwd sends one test message to all configured notifie
 <details>
 <summary><strong>Postgres is in Kubernetes — how do I connect?</strong></summary>
 
-Use `-kube-postgres namespace/svc/name` (e.g. `default/svc/postgres`). pgwd runs `kubectl port-forward` and connects to localhost. Validate first with `-validate-k8s-access`. See [Kubernetes](#kubernetes).
+Use `-kube-postgres namespace/svc/name` (e.g. `default/svc/postgres`). pgwd uses client-go to port-forward and connects to localhost. Validate first with `-validate-k8s-access`. See [Kubernetes](#kubernetes).
 </details>
 
 <details>
 <summary><strong>Loki is inside the cluster — what if pgwd runs outside?</strong></summary>
 
-Use `-kube-loki namespace/svc/loki` (e.g. `monitoring/svc/loki`). pgwd runs `kubectl port-forward` to Loki (port 3100) and sends notifications to localhost. Mutually exclusive with `-notifications-loki-url`; use one or the other. See [Kubernetes](#kubernetes).
+Use `-kube-loki namespace/svc/loki` (e.g. `monitoring/svc/loki`). pgwd port-forwards to Loki (port 3100) and sends notifications to localhost. Mutually exclusive with `-notifications-loki-url`; use one or the other. See [Kubernetes](#kubernetes).
 </details>
 
 <details>
@@ -869,11 +918,11 @@ Restrict permissions if the config contains secrets: `sudo chmod 600 /etc/pgwd/p
 
 | Unit | Function | When to use |
 |------|----------|-------------|
-| `pgwd.service` | Daemon — runs continuously, checks every `interval` seconds from config | Continuous monitoring (e.g. every 60 s) |
+| `pgwd.service` | Daemon — runs continuously, checks every `interval` seconds from config | **Recommended.** Use for resolution alerts, /metrics, hysteresis, SQLite. |
 | `pgwd-once.service` | One-shot — runs pgwd once and exits. Used by the timer | Do not enable directly |
-| `pgwd.timer` | Schedule — triggers pgwd-once every 5 minutes (1 min after boot) | Cron-like: one check every 5 min |
+| `pgwd.timer` | Schedule — triggers pgwd-once every 5 minutes (1 min after boot) | Cron-like: one check per tick. No resolution, /metrics, or hysteresis. |
 
-**Two ways to run:** daemon (`pgwd.service`) or timer (`pgwd.timer`). See [contrib/systemd/README.md](contrib/systemd/README.md) for setup details.
+**Two ways to run:** daemon (`pgwd.service`) or timer (`pgwd.timer`). Prefer the daemon when you use sqlite, http, resolution notifications, or hysteresis. See [contrib/systemd/README.md](contrib/systemd/README.md) for setup details.
 
 **Boot ordering:** shipped units start **after `network.target`** (not `network-online.target`) so `systemctl enable --now` does not block on `systemd-networkd-wait-online` — a common issue on minimal or static-IP systems (e.g. Arch). If you need stricter “full Internet up” ordering, add a drop-in; see [contrib/systemd/README.md — Troubleshooting](contrib/systemd/README.md#troubleshooting).
 

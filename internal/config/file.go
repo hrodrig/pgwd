@@ -35,6 +35,19 @@ type fileConfig struct {
 	NotifyOnConnectFailure bool          `yaml:"notify_on_connect_failure"`
 	Databases []fileConfigDB `yaml:"databases"`
 	DB        fileConfigDB   `yaml:"db"`
+	Sqlite struct {
+		Path       string `yaml:"path"`
+		MaxMetrics int    `yaml:"max_metrics"`
+		StaleAge   int    `yaml:"stale_age"`
+	} `yaml:"sqlite"`
+	ConfirmAlert int `yaml:"confirm_alert"`
+	ConfirmOk     int `yaml:"confirm_ok"`
+	HTTP struct {
+		Listen     string `yaml:"listen"`
+		BasePath   string `yaml:"base_path"`
+		HealthPath string `yaml:"healthz_path"`
+		MetricsPath string `yaml:"metrics_path"`
+	} `yaml:"http"`
 	Kube struct {
 		Context           string `yaml:"context"`
 		LocalPort         int    `yaml:"local_port"`
@@ -101,6 +114,15 @@ func fileConfigToConfig(fc fileConfig) Config {
 		LokiOrgID:               fc.Notifications.Loki.OrgID,
 		LokiBearerToken:         fc.Notifications.Loki.BearerToken,
 		NotifyOnConnectFailure:  fc.NotifyOnConnectFailure,
+		SqlitePath:              fc.Sqlite.Path,
+		SqliteMaxMetrics:        fc.Sqlite.MaxMetrics,
+		SqliteStaleAge:          fc.Sqlite.StaleAge,
+		ConfirmAlert:            fc.ConfirmAlert,
+		ConfirmOk:               fc.ConfirmOk,
+		HTTPListen:              fc.HTTP.Listen,
+		HTTPBasePath:            fc.HTTP.BasePath,
+		HTTPHealthPath:          fc.HTTP.HealthPath,
+		HTTPMetricsPath:         fc.HTTP.MetricsPath,
 		SlackWebhook:            fc.Notifications.Slack.Webhook,
 		StaleAge:                fc.DB.StaleAge,
 		ThresholdTotal:          fc.DB.Threshold.Total,
@@ -201,5 +223,25 @@ func ApplyDefaults(c *Config) {
 	}
 	if c.ThresholdLevels == "" {
 		c.ThresholdLevels = DefaultThresholdLevels
+	}
+	if c.SqlitePath != "" && c.SqliteMaxMetrics <= 0 {
+		c.SqliteMaxMetrics = 10000
+	}
+	if c.ConfirmAlert <= 0 {
+		c.ConfirmAlert = 1
+	}
+	if c.ConfirmOk <= 0 {
+		c.ConfirmOk = 1
+	}
+	if c.HTTPListen != "" {
+		if c.HTTPBasePath == "" {
+			c.HTTPBasePath = "/api/pgwd/v1"
+		}
+		if c.HTTPHealthPath == "" {
+			c.HTTPHealthPath = "/healthz"
+		}
+		if c.HTTPMetricsPath == "" {
+			c.HTTPMetricsPath = "/metrics"
+		}
 	}
 }
