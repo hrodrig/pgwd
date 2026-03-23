@@ -1,0 +1,11 @@
+pgwd monitors PostgreSQL connection counts (total, active, idle, stale) and
+sends alerts via Slack and/or Loki when configured thresholds are exceeded.
+
+Features:
+- Configurable thresholds and 3-tier alert levels (attention, alert, danger)
+- Kubernetes support: port-forward to Postgres and Loki inside the cluster
+- One-shot or daemon mode; suitable for cron or rc.d
+- Static binary, uses pledge() on OpenBSD
+- Always notifies when Postgres is unreachable (connection failure alert)
+
+WWW: https://github.com/hrodrig/pgwd

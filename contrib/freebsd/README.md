@@ -176,3 +176,5 @@ notifications:
 ## Submitting to official ports
 
 When the port is ready, submit via [Bugzilla](https://bugs.freebsd.org) (preferred) or see [Porter's Handbook](https://docs.freebsd.org/en/books/porters-handbook/). The maintainer email in the Makefile must be valid and responsive.
+
+**Release and update procedure:** See [PORT-RELEASE.md](PORT-RELEASE.md) for step-by-step instructions (version bump, makesum, gshar, Bugzilla). Run `make port-freebsd-sync` from the repo root to sync VERSION to the port before updating.

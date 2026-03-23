@@ -49,6 +49,7 @@ help:
 	@echo "  release-check      Run all checks (lint, test, test-integration, test-e2e-kube, docker-scan)"
 	@echo "  release            Full release (from main only; runs release-check first)"
 	@echo "  snapshot           Goreleaser snapshot build (outputs to dist/)"
+	@echo "  port-freebsd-sync  Sync VERSION to contrib/freebsd/Makefile (run before port update)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make build"
@@ -181,6 +182,15 @@ release: release-check
 	  exit 1; \
 	fi; \
 	goreleaser release --clean
+
+# Sync VERSION file to FreeBSD port Makefile. Run before updating the port for a new release.
+PORT_VERSION := $(shell cat VERSION 2>/dev/null | tr -d '\n\r' | sed 's/^v//')
+.PHONY: port-freebsd-sync
+port-freebsd-sync:
+	@[ -n "$(PORT_VERSION)" ] || { echo "Error: VERSION file empty or missing"; exit 1; }
+	@sed -i.bak "s/^PORTVERSION=.*/PORTVERSION=\t$(PORT_VERSION)/" contrib/freebsd/Makefile
+	@rm -f contrib/freebsd/Makefile.bak
+	@echo "Updated contrib/freebsd/Makefile PORTVERSION to $(PORT_VERSION)"
 
 # Snapshot build (no tag required), outputs to dist/
 snapshot:

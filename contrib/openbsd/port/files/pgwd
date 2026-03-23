@@ -1,0 +1,17 @@
+#!/bin/ksh
+# OpenBSD rc.d script for pgwd.
+# Config: /etc/pgwd/pgwd.conf (edit before enabling).
+#
+#   rcctl enable pgwd
+#   rcctl start pgwd
+
+daemon="/usr/local/bin/pgwd"
+: ${pgwd_flags="-config /etc/pgwd/pgwd.conf"}
+daemon_flags=$pgwd_flags
+# When using -kube-postgres, pgwd needs KUBECONFIG. Set in rc.conf.local:
+#   pgwd_env="KUBECONFIG=/root/.kube/config"
+[ -n "$pgwd_env" ] && eval "export $pgwd_env"
+
+. /etc/rc.d/rc.subr
+rc_reload=NO
+rc_cmd $1

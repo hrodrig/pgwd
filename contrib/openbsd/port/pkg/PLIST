@@ -1,0 +1,5 @@
+bin/pgwd
+etc/rc.d/pgwd
+man/man1/pgwd.1
+share/doc/pgwd/LICENSE
+share/examples/pgwd/pgwd.conf.example
