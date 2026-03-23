@@ -1,7 +1,8 @@
 # /etc/pgwd/pgwd.conf — pgwd config (YAML)
 # Copy to /etc/pgwd/pgwd.conf and adjust.
-# One config file = one Postgres instance. For multiple instances, use one config per
-# instance and run from cron (one cron entry per config) or multiple daemons/timers.
+# Single DB: use db: { url, threshold, ... }. Multi-DB (daemon only): use databases: [ {...}, ... ].
+# For many diverse instances (different clusters, kube contexts), one config per instance
+# and cron (one entry per config) is often simpler.
 # When config file is loaded, env vars (PGWD_*) are ignored. CLI flags override.
 #
 # YAML ↔ CLI mapping (CLI overrides config):
@@ -55,6 +56,20 @@ notify_on_connect_failure: false
 # -----------------------------------------------------------------------------
 # Database connection and thresholds
 # -----------------------------------------------------------------------------
+# Single database (db:) — or use databases: for multiple Postgres in one daemon:
+#
+# databases:
+#   - url: postgres://user:pass@host1:5432/prod
+#     client: "monitor-01-prod"         # optional; defaults to base client + "-" + db name
+#   - url: postgres://user:pass@host2:5432/analytics
+#     client: "monitor-01-analytics"
+#     threshold:
+#       levels: "80,90,98"              # optional per-db override
+#   - url: postgres://user:pass@host3:5432/replica
+#     # no client → use base client + db name from URL path
+#
+# When using databases:, client at top level is required. kube.postgres is not supported.
+#
 db:
   # url: PostgreSQL connection URL. Example: postgres://user:pass@host:5432/dbname
   url: postgres://user:pass@localhost:5432/mydb

@@ -1,7 +1,9 @@
 package config
 
 import (
+	"net/url"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -9,24 +11,29 @@ import (
 // DefaultConfigPath is the standard config file location.
 const DefaultConfigPath = "/etc/pgwd/pgwd.conf"
 
-// fileConfig mirrors the YAML structure: db, kube, notifications, and top-level keys.
+// fileConfigDB is one entry in the databases array.
+type fileConfigDB struct {
+	URL                     string `yaml:"url"`
+	Client                  string `yaml:"client"`
+	StaleAge                int    `yaml:"stale_age"`
+	DefaultThresholdPercent int    `yaml:"default_threshold_percent"`
+	Threshold               struct {
+		Active int    `yaml:"active"`
+		Idle   int    `yaml:"idle"`
+		Levels string `yaml:"levels"`
+		Stale  int    `yaml:"stale"`
+		Total  int    `yaml:"total"`
+	} `yaml:"threshold"`
+}
+
+// fileConfig mirrors the YAML structure: db, databases, kube, notifications, and top-level keys.
 type fileConfig struct {
-	Client                 string `yaml:"client"`
-	DryRun                 bool   `yaml:"dry_run"`
-	Interval               int    `yaml:"interval"`
-	NotifyOnConnectFailure bool   `yaml:"notify_on_connect_failure"`
-	DB                     struct {
-		URL                     string `yaml:"url"`
-		StaleAge                int    `yaml:"stale_age"`
-		DefaultThresholdPercent int    `yaml:"default_threshold_percent"`
-		Threshold               struct {
-			Active int    `yaml:"active"`
-			Idle   int    `yaml:"idle"`
-			Levels string `yaml:"levels"`
-			Stale  int    `yaml:"stale"`
-			Total  int    `yaml:"total"`
-		} `yaml:"threshold"`
-	} `yaml:"db"`
+	Client                 string        `yaml:"client"`
+	DryRun                 bool          `yaml:"dry_run"`
+	Interval               int           `yaml:"interval"`
+	NotifyOnConnectFailure bool          `yaml:"notify_on_connect_failure"`
+	Databases []fileConfigDB `yaml:"databases"`
+	DB        fileConfigDB   `yaml:"db"`
 	Kube struct {
 		Context           string `yaml:"context"`
 		LocalPort         int    `yaml:"local_port"`
@@ -101,8 +108,69 @@ func fileConfigToConfig(fc fileConfig) Config {
 		ThresholdStale:          fc.DB.Threshold.Stale,
 		ThresholdLevels:         fc.DB.Threshold.Levels,
 	}
+
+	// Normalize to Databases: use databases if present, else wrap db as single target.
+	if len(fc.Databases) > 0 {
+		c.Databases = make([]DatabaseTarget, 0, len(fc.Databases))
+		for _, d := range fc.Databases {
+			t := mergeDBTarget(fc.Client, fc.DB, d)
+			c.Databases = append(c.Databases, t)
+		}
+	} else if fc.DB.URL != "" {
+		t := mergeDBTarget(fc.Client, fc.DB, fc.DB)
+		c.Databases = []DatabaseTarget{t}
+	}
+
 	ApplyDefaults(&c)
 	return c
+}
+
+// mergeDBTarget builds a DatabaseTarget from base db config and per-entry overrides.
+func mergeDBTarget(baseClient string, base, over fileConfigDB) DatabaseTarget {
+	t := DatabaseTarget{
+		URL:                     over.URL,
+		Client:                  over.Client,
+		StaleAge:                orZero(over.StaleAge, base.StaleAge),
+		DefaultThresholdPercent: orZero(over.DefaultThresholdPercent, base.DefaultThresholdPercent),
+		ThresholdTotal:          orZero(over.Threshold.Total, base.Threshold.Total),
+		ThresholdActive:         orZero(over.Threshold.Active, base.Threshold.Active),
+		ThresholdIdle:           orZero(over.Threshold.Idle, base.Threshold.Idle),
+		ThresholdStale:         orZero(over.Threshold.Stale, base.Threshold.Stale),
+		ThresholdLevels:        orEmpty(over.Threshold.Levels, base.Threshold.Levels),
+	}
+	if t.Client == "" && baseClient != "" {
+		t.Client = baseClient + "-" + databaseNameFromURL(t.URL)
+	} else if t.Client == "" {
+		t.Client = databaseNameFromURL(t.URL)
+	}
+	return t
+}
+
+func orZero(a, b int) int {
+	if a != 0 {
+		return a
+	}
+	return b
+}
+
+func orEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+
+func databaseNameFromURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "unknown"
+	}
+	db := strings.TrimPrefix(strings.TrimSpace(u.Path), "/")
+	if db == "" {
+		return "postgres"
+	}
+	return db
 }
 
 // ApplyDefaults sets default values for fields that are zero. Call after FromFile when no file exists.

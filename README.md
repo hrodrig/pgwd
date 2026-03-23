@@ -113,7 +113,7 @@ pgwd loads settings from (in order): **config file** → **environment variables
 | Environment | `PGWD_*` |
 | CLI | `-flag` |
 
-**Config file** (YAML) — keys match `-flag` and `PGWD_*` env vars. See `contrib/pgwd.conf.example`. One config = one Postgres; for multiple instances, use one config per instance (e.g. cron with `-config /etc/pgwd/prod-db1.conf`).
+**Config file** (YAML) — keys match `-flag` and `PGWD_*` env vars. See `contrib/pgwd.conf.example`. Single DB: use `db:`; multi-DB in daemon mode: use `databases:`. For many diverse instances (different clusters, kube contexts), one config per instance with cron is often simpler.
 
 ```bash
 # Use default path /etc/pgwd/pgwd.conf
@@ -249,7 +249,7 @@ pgwd -db-url "postgres://..." -notifications-loki-url "http://localhost:3100/lok
 
 | Scenario | Suggestion |
 |----------|------------|
-| **Many Postgres instances** | One config per instance; one cron entry per instance. Each instance can have different clusters, thresholds, and environments. No coordination needed; add a new instance = add a cron line. Often more efficient than a daemon when instances are diverse. |
+| **Many Postgres instances** | Use `databases:` in one config (daemon mode) for multiple direct URLs, or one config per instance with cron when instances are diverse (different clusters, kube contexts). |
 | **Cron check every 5 min** | One-shot (`interval` 0 or unset), one or more thresholds, Slack or Loki. Run from cron every 5 minutes. |
 | **Long-running watcher** | Daemon with `-interval 60` (or 120). Run under systemd/supervisor; stop with SIGTERM. |
 | **Detect connection leaks** | Use `stale-age` + `threshold-stale` (e.g. 600 and 1). Alert when any connection stays open longer than 10 min. |
@@ -263,7 +263,7 @@ pgwd -db-url "postgres://..." -notifications-loki-url "http://localhost:3100/lok
 
 ### Running from cron
 
-**One config = one Postgres.** When you have many diverse instances (different clusters, thresholds, kube contexts), cron is often the most efficient approach: one cron entry per instance, each with its own config file. No daemon to manage; add or remove instances by editing crontab.
+**Daemon or cron.** For multiple Postgres with direct URLs, use `databases:` in one config with a daemon. When instances are diverse (different clusters, kube contexts), cron with one config per instance is often simpler: one cron entry per config, no daemon to manage.
 
 Cron runs with a **minimal environment** (e.g. `PATH=/usr/bin:/bin`). Two things to keep in mind:
 
@@ -746,7 +746,7 @@ Yes. Use one-shot mode (`PGWD_INTERVAL=0` or omit it). Run pgwd every 5 minutes 
 <details>
 <summary><strong>Can I monitor multiple Postgres instances?</strong></summary>
 
-Yes. One config file = one Postgres. For many diverse instances (different clusters, thresholds, kube contexts), cron is often the most efficient: one cron entry per instance, each with its own config (`-config /etc/pgwd/instance-name.conf`). No coordination needed; add a new instance = add a cron line. See [Example: multiple services](#example-multiple-services-and-heartbeat-via-bash--cron).
+Yes. Use `databases:` in one config for multi-DB in daemon mode. For many diverse instances (different clusters, kube contexts), cron with one config per instance is often simpler: one cron entry per config. See [Example: multiple services](#example-multiple-services-and-heartbeat-via-bash--cron) and `contrib/pgwd.conf.example` for `databases:` syntax.
 </details>
 
 <details>

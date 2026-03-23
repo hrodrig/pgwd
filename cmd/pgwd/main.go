@@ -94,6 +94,7 @@ func warnDeprecatedThresholds(cfg *config.Config) {
 }
 
 func validateConfig(cfg *config.Config) {
+	validateDatabases(cfg)
 	validateDBURL(cfg)
 	validateClient(cfg)
 	warnDeprecatedThresholds(cfg)
@@ -103,13 +104,33 @@ func validateConfig(cfg *config.Config) {
 	validateKubeLoki(cfg)
 }
 
+func validateDatabases(cfg *config.Config) {
+	if !cfg.UsesDatabases() {
+		return
+	}
+	if cfg.KubePostgres != "" {
+		log.Fatal("pgwd: kube-postgres is not supported with databases (multi-DB); use db (single) or add per-db kube in a future release")
+	}
+	for i, t := range cfg.Databases {
+		if t.URL == "" {
+			log.Fatalf("pgwd: databases[%d] missing url", i)
+		}
+	}
+}
+
 func validateClient(cfg *config.Config) {
 	if cfg.Client == "" {
+		if cfg.UsesDatabases() {
+			log.Fatal("pgwd: client is required when using databases (needed to derive per-target client names)")
+		}
 		log.Fatal("pgwd: client is required: set client in config or -client (identifies this monitor instance)")
 	}
 }
 
 func validateDBURL(cfg *config.Config) {
+	if cfg.UsesDatabases() {
+		return // validateDatabases already checked targets have URLs
+	}
 	if cfg.DBURL == "" {
 		log.Fatal("pgwd: missing database URL: set PGWD_DB_URL or -db-url")
 	}
@@ -211,7 +232,7 @@ func setupKubeLoki(ctx context.Context, cfg *config.Config) (cleanup func()) {
 	return cleanup
 }
 
-func runContextStrings(ctx context.Context, cfg *config.Config) (cluster, client, namespace, database string) {
+func runContextStrings(ctx context.Context, cfg *config.Config, dbURL string) (cluster, client, namespace, database string) {
 	if cfg.KubePostgres != "" {
 		cluster = kube.ClusterName(ctx, cfg.KubeContext)
 	}
@@ -221,7 +242,7 @@ func runContextStrings(ctx context.Context, cfg *config.Config) (cluster, client
 			namespace = ns
 		}
 	}
-	if u, err := url.Parse(cfg.DBURL); err == nil && u.Path != "" {
+	if u, err := url.Parse(dbURL); err == nil && u.Path != "" {
 		database = strings.TrimPrefix(strings.TrimSpace(u.Path), "/")
 	}
 	return cluster, client, namespace, database
@@ -591,11 +612,13 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	kubeCleanup := setupKube(ctx, &cfg)
-	defer kubeCleanup()
+	if !cfg.UsesDatabases() {
+		kubeCleanup := setupKube(ctx, &cfg)
+		defer kubeCleanup()
 
-	kubeLokiCleanup := setupKubeLoki(ctx, &cfg)
-	defer kubeLokiCleanup()
+		kubeLokiCleanup := setupKubeLoki(ctx, &cfg)
+		defer kubeLokiCleanup()
+	}
 
 	// On OpenBSD: skip pledge when using kube. pgwd spawns kubectl; if pgwd has pledged,
 	// kubectl inherits it and fails (pledge "rpath", syscall 59). Without pledge, kubectl works.
@@ -603,22 +626,36 @@ func main() {
 		openbsd.ApplyPledge()
 	}
 
-	runCluster, runClient, runNamespace, runDatabase := runContextStrings(ctx, &cfg)
 	senders := buildSenders(&cfg)
+	targets := cfg.Targets()
 
-	pool, err := postgres.Pool(ctx, cfg.DBURL)
-	if err != nil {
-		notifyConnectFailure(ctx, senders, &cfg, runCluster, runClient, runNamespace, runDatabase, err)
-		log.Fatal("postgres connect failed (check database URL, connectivity, and credentials)")
-	}
-	defer pool.Close()
+	runOne := func(t config.DatabaseTarget) {
+		targetCfg := cfg.ConfigForTarget(t)
+		runCluster, runClient, runNamespace, runDatabase := runContextStrings(ctx, targetCfg, t.URL)
 
-	if err := applyThresholdDefaults(ctx, pool, &cfg); err != nil {
-		notifyConnectFailure(ctx, senders, &cfg, runCluster, runClient, runNamespace, runDatabase, err)
-		log.Fatal(err)
+		pool, err := postgres.Pool(ctx, t.URL)
+		if err != nil {
+			notifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err)
+			if len(targets) == 1 {
+				log.Fatal("postgres connect failed (check database URL, connectivity, and credentials)")
+			}
+			log.Printf("postgres connect failed [%s]: %v", t.Client, err)
+			return // skip this target, continue with others
+		}
+		defer pool.Close()
+
+		if err := applyThresholdDefaults(ctx, pool, targetCfg); err != nil {
+			notifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err)
+			log.Printf("threshold config error [%s]: %v", t.Client, err)
+			return
+		}
+		run := makeRunFunc(ctx, pool, targetCfg, senders, runCluster, runClient, runNamespace, runDatabase)
+		run()
 	}
-	run := makeRunFunc(ctx, pool, &cfg, senders, runCluster, runClient, runNamespace, runDatabase)
-	run()
+
+	for _, t := range targets {
+		runOne(t)
+	}
 	if cfg.Interval <= 0 {
 		return
 	}
@@ -629,7 +666,9 @@ func main() {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			run()
+			for _, t := range targets {
+				runOne(t)
+			}
 		}
 	}
 }

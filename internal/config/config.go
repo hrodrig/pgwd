@@ -9,10 +9,25 @@ import (
 // DefaultThresholdLevels is the default comma-separated percentages for 3-tier alerts (MySQL-style).
 const DefaultThresholdLevels = "75,85,95"
 
+// DatabaseTarget is one Postgres instance to monitor. Used when config has multiple databases.
+type DatabaseTarget struct {
+	URL                     string
+	Client                  string // empty = derive from base client + "-" + db name from URL
+	StaleAge                int
+	DefaultThresholdPercent int
+	ThresholdTotal          int
+	ThresholdActive         int
+	ThresholdIdle           int
+	ThresholdStale          int
+	ThresholdLevels         string
+}
+
 // Config holds all pgwd settings from CLI and env (PGWD_*).
 type Config struct {
-	// Database
+	// Database (single-DB mode; used when Databases is empty)
 	DBURL string
+	// Databases (multi-DB mode); when non-empty, DBURL is ignored. From file only.
+	Databases []DatabaseTarget
 
 	// Kubernetes: connect to Postgres via kubectl port-forward (optional)
 	KubePostgres          string // e.g. "default/svc/postgres" or "default/pod/postgres-0"
@@ -351,4 +366,44 @@ func (c *Config) HasAnyThreshold() bool {
 // HasAnyNotifier returns true if Slack or Loki is configured.
 func (c *Config) HasAnyNotifier() bool {
 	return c.SlackWebhook != "" || c.LokiURL != "" || c.KubeLoki != ""
+}
+
+// Targets returns the database targets to monitor. When Databases is non-empty, returns those.
+// Otherwise returns a single target built from DBURL and base config (single-DB mode).
+func (c *Config) Targets() []DatabaseTarget {
+	if len(c.Databases) > 0 {
+		return c.Databases
+	}
+	return []DatabaseTarget{{
+		URL:                     c.DBURL,
+		Client:                  c.Client,
+		StaleAge:                c.StaleAge,
+		DefaultThresholdPercent: c.DefaultThresholdPercent,
+		ThresholdTotal:          c.ThresholdTotal,
+		ThresholdActive:         c.ThresholdActive,
+		ThresholdIdle:           c.ThresholdIdle,
+		ThresholdStale:          c.ThresholdStale,
+		ThresholdLevels:         c.ThresholdLevels,
+	}}
+}
+
+// UsesDatabases returns true when config has multiple database targets (from databases: in YAML).
+func (c *Config) UsesDatabases() bool {
+	return len(c.Databases) > 0
+}
+
+// ConfigForTarget returns a Config with base values and target-specific overrides for one check.
+// Callers must not modify the returned config's non-target fields (notifications, etc.).
+func (c *Config) ConfigForTarget(t DatabaseTarget) *Config {
+	out := *c
+	out.DBURL = t.URL
+	out.Client = t.Client
+	out.StaleAge = t.StaleAge
+	out.DefaultThresholdPercent = t.DefaultThresholdPercent
+	out.ThresholdTotal = t.ThresholdTotal
+	out.ThresholdActive = t.ThresholdActive
+	out.ThresholdIdle = t.ThresholdIdle
+	out.ThresholdStale = t.ThresholdStale
+	out.ThresholdLevels = t.ThresholdLevels
+	return &out
 }
