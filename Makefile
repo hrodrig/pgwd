@@ -121,6 +121,8 @@ test-integration:
 	@docker compose -f testing/compose-loki.yaml up -d
 	@echo "Waiting for Postgres (healthcheck)..."
 	@until docker compose -f testing/compose.yaml exec -T postgres pg_isready -U pgwd -d pgwd 2>/dev/null; do sleep 2; done
+	@until docker compose -f testing/compose.yaml exec -T postgres2 pg_isready -U pgwd -d analytics 2>/dev/null; do sleep 2; done
+	@until docker compose -f testing/compose.yaml exec -T postgres3 pg_isready -U pgwd -d replica 2>/dev/null; do sleep 2; done
 	@echo "Waiting for Loki (/ready)..."
 	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
 	  curl -sf http://localhost:3100/ready | grep -q ready && break; \
@@ -131,6 +133,9 @@ test-integration:
 	@PGWD_TEST_DB_URL="postgres://pgwd:pgwd@localhost:5432/pgwd?sslmode=disable" \
 	 PGWD_TEST_LOKI_URL="http://localhost:3100/loki/api/v1/push" \
 	 go test ./internal/postgres/... ./internal/notify/... -v -count=1 -run 'TestPool_Integration|TestStats_Integration|TestMaxConnections_Integration|TestStaleCount_Integration|TestLoki_Integration$$' || (docker compose -f testing/compose.yaml down; docker compose -f testing/compose-loki.yaml down; exit 1)
+	@echo "Running pgwd multi-database (databases: 3 Postgres)..."
+	@$(MAKE) build
+	@./pgwd -config testing/multidb-e2e.conf -dry-run -interval 0 || (docker compose -f testing/compose.yaml down; docker compose -f testing/compose-loki.yaml down; exit 1)
 	@docker compose -f testing/compose.yaml down
 	@docker compose -f testing/compose-loki.yaml down
 	@echo "Integration tests passed."

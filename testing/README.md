@@ -6,7 +6,7 @@ Local test helpers for pgwd.
 
 ## Postgres (compose)
 
-`compose.yaml` runs PostgreSQL 16 (default **max_connections=20**) and an optional **client** service that holds one connection open. Use one or several clients to consume connections and test pgwd thresholds.
+`compose.yaml` runs PostgreSQL 16 (default **max_connections=20**), an optional **client** service that holds one connection open, and **postgres2** / **postgres3** for multi-database E2E (databases `pgwd`, `analytics`, `replica` on ports 5432, 5433, 5434).
 
 **Users:** The **pgwd** user (superuser) is used for the monitor and for `PGWD_TEST_DB_URL`. Client containers use **pgwd_app** (non-superuser), so they only consume the "normal" connection slots; the 3 reserved by `superuser_reserved_connections` stay free. That way you can always open an admin session from inside the Postgres container (`psql -U pgwd -d pgwd`) even when clients have filled the rest. In production, use a non-superuser for application connections so reserved slots remain available for DBA access; see [PostgreSQL runtime config — Connection and Authentication](https://www.postgresql.org/docs/current/runtime-config-connection.html) (`superuser_reserved_connections`).
 
@@ -157,7 +157,7 @@ curl -s "http://localhost:3100/loki/api/v1/query_range?query={app=\"pgwd\",names
 
 ## E2E Kubernetes (kind)
 
-Validates pgwd with `-kube-postgres` and `-kube-loki` against a real cluster. Creates a kind cluster, deploys Postgres and Loki, runs `pgwd -dry-run` and `pgwd -kube-loki -force-notification`, then destroys the cluster.
+Validates pgwd with `-kube-postgres` and `-kube-loki` against a real cluster. Creates a kind cluster, deploys 3 Postgres (pgwd, analytics, replica) and Loki, runs `pgwd -dry-run` (single DB via kube), `pgwd -config` with `databases:` (multi-DB via port-forward), and `pgwd -kube-loki -force-notification`, then destroys the cluster.
 
 **Requires:** kind, kubectl, docker.
 

@@ -24,8 +24,10 @@ kubectl apply -f "$K8S_DIR/postgres.yaml"
 echo "Deploying Loki..."
 kubectl apply -f "$K8S_DIR/loki.yaml"
 
-echo "Waiting for Postgres pod to be ready..."
+echo "Waiting for Postgres pods to be ready..."
 kubectl wait --for=condition=ready pod -l app=postgres -n pgwd-e2e --timeout=120s
+kubectl wait --for=condition=ready pod -l app=postgres2 -n pgwd-e2e --timeout=120s
+kubectl wait --for=condition=ready pod -l app=postgres3 -n pgwd-e2e --timeout=120s
 
 echo "Waiting for Loki pod to be ready..."
 kubectl wait --for=condition=ready pod -l app=loki -n pgwd-e2e --timeout=120s
@@ -43,6 +45,41 @@ echo "Running pgwd -kube-postgres with -dry-run..."
   -kube-local-port 15432 \
   -db-url 'postgres://pgwd:DISCOVER_MY_PASSWORD@localhost:15432/pgwd?sslmode=disable' \
   -dry-run
+
+echo "Running pgwd multi-database (databases: 3 Postgres via port-forward)..."
+PF1_PID=""
+PF2_PID=""
+PF3_PID=""
+kubectl port-forward -n pgwd-e2e svc/postgres 15432:5432 &
+PF1_PID=$!
+kubectl port-forward -n pgwd-e2e svc/postgres2 15433:5432 &
+PF2_PID=$!
+kubectl port-forward -n pgwd-e2e svc/postgres3 15434:5432 &
+PF3_PID=$!
+kill_pf() {
+  [ -n "$PF1_PID" ] && kill $PF1_PID 2>/dev/null || true
+  [ -n "$PF2_PID" ] && kill $PF2_PID 2>/dev/null || true
+  [ -n "$PF3_PID" ] && kill $PF3_PID 2>/dev/null || true
+}
+trap kill_pf EXIT
+sleep 3
+MULTIDB_CONF=$(mktemp)
+cat > "$MULTIDB_CONF" << 'MULTIDBCONF'
+client: pgwd-e2e-multidb
+interval: 0
+dry_run: true
+databases:
+  - url: postgres://pgwd:pgwd@localhost:15432/pgwd?sslmode=disable
+    client: pgwd-e2e-multidb-pgwd
+  - url: postgres://pgwd:pgwd@localhost:15433/analytics?sslmode=disable
+    client: pgwd-e2e-multidb-analytics
+  - url: postgres://pgwd:pgwd@localhost:15434/replica?sslmode=disable
+    client: pgwd-e2e-multidb-replica
+MULTIDBCONF
+./pgwd -config "$MULTIDB_CONF" -dry-run -interval 0 || { rm -f "$MULTIDB_CONF"; exit 1; }
+rm -f "$MULTIDB_CONF"
+trap - EXIT
+kill_pf
 
 echo "Running pgwd -kube-postgres -kube-loki with -force-notification (daemon mode to keep port-forward up)..."
 ./pgwd -client pgwd-e2e-test \
