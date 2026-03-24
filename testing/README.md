@@ -52,6 +52,44 @@ docker compose -f testing/compose.yaml down
 
 ---
 
+## Local daemon run (local-test.conf)
+
+`local-test.conf` runs pgwd in **daemon mode** with SQLite store and HTTP server — useful to verify the full flow: multi-DB checks, SQLite persistence, `/healthz` and `/metrics` endpoints.
+
+**Prerequisites:** Postgres stack running (all 3 databases: pgwd, analytics, replica).
+
+```bash
+docker compose -f testing/compose.yaml up -d --scale client=0
+```
+
+**Run pgwd** (from repo root):
+
+```bash
+./pgwd -config testing/local-test.conf
+```
+
+**What it does:**
+- Monitors 3 databases (ports 5432, 5433, 5434)
+- Stores metrics in `/tmp/pgwd-test.db` (SQLite, ncruces driver)
+- Exposes HTTP on `:8080`; health and metrics at `/api/pgwd/v1/healthz` and `/api/pgwd/v1/metrics`
+- `log_level: debug` — prints `[client/database] total=X active=Y ...` every 5 seconds (interval: 5)
+
+**Verify endpoints:**
+
+```bash
+curl http://localhost:8080/api/pgwd/v1/healthz
+# → ok
+
+curl http://localhost:8080/api/pgwd/v1/metrics
+# → Prometheus metrics (pgwd_connections_total, etc.)
+```
+
+**Port conflict:** If `:8080` is in use, edit `http.listen` in `local-test.conf` (e.g. `:8081`).
+
+**Less verbose logs:** Set `log_level: info` in the config to suppress periodic stats (only errors and notifications).
+
+---
+
 ## Loki (compose-loki.yaml)
 
 Separate compose for the Loki stack. Used to validate that pgwd notifications are correctly formatted when pushed to Loki (for Grafana alerting).
