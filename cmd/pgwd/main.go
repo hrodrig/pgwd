@@ -19,6 +19,7 @@ import (
 
 	"github.com/hrodrig/pgwd/internal/checker"
 	"github.com/hrodrig/pgwd/internal/config"
+	"github.com/hrodrig/pgwd/internal/validator"
 	"github.com/hrodrig/pgwd/internal/httpsrv"
 	"github.com/hrodrig/pgwd/internal/kube"
 	"github.com/hrodrig/pgwd/internal/notify"
@@ -92,88 +93,9 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	return *showVersionFlag
 }
 
-func warnDeprecatedThresholds(cfg *config.Config) {
-	if cfg.ThresholdTotal > 0 || cfg.ThresholdActive > 0 {
-		fmt.Fprintln(os.Stderr, "pgwd: -db-threshold-total and -db-threshold-active are deprecated and will be removed in v1.0.0; use -db-threshold-levels instead (e.g. -db-threshold-levels 75,85,95)")
-	}
-}
-
 func validateConfig(cfg *config.Config) {
-	validateDatabases(cfg)
-	validateDBURL(cfg)
-	validateClient(cfg)
-	warnDeprecatedThresholds(cfg)
-	validateStale(cfg)
-	validateNotifiers(cfg)
-	validateKubePostgres(cfg)
-	validateKubeLoki(cfg)
-}
-
-func validateDatabases(cfg *config.Config) {
-	if !cfg.UsesDatabases() {
-		return
-	}
-	if cfg.KubePostgres != "" {
-		log.Fatal("pgwd: kube-postgres is not supported with databases (multi-DB); use db (single) or add per-db kube in a future release")
-	}
-	for i, t := range cfg.Databases {
-		if t.URL == "" {
-			log.Fatalf("pgwd: databases[%d] missing url", i)
-		}
-	}
-}
-
-func validateClient(cfg *config.Config) {
-	if cfg.Client == "" {
-		if cfg.UsesDatabases() {
-			log.Fatal("pgwd: client is required when using databases (needed to derive per-target client names)")
-		}
-		log.Fatal("pgwd: client is required: set client in config or -client (identifies this monitor instance)")
-	}
-}
-
-func validateDBURL(cfg *config.Config) {
-	if cfg.UsesDatabases() {
-		return // validateDatabases already checked targets have URLs
-	}
-	if cfg.DBURL == "" {
-		log.Fatal("pgwd: missing database URL: set PGWD_DB_URL or -db-url")
-	}
-}
-
-func validateStale(cfg *config.Config) {
-	if cfg.ThresholdStale > 0 && cfg.StaleAge <= 0 {
-		log.Fatal("pgwd: when using -db-threshold-stale, -db-stale-age must be > 0 (PGWD_DB_STALE_AGE)")
-	}
-}
-
-func validateNotifiers(cfg *config.Config) {
-	if !cfg.HasAnyNotifier() && !cfg.DryRun {
-		log.Fatal("pgwd: no notifier configured: set PGWD_NOTIFICATIONS_SLACK_WEBHOOK and/or PGWD_NOTIFICATIONS_LOKI_URL (or -notifications-slack-webhook / -notifications-loki-url), or use -dry-run")
-	}
-	if cfg.ForceNotification && !cfg.HasAnyNotifier() {
-		log.Fatal("pgwd: force-notification requires at least one notifier (-notifications-slack-webhook or -notifications-loki-url)")
-	}
-	if cfg.NotifyOnConnectFailure && !cfg.HasAnyNotifier() {
-		log.Fatal("pgwd: notify-on-connect-failure requires at least one notifier (-notifications-slack-webhook or -notifications-loki-url)")
-	}
-}
-
-func validateKubePostgres(cfg *config.Config) {
-	if cfg.KubePostgres != "" && cfg.DBURL == "" {
-		log.Fatal("pgwd: kube-postgres requires PGWD_DB_URL or -db-url (use host localhost and the same port as -kube-local-port)")
-	}
-}
-
-func validateKubeLoki(cfg *config.Config) {
-	if cfg.KubeLoki != "" && cfg.LokiURL != "" {
-		log.Fatal("pgwd: use -kube-loki OR -notifications-loki-url, not both (-notifications-loki-url for exposed Loki, -kube-loki when Loki is inside the cluster)")
-	}
-	if cfg.KubeLoki != "" && (cfg.KubeLokiLocalPort < 1 || cfg.KubeLokiLocalPort > 65535) {
-		log.Fatal("pgwd: kube-loki-local-port must be between 1 and 65535")
-	}
-	if cfg.KubeLoki != "" && (cfg.KubeLokiRemotePort < 1 || cfg.KubeLokiRemotePort > 65535) {
-		log.Fatal("pgwd: kube-loki-remote-port must be between 1 and 65535")
+	if err := validator.Validate(cfg); err != nil {
+		log.Fatal(err)
 	}
 }
 

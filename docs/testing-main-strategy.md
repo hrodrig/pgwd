@@ -47,7 +47,7 @@ Create `internal/checker` with functions that have **zero external deps** (no DB
 
 ---
 
-### Phase 2: Extract validation to `internal/validator` (return error, not log.Fatal)
+### Phase 2: Extract validation to `internal/validator` (return error, not log.Fatal) ✅ (done)
 
 Create `internal/validator` with functions that **return `error`** instead of calling `log.Fatal`. `main.go` calls them and does `if err != nil { log.Fatal(err) }`.
 

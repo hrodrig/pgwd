@@ -21,7 +21,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 
 - Run all tests: `make test` or `go test ./...`
 - **Integration tests:** `make test-integration` (requires Docker). Starts Postgres and Loki via `testing/compose.yaml` and `testing/compose-loki.yaml`, runs integration tests, then stops. Must pass before release (see `.cursor/rules/release-tests.mdc`).
-- Tests exist in `internal/config`, `internal/notify` (unit + Loki integration), `internal/checker`, `internal/store`, `internal/kube`, and `internal/postgres` (integration, requires `PGWD_TEST_DB_URL`). `cmd/pgwd` has black-box tests (version, help, validation exits).
+- Tests exist in `internal/config`, `internal/notify` (unit + Loki integration), `internal/checker`, `internal/validator`, `internal/store`, `internal/httpsrv`, `internal/kube`, and `internal/postgres` (integration, requires `PGWD_TEST_DB_URL`). `cmd/pgwd` has black-box tests (version, help, validation exits).
 - Before committing or proposing changes, ensure `go test ./...` passes. Before release, also run `make test-integration`.
 
 ## Code style and conventions
@@ -47,6 +47,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 
 - `cmd/pgwd/` — main package. Black-box tests in `main_test.go` (version, help, validation).
 - `internal/checker/` — pure logic for thresholds, levels, event collection, state derivation (extracted from main for testability).
+- `internal/validator/` — config validation returning errors (extracted from main for testability).
 - `internal/config/` — config from file (YAML), env (`PGWD_*`), and CLI. `file.go`: FromFile, ApplyDefaults.
 - `internal/postgres/` — pool, stats, stale count, max_connections.
 - `internal/notify/` — Slack and Loki senders, event type.
