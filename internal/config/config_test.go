@@ -716,6 +716,20 @@ func TestUsesDatabases(t *testing.T) {
 // ConfigForTarget
 // ---------------------------------------------------------------------------
 
+func assertStrField(t *testing.T, name, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("%s: got %q, want %q", name, got, want)
+	}
+}
+
+func assertIntField(t *testing.T, name string, got, want int) {
+	t.Helper()
+	if got != want {
+		t.Errorf("%s: got %d, want %d", name, got, want)
+	}
+}
+
 func TestConfigForTarget(t *testing.T) {
 	base := Config{
 		DBURL:                   "postgres://base/db",
@@ -748,49 +762,24 @@ func TestConfigForTarget(t *testing.T) {
 
 	got := base.ConfigForTarget(target)
 
-	if got.DBURL != target.URL {
-		t.Errorf("DBURL: got %q, want %q", got.DBURL, target.URL)
-	}
-	if got.Client != target.Client {
-		t.Errorf("Client: got %q, want %q", got.Client, target.Client)
-	}
-	if got.StaleAge != target.StaleAge {
-		t.Errorf("StaleAge: got %d, want %d", got.StaleAge, target.StaleAge)
-	}
-	if got.DefaultThresholdPercent != target.DefaultThresholdPercent {
-		t.Errorf("DefaultThresholdPercent: got %d, want %d", got.DefaultThresholdPercent, target.DefaultThresholdPercent)
-	}
-	if got.ThresholdTotal != target.ThresholdTotal {
-		t.Errorf("ThresholdTotal: got %d, want %d", got.ThresholdTotal, target.ThresholdTotal)
-	}
-	if got.ThresholdActive != target.ThresholdActive {
-		t.Errorf("ThresholdActive: got %d, want %d", got.ThresholdActive, target.ThresholdActive)
-	}
-	if got.ThresholdIdle != target.ThresholdIdle {
-		t.Errorf("ThresholdIdle: got %d, want %d", got.ThresholdIdle, target.ThresholdIdle)
-	}
-	if got.ThresholdStale != target.ThresholdStale {
-		t.Errorf("ThresholdStale: got %d, want %d", got.ThresholdStale, target.ThresholdStale)
-	}
-	if got.ThresholdLevels != target.ThresholdLevels {
-		t.Errorf("ThresholdLevels: got %q, want %q", got.ThresholdLevels, target.ThresholdLevels)
-	}
+	// Target-specific fields must come from DatabaseTarget
+	assertStrField(t, "DBURL", got.DBURL, target.URL)
+	assertStrField(t, "Client", got.Client, target.Client)
+	assertIntField(t, "StaleAge", got.StaleAge, target.StaleAge)
+	assertIntField(t, "DefaultThresholdPercent", got.DefaultThresholdPercent, target.DefaultThresholdPercent)
+	assertIntField(t, "ThresholdTotal", got.ThresholdTotal, target.ThresholdTotal)
+	assertIntField(t, "ThresholdActive", got.ThresholdActive, target.ThresholdActive)
+	assertIntField(t, "ThresholdIdle", got.ThresholdIdle, target.ThresholdIdle)
+	assertIntField(t, "ThresholdStale", got.ThresholdStale, target.ThresholdStale)
+	assertStrField(t, "ThresholdLevels", got.ThresholdLevels, target.ThresholdLevels)
 
 	// Non-target fields must be preserved from base
-	if got.SlackWebhook != base.SlackWebhook {
-		t.Errorf("SlackWebhook should be preserved: got %q", got.SlackWebhook)
-	}
-	if got.LokiURL != base.LokiURL {
-		t.Errorf("LokiURL should be preserved: got %q", got.LokiURL)
-	}
-	if got.Interval != base.Interval {
-		t.Errorf("Interval should be preserved: got %d", got.Interval)
-	}
+	assertStrField(t, "SlackWebhook", got.SlackWebhook, base.SlackWebhook)
+	assertStrField(t, "LokiURL", got.LokiURL, base.LokiURL)
+	assertIntField(t, "Interval", got.Interval, base.Interval)
+	assertStrField(t, "LogLevel", got.LogLevel, base.LogLevel)
 	if got.DryRun != base.DryRun {
 		t.Errorf("DryRun should be preserved: got %v", got.DryRun)
-	}
-	if got.LogLevel != base.LogLevel {
-		t.Errorf("LogLevel should be preserved: got %q", got.LogLevel)
 	}
 }
 
