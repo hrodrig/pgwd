@@ -1,0 +1,6 @@
+---
+# FreeBSD — tarball only (Phase 2), rc.d
+pgwd_install_method: tarball
+pgwd_init_system: rcd
+pgwd_binary_path: /usr/local/bin/pgwd
+pgwd_tarball_os: freebsd

@@ -1,0 +1,148 @@
+---
+# pgwd_install — install pgwd using the platform-appropriate method.
+#
+# Variables (from inventory or group_vars):
+#   pgwd_version          — e.g. "0.5.10"
+#   pgwd_release_url      — base URL for release assets
+#   pgwd_local_package    — optional: local file path (skips download)
+#   platform_vars         — platform name to load (ubuntu, almalinux, alpine, freebsd, openbsd)
+
+- name: Load platform variables
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../platform_vars/{{ platform_vars }}.yml"
+
+# --- .deb (Ubuntu/Debian) ---
+- name: Download deb package
+  ansible.builtin.get_url:
+    url: "{{ pgwd_release_url }}/pgwd_v{{ pgwd_version }}_linux_amd64.deb"
+    dest: "/tmp/pgwd.deb"
+    mode: "0644"
+  when:
+    - pgwd_install_method == "deb"
+    - pgwd_local_package is not defined
+
+- name: Copy local deb package
+  ansible.builtin.copy:
+    src: "{{ pgwd_local_package }}"
+    dest: "/tmp/pgwd.deb"
+    mode: "0644"
+  when:
+    - pgwd_install_method == "deb"
+    - pgwd_local_package is defined
+
+- name: Install deb package
+  ansible.builtin.apt:
+    deb: /tmp/pgwd.deb
+    state: present
+  when: pgwd_install_method == "deb"
+
+# --- .rpm (AlmaLinux/RHEL) ---
+- name: Download rpm package
+  ansible.builtin.get_url:
+    url: "{{ pgwd_release_url }}/pgwd_v{{ pgwd_version }}_linux_amd64.rpm"
+    dest: "/tmp/pgwd.rpm"
+    mode: "0644"
+  when:
+    - pgwd_install_method == "rpm"
+    - pgwd_local_package is not defined
+
+- name: Copy local rpm package
+  ansible.builtin.copy:
+    src: "{{ pgwd_local_package }}"
+    dest: "/tmp/pgwd.rpm"
+    mode: "0644"
+  when:
+    - pgwd_install_method == "rpm"
+    - pgwd_local_package is defined
+
+- name: Install rpm package (dnf)
+  ansible.builtin.dnf:
+    name: /tmp/pgwd.rpm
+    state: present
+    disable_gpg_check: true
+  when: pgwd_install_method == "rpm"
+
+# --- .rpm via zypper (OpenSUSE) ---
+- name: Download rpm package (zypper)
+  ansible.builtin.get_url:
+    url: "{{ pgwd_release_url }}/pgwd_v{{ pgwd_version }}_linux_amd64.rpm"
+    dest: "/tmp/pgwd.rpm"
+    mode: "0644"
+  when:
+    - pgwd_install_method == "rpm_zypper"
+    - pgwd_local_package is not defined
+
+- name: Copy local rpm package (zypper)
+  ansible.builtin.copy:
+    src: "{{ pgwd_local_package }}"
+    dest: "/tmp/pgwd.rpm"
+    mode: "0644"
+  when:
+    - pgwd_install_method == "rpm_zypper"
+    - pgwd_local_package is defined
+
+- name: Install rpm package (zypper)
+  ansible.builtin.command: zypper --non-interactive install --allow-unsigned-rpm /tmp/pgwd.rpm
+  register: zypper_install
+  changed_when: "'Installing' in zypper_install.stdout"
+  when: pgwd_install_method == "rpm_zypper"
+
+# --- tarball (Alpine, FreeBSD, OpenBSD) ---
+- name: Download tarball
+  ansible.builtin.get_url:
+    url: "{{ pgwd_release_url }}/pgwd_v{{ pgwd_version }}_{{ pgwd_tarball_os }}_amd64.tar.gz"
+    dest: "/tmp/pgwd.tar.gz"
+    mode: "0644"
+  when:
+    - pgwd_install_method == "tarball"
+    - pgwd_local_package is not defined
+
+- name: Copy local tarball
+  ansible.builtin.copy:
+    src: "{{ pgwd_local_package }}"
+    dest: "/tmp/pgwd.tar.gz"
+    mode: "0644"
+  when:
+    - pgwd_install_method == "tarball"
+    - pgwd_local_package is defined
+
+- name: Extract tarball
+  ansible.builtin.shell: tar xzf /tmp/pgwd.tar.gz -C /tmp
+  args:
+    executable: /bin/sh
+  when: pgwd_install_method == "tarball"
+
+- name: Install binary from tarball
+  ansible.builtin.shell: |
+    install -m 755 /tmp/pgwd /usr/local/bin/pgwd
+  args:
+    executable: /bin/sh
+  when: pgwd_install_method == "tarball"
+
+- name: Install man page from tarball
+  ansible.builtin.shell: |
+    if [ -f /tmp/share/man/man1/pgwd.1 ]; then
+      mkdir -p /usr/local/share/man/man1
+      install -m 644 /tmp/share/man/man1/pgwd.1 /usr/local/share/man/man1/pgwd.1
+    fi
+  args:
+    executable: /bin/sh
+  when: pgwd_install_method == "tarball"
+
+# --- Verification ---
+- name: Verify pgwd is installed
+  ansible.builtin.command: pgwd -version
+  register: pgwd_version_output
+  changed_when: false
+
+- name: Show installed version
+  ansible.builtin.debug:
+    msg: "{{ pgwd_version_output.stdout | default(pgwd_version_output.stderr) }}"
+
+- name: Assert version matches
+  ansible.builtin.assert:
+    that:
+      - "pgwd_version in pgwd_version_output.stdout or pgwd_version in pgwd_version_output.stderr"
+    fail_msg: "Expected version {{ pgwd_version }} but got: {{ pgwd_version_output.stdout }} {{ pgwd_version_output.stderr }}"
+    success_msg: "pgwd version verified: {{ pgwd_version }}"
+  when: not (pgwd_skip_version_check | default(false) | bool)

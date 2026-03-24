@@ -1,0 +1,209 @@
+---
+# pgwd_daemon — install init script, start daemon, verify, stop.
+#
+# Variables (from platform_vars):
+#   pgwd_init_system  — "systemd", "openrc", or "rcd"
+#   pgwd_daemon_state — "started" or "stopped" (default "started")
+
+- name: Load platform variables
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../platform_vars/{{ platform_vars }}.yml"
+
+- name: Set daemon state default
+  ansible.builtin.set_fact:
+    pgwd_daemon_state: "{{ pgwd_daemon_state | default('started') }}"
+
+- name: Compute repo root
+  ansible.builtin.set_fact:
+    _repo_root: "{{ playbook_dir | dirname | dirname | dirname }}"
+
+# ==================== systemd ====================
+- name: "systemd: install service unit"
+  ansible.builtin.copy:
+    src: "{{ _repo_root }}/contrib/systemd/pgwd.service"
+    dest: /etc/systemd/system/pgwd.service
+    mode: "0644"
+  when:
+    - pgwd_init_system == "systemd"
+    - pgwd_daemon_state == "started"
+
+- name: "systemd: daemon-reload"
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when:
+    - pgwd_init_system == "systemd"
+    - pgwd_daemon_state == "started"
+
+- name: "systemd: enable and start pgwd"
+  ansible.builtin.systemd:
+    name: pgwd
+    enabled: true
+    state: started
+  when:
+    - pgwd_init_system == "systemd"
+    - pgwd_daemon_state == "started"
+
+- name: "systemd: wait for service to become active"
+  ansible.builtin.command: systemctl is-active pgwd
+  register: systemd_active
+  changed_when: false
+  failed_when: false
+  retries: 6
+  delay: 5
+  until: systemd_active.stdout == "active"
+  when:
+    - pgwd_init_system == "systemd"
+    - pgwd_daemon_state == "started"
+
+- name: "systemd: assert active"
+  ansible.builtin.assert:
+    that:
+      - systemd_active.stdout == "active"
+    fail_msg: "pgwd systemd service is not active: {{ systemd_active.stdout }}"
+    success_msg: "pgwd is running (systemd)"
+  when:
+    - pgwd_init_system == "systemd"
+    - pgwd_daemon_state == "started"
+
+- name: "systemd: stop pgwd"
+  ansible.builtin.systemd:
+    name: pgwd
+    state: stopped
+    enabled: false
+  when:
+    - pgwd_init_system == "systemd"
+    - pgwd_daemon_state == "stopped"
+
+# ==================== OpenRC ====================
+- name: "openrc: install init script"
+  ansible.builtin.copy:
+    src: "{{ _repo_root }}/contrib/openrc/pgwd.initd"
+    dest: /etc/init.d/pgwd
+    mode: "0755"
+  when:
+    - pgwd_init_system == "openrc"
+    - pgwd_daemon_state == "started"
+
+- name: "openrc: add to default runlevel"
+  ansible.builtin.command: rc-update add pgwd default
+  register: rc_update_result
+  changed_when: "'added' in rc_update_result.stdout or 'added' in rc_update_result.stderr"
+  failed_when: false
+  when:
+    - pgwd_init_system == "openrc"
+    - pgwd_daemon_state == "started"
+
+- name: "openrc: start pgwd"
+  ansible.builtin.command: rc-service pgwd start
+  changed_when: true
+  when:
+    - pgwd_init_system == "openrc"
+    - pgwd_daemon_state == "started"
+
+- name: "openrc: wait for process"
+  ansible.builtin.pause:
+    seconds: 5
+  when:
+    - pgwd_init_system == "openrc"
+    - pgwd_daemon_state == "started"
+
+- name: "openrc: verify running"
+  ansible.builtin.command: rc-service pgwd status
+  register: openrc_status
+  changed_when: false
+  failed_when: false
+  when:
+    - pgwd_init_system == "openrc"
+    - pgwd_daemon_state == "started"
+
+- name: "openrc: assert running"
+  ansible.builtin.assert:
+    that:
+      - openrc_status.rc == 0
+    fail_msg: "pgwd OpenRC service not running: {{ openrc_status.stdout | default('') }}"
+    success_msg: "pgwd is running (OpenRC)"
+  when:
+    - pgwd_init_system == "openrc"
+    - pgwd_daemon_state == "started"
+
+- name: "openrc: stop pgwd"
+  ansible.builtin.command: rc-service pgwd stop
+  changed_when: true
+  failed_when: false
+  when:
+    - pgwd_init_system == "openrc"
+    - pgwd_daemon_state == "stopped"
+
+- name: "openrc: remove from default runlevel"
+  ansible.builtin.command: rc-update del pgwd default
+  changed_when: true
+  failed_when: false
+  when:
+    - pgwd_init_system == "openrc"
+    - pgwd_daemon_state == "stopped"
+
+# ==================== rc.d (FreeBSD/OpenBSD) ====================
+- name: "rcd: install rc.d script"
+  ansible.builtin.copy:
+    src: "{{ _repo_root }}/contrib/freebsd/rc.d/pgwd"
+    dest: /usr/local/etc/rc.d/pgwd
+    mode: "0755"
+  when:
+    - pgwd_init_system == "rcd"
+    - pgwd_daemon_state == "started"
+
+- name: "rcd: enable pgwd"
+  ansible.builtin.command: sysrc pgwd_enable=YES
+  changed_when: true
+  when:
+    - pgwd_init_system == "rcd"
+    - pgwd_daemon_state == "started"
+
+- name: "rcd: start pgwd"
+  ansible.builtin.command: service pgwd start
+  changed_when: true
+  when:
+    - pgwd_init_system == "rcd"
+    - pgwd_daemon_state == "started"
+
+- name: "rcd: wait for process"
+  ansible.builtin.pause:
+    seconds: 5
+  when:
+    - pgwd_init_system == "rcd"
+    - pgwd_daemon_state == "started"
+
+- name: "rcd: verify running"
+  ansible.builtin.command: service pgwd status
+  register: rcd_status
+  changed_when: false
+  failed_when: false
+  when:
+    - pgwd_init_system == "rcd"
+    - pgwd_daemon_state == "started"
+
+- name: "rcd: assert running"
+  ansible.builtin.assert:
+    that:
+      - rcd_status.rc == 0
+    fail_msg: "pgwd rc.d service not running: {{ rcd_status.stdout | default('') }}"
+    success_msg: "pgwd is running (rc.d)"
+  when:
+    - pgwd_init_system == "rcd"
+    - pgwd_daemon_state == "started"
+
+- name: "rcd: stop pgwd"
+  ansible.builtin.command: service pgwd stop
+  changed_when: true
+  failed_when: false
+  when:
+    - pgwd_init_system == "rcd"
+    - pgwd_daemon_state == "stopped"
+
+- name: "rcd: disable pgwd"
+  ansible.builtin.command: sysrc pgwd_enable=NO
+  changed_when: true
+  failed_when: false
+  when:
+    - pgwd_init_system == "rcd"
+    - pgwd_daemon_state == "stopped"

@@ -1,0 +1,18 @@
+---
+# test.yml — dry-run, notifications (Loki+Slack), timer.
+- name: pgwd platform tests
+  hosts: all
+  gather_facts: false
+  become: true
+
+  pre_tasks:
+    - name: Stop daemon before tests (tests run pgwd directly)
+      ansible.builtin.include_role:
+        name: pgwd_daemon
+      vars:
+        pgwd_daemon_state: stopped
+
+  roles:
+    - pgwd_test_run
+    - pgwd_test_notifications
+    - pgwd_test_timer

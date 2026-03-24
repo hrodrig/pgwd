@@ -1,0 +1,6 @@
+---
+# AlmaLinux / RHEL — .rpm package, systemd
+pgwd_install_method: rpm
+pgwd_init_system: systemd
+pgwd_binary_path: /usr/bin/pgwd
+pgwd_tarball_os: linux

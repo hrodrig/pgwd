@@ -36,6 +36,8 @@ help:
 	@echo "  test               Unit tests"
 	@echo "  test-integration   Integration tests (requires Docker)"
 	@echo "  test-e2e-kube      E2E test with kind cluster (requires kind, kubectl, Docker)"
+	@echo "  test-platforms     Multi-platform tests via Ansible (requires VMs; see testing/platforms/)"
+	@echo "                     Target one platform: make test-platforms PLATFORM=pgwd-ubuntu"
 	@echo ""
 	@echo "Quality:"
 	@echo "  lint               Check gofmt and gocyclo"
@@ -140,6 +142,15 @@ test-integration:
 	@docker compose -f testing/compose.yaml down
 	@docker compose -f testing/compose-loki.yaml down
 	@echo "Integration tests passed."
+
+# Multi-platform tests via Ansible. Requires VMs configured in testing/platforms/inventory/hosts.yml.
+# Target one platform: make test-platforms PLATFORM=pgwd-ubuntu
+PLATFORM ?=
+.PHONY: test-platforms
+test-platforms:
+	@command -v ansible-playbook >/dev/null 2>&1 || { echo "ansible-playbook not found; install with: pip install ansible"; exit 1; }
+	@test -f testing/platforms/inventory/hosts.yml || { echo "Error: testing/platforms/inventory/hosts.yml not found. Copy hosts.yml.example and edit."; exit 1; }
+	cd testing/platforms && ansible-playbook playbooks/full-cycle.yml $(if $(PLATFORM),--limit $(PLATFORM),)
 
 # Lint: gofmt + gocyclo (run during development; CI runs this too)
 lint:

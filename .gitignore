@@ -47,6 +47,9 @@ codeql-results.sarif
 # Generated man page (created by goreleaser before hook)
 contrib/man/man1/pgwd.1.gz
 
+# Platform test inventory (developer-specific, not committed)
+testing/platforms/inventory/hosts.yml
+
 # Never track macOS metadata
 .DS_Store
 **/.DS_Store

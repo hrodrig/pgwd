@@ -1,0 +1,115 @@
+---
+# pgwd_test_timer — verify scheduled execution via systemd timer or cron.
+#
+# Variables (from platform_vars):
+#   pgwd_init_system  — "systemd", "openrc", or "rcd"
+
+- name: Load platform variables
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../platform_vars/{{ platform_vars }}.yml"
+
+- name: Compute repo root
+  ansible.builtin.set_fact:
+    _repo_root: "{{ playbook_dir | dirname | dirname | dirname }}"
+
+# ==================== systemd timer ====================
+- name: "systemd: install timer units"
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    mode: "0644"
+  loop:
+    - src: "{{ _repo_root }}/contrib/systemd/pgwd.timer"
+      dest: /etc/systemd/system/pgwd.timer
+    - src: "{{ _repo_root }}/contrib/systemd/pgwd-once.service"
+      dest: /etc/systemd/system/pgwd-once.service
+  when: pgwd_init_system == "systemd"
+
+- name: "systemd: daemon-reload for timer"
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: pgwd_init_system == "systemd"
+
+- name: "systemd: enable and start timer"
+  ansible.builtin.systemd:
+    name: pgwd.timer
+    enabled: true
+    state: started
+  when: pgwd_init_system == "systemd"
+
+- name: "systemd: verify timer is active"
+  ansible.builtin.command: systemctl is-active pgwd.timer
+  register: timer_active
+  changed_when: false
+  when: pgwd_init_system == "systemd"
+
+- name: "systemd: assert timer active"
+  ansible.builtin.assert:
+    that:
+      - timer_active.stdout == "active"
+    fail_msg: "pgwd.timer is not active: {{ timer_active.stdout }}"
+    success_msg: "pgwd.timer is active"
+  when: pgwd_init_system == "systemd"
+
+- name: "systemd: list timers (informational)"
+  ansible.builtin.command: systemctl list-timers pgwd.timer --no-pager
+  register: timer_list
+  changed_when: false
+  when: pgwd_init_system == "systemd"
+
+- name: "systemd: show timer schedule"
+  ansible.builtin.debug:
+    msg: "{{ timer_list.stdout_lines }}"
+  when: pgwd_init_system == "systemd"
+
+- name: "systemd: cleanup timer"
+  ansible.builtin.systemd:
+    name: pgwd.timer
+    enabled: false
+    state: stopped
+  when: pgwd_init_system == "systemd"
+
+- name: "systemd: remove timer unit files"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/pgwd.timer
+    - /etc/systemd/system/pgwd-once.service
+  when: pgwd_init_system == "systemd"
+
+# ==================== cron (OpenRC / rc.d) ====================
+- name: "cron: install pgwd crontab entry"
+  ansible.builtin.cron:
+    name: "pgwd platform test"
+    minute: "*/5"
+    job: "{{ pgwd_binary_path }} -config /etc/pgwd/pgwd.conf -interval 0 >> /var/log/pgwd-cron.log 2>&1"
+    user: root
+  when: pgwd_init_system in ["openrc", "rcd"]
+
+- name: "cron: verify entry exists"
+  ansible.builtin.command: crontab -l
+  register: cron_list
+  changed_when: false
+  when: pgwd_init_system in ["openrc", "rcd"]
+
+- name: "cron: assert pgwd in crontab"
+  ansible.builtin.assert:
+    that:
+      - "'pgwd' in cron_list.stdout"
+    fail_msg: "pgwd not found in crontab"
+    success_msg: "pgwd cron entry verified"
+  when: pgwd_init_system in ["openrc", "rcd"]
+
+- name: "cron: remove pgwd crontab entry"
+  ansible.builtin.cron:
+    name: "pgwd platform test"
+    state: absent
+    user: root
+  when: pgwd_init_system in ["openrc", "rcd"]
+
+- name: "cron: clean up log"
+  ansible.builtin.file:
+    path: /var/log/pgwd-cron.log
+    state: absent
+  when: pgwd_init_system in ["openrc", "rcd"]

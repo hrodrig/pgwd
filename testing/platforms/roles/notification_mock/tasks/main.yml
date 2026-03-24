@@ -1,0 +1,69 @@
+---
+# notification_mock — deploy and manage the mock HTTP server for Slack+Loki capture.
+#
+# Variables:
+#   notification_mock_port (default 9999)
+#   notification_mock_state: "started" or "stopped" (default "started")
+
+- name: Set mock state default
+  ansible.builtin.set_fact:
+    notification_mock_state: "{{ notification_mock_state | default('started') }}"
+
+# --- Start ---
+- name: Clean previous capture files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/pgwd-mock-loki-api-v1-push.json
+    - /tmp/pgwd-mock-slack.json
+    - /tmp/pgwd-mock.pid
+  when: notification_mock_state == "started"
+
+- name: Deploy mock server script
+  ansible.builtin.copy:
+    src: mock_server.py
+    dest: /tmp/pgwd-mock-server.py
+    mode: "0755"
+  when: notification_mock_state == "started"
+
+- name: Start mock server in background
+  ansible.builtin.shell: |
+    nohup python3 /tmp/pgwd-mock-server.py {{ notification_mock_port | default(9999) }} \
+      >/tmp/pgwd-mock.log 2>&1 &
+    sleep 1
+    test -f /tmp/pgwd-mock.pid
+  args:
+    executable: /bin/sh
+  when: notification_mock_state == "started"
+
+- name: Verify mock server is listening
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ notification_mock_port | default(9999) }}/"
+    method: GET
+    status_code: 200
+  retries: 3
+  delay: 2
+  when: notification_mock_state == "started"
+
+# --- Stop ---
+- name: Kill mock server
+  ansible.builtin.shell: |
+    if [ -f /tmp/pgwd-mock.pid ]; then
+      kill "$(cat /tmp/pgwd-mock.pid)" 2>/dev/null || true
+      rm -f /tmp/pgwd-mock.pid
+    fi
+  args:
+    executable: /bin/sh
+  when: notification_mock_state == "stopped"
+
+- name: Clean up mock artifacts
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/pgwd-mock-server.py
+    - /tmp/pgwd-mock.log
+    - /tmp/pgwd-mock-loki-api-v1-push.json
+    - /tmp/pgwd-mock-slack.json
+  when: notification_mock_state == "stopped"

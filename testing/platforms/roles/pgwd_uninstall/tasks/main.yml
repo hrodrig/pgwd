@@ -1,0 +1,135 @@
+---
+# pgwd_uninstall — remove pgwd and verify full cleanup.
+#
+# Variables (from platform_vars):
+#   pgwd_install_method  — "deb", "rpm", or "tarball"
+#   pgwd_init_system     — "systemd", "openrc", or "rcd"
+
+- name: Load platform variables
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../platform_vars/{{ platform_vars }}.yml"
+
+# --- Stop daemon first ---
+- name: Stop daemon before uninstall
+  ansible.builtin.include_role:
+    name: pgwd_daemon
+  vars:
+    pgwd_daemon_state: stopped
+
+# --- systemd: remove service unit ---
+- name: "systemd: remove service file"
+  ansible.builtin.file:
+    path: /etc/systemd/system/pgwd.service
+    state: absent
+  when: pgwd_init_system == "systemd"
+
+- name: "systemd: daemon-reload after removal"
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: pgwd_init_system == "systemd"
+
+# --- OpenRC: remove init script ---
+- name: "openrc: remove init script"
+  ansible.builtin.file:
+    path: /etc/init.d/pgwd
+    state: absent
+  when: pgwd_init_system == "openrc"
+
+# --- rc.d: remove rc.d script ---
+- name: "rcd: remove rc.d script"
+  ansible.builtin.file:
+    path: /usr/local/etc/rc.d/pgwd
+    state: absent
+  when: pgwd_init_system == "rcd"
+
+# --- Package removal ---
+- name: "deb: purge pgwd package"
+  ansible.builtin.apt:
+    name: pgwd
+    state: absent
+    purge: true
+  when: pgwd_install_method == "deb"
+
+- name: "rpm: remove pgwd package (dnf)"
+  ansible.builtin.dnf:
+    name: pgwd
+    state: absent
+  when: pgwd_install_method == "rpm"
+
+- name: "rpm: remove pgwd package (zypper)"
+  ansible.builtin.command: zypper --non-interactive remove pgwd
+  register: zypper_remove
+  changed_when: "'Removing' in zypper_remove.stdout"
+  failed_when: false
+  when: pgwd_install_method == "rpm_zypper"
+
+- name: "tarball: remove binary"
+  ansible.builtin.file:
+    path: /usr/local/bin/pgwd
+    state: absent
+  when: pgwd_install_method == "tarball"
+
+- name: "tarball: remove man page"
+  ansible.builtin.file:
+    path: /usr/local/share/man/man1/pgwd.1
+    state: absent
+  when: pgwd_install_method == "tarball"
+
+# --- Config cleanup ---
+- name: Remove config directory
+  ansible.builtin.file:
+    path: /etc/pgwd
+    state: absent
+
+# --- Cleanup temp files ---
+- name: Remove temp install artifacts
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/pgwd.deb
+    - /tmp/pgwd.rpm
+    - /tmp/pgwd.tar.gz
+    - /tmp/pgwd
+    - /tmp/share
+
+# --- Verification ---
+- name: Verify pgwd not in PATH
+  ansible.builtin.shell: which pgwd 2>/dev/null || echo "NOT_FOUND"
+  args:
+    executable: /bin/sh
+  register: pgwd_which
+  changed_when: false
+
+- name: Assert pgwd removed from PATH
+  ansible.builtin.assert:
+    that:
+      - "'NOT_FOUND' in pgwd_which.stdout"
+    fail_msg: "pgwd still found at: {{ pgwd_which.stdout }}"
+    success_msg: "pgwd removed from PATH"
+
+- name: Verify config directory removed
+  ansible.builtin.stat:
+    path: /etc/pgwd
+  register: pgwd_etc
+
+- name: Assert config directory gone
+  ansible.builtin.assert:
+    that:
+      - not pgwd_etc.stat.exists
+    fail_msg: "/etc/pgwd still exists"
+    success_msg: "Config directory removed"
+
+- name: Verify no pgwd process running
+  ansible.builtin.shell: pgrep -x pgwd || echo "NO_PROCESS"
+  args:
+    executable: /bin/sh
+  register: pgwd_pgrep
+  changed_when: false
+
+- name: Assert no pgwd process
+  ansible.builtin.assert:
+    that:
+      - "'NO_PROCESS' in pgwd_pgrep.stdout"
+    fail_msg: "pgwd process still running: {{ pgwd_pgrep.stdout }}"
+    success_msg: "No pgwd process running"

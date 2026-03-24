@@ -22,7 +22,9 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 - Run all tests: `make test` or `go test ./...`
 - **Integration tests:** `make test-integration` (requires Docker). Starts Postgres and Loki via `testing/compose.yaml` and `testing/compose-loki.yaml`, runs integration tests, then stops. Must pass before release (see `.cursor/rules/release-tests.mdc`).
 - Tests exist in `internal/config`, `internal/notify` (unit + Loki integration), `internal/checker`, `internal/validator`, `internal/store`, `internal/httpsrv`, `internal/kube`, and `internal/postgres` (integration, requires `PGWD_TEST_DB_URL`). `cmd/pgwd` has black-box tests (version, help, validation exits).
+- **Platform tests:** `make test-platforms` (requires Ansible + VMs). Ansible playbooks under `testing/platforms/` automate install, daemon, notification (Loki+Slack mock), timer, and uninstall validation across Linux and BSD. See `testing/platforms/README.md`. Target one platform: `make test-platforms PLATFORM=pgwd-ubuntu`.
 - Before committing or proposing changes, ensure `go test ./...` passes. Before release, also run `make test-integration`.
+- **Before a release:** run `make test-platforms` (or at minimum the platforms affected by the change) to validate install, daemon, notifications, and uninstall on real OS targets. This is not automated in CI (requires VMs) but is a manual pre-release gate.
 
 ## Code style and conventions
 
@@ -54,6 +56,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 - `internal/kube/` — Kubernetes port-forward, pod resolution, password discovery; `RequireKubectl()` at startup when `-kube-postgres` is set.
 - `docs/` — sequence diagrams (Mermaid), VHS demo tape.
 - `contrib/systemd/` — systemd units (daemon, timer, one-shot).
+- `testing/platforms/` — Ansible roles and playbooks for multi-platform install/test/uninstall validation (Linux, BSD). See `testing/platforms/README.md`.
 - `tools/` — scripts for scanning before merging to main: `tools/scan.sh` (govulncheck, optional Grype). See `tools/README.md`. CI runs govulncheck in the Security workflow.
 
 ## Skills
