@@ -109,10 +109,10 @@ func TestStateAndThresholdFromEvents(t *testing.T) {
 		return notify.Event{Threshold: threshold, Level: level}
 	}
 	tests := []struct {
-		name           string
-		events         []notify.Event
-		wantState      string
-		wantThreshold  string
+		name          string
+		events        []notify.Event
+		wantState     string
+		wantThreshold string
 	}{
 		{"empty", nil, "ok", ""},
 		{"empty slice", []notify.Event{}, "ok", ""},
@@ -158,7 +158,7 @@ func TestApplySingleThresholdDefaults(t *testing.T) {
 			cfg := &config.Config{
 				DefaultThresholdPercent: tt.percent,
 				ThresholdTotal:          tt.initTotal,
-				ThresholdActive:        tt.initActive,
+				ThresholdActive:         tt.initActive,
 			}
 			ApplySingleThresholdDefaults(cfg, tt.maxConn)
 			if cfg.ThresholdTotal != tt.wantTotal || cfg.ThresholdActive != tt.wantActive {
@@ -172,11 +172,11 @@ func TestApplySingleThresholdDefaults(t *testing.T) {
 func TestValidateThresholdConfig(t *testing.T) {
 	errServer := errors.New("server error")
 	tests := []struct {
-		name      string
-		cfg       *config.Config
-		maxConn   int
+		name       string
+		cfg        *config.Config
+		maxConn    int
 		maxConnErr error
-		wantErr   bool
+		wantErr    bool
 	}{
 		{"dry-run: no error", &config.Config{DryRun: true}, 0, nil, false},
 		{"force-notification: no error", &config.Config{ForceNotification: true}, 0, nil, false},
@@ -255,12 +255,12 @@ func TestCollectExplicitThresholdEvents(t *testing.T) {
 	base := notify.Event{Cluster: "c", Client: "x"}
 
 	tests := []struct {
-		name        string
-		stats       postgres.ConnectionStats
-		maxConn     int
-		wantCount   int
-		wantTotal   bool
-		wantActive  bool
+		name       string
+		stats      postgres.ConnectionStats
+		maxConn    int
+		wantCount  int
+		wantTotal  bool
+		wantActive bool
 	}{
 		{"below both", postgres.ConnectionStats{50, 30, 20}, 100, 0, false, false},
 		{"total exceeded", postgres.ConnectionStats{90, 30, 60}, 100, 1, true, false},

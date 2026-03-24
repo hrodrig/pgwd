@@ -14,9 +14,9 @@ import (
 
 func TestServer_HandleHealth_NoStore(t *testing.T) {
 	cfg := &config.Config{
-		HTTPListen:     ":0",
-		HTTPBasePath:   "/api/pgwd/v1",
-		HTTPHealthPath: "/healthz",
+		HTTPListen:      ":0",
+		HTTPBasePath:    "/api/pgwd/v1",
+		HTTPHealthPath:  "/healthz",
 		HTTPMetricsPath: "/metrics",
 	}
 	srv := New(cfg, nil)
@@ -44,9 +44,9 @@ func TestServer_HandleHealth_WithStore(t *testing.T) {
 	defer st.Close()
 
 	cfg := &config.Config{
-		HTTPListen:     ":0",
-		HTTPBasePath:   "/api/pgwd/v1",
-		HTTPHealthPath: "/healthz",
+		HTTPListen:      ":0",
+		HTTPBasePath:    "/api/pgwd/v1",
+		HTTPHealthPath:  "/healthz",
 		HTTPMetricsPath: "/metrics",
 	}
 	srv := New(cfg, st)
@@ -61,9 +61,9 @@ func TestServer_HandleHealth_WithStore(t *testing.T) {
 
 func TestServer_HandleMetrics_NoStore(t *testing.T) {
 	cfg := &config.Config{
-		HTTPListen:     ":0",
-		HTTPBasePath:   "/api/pgwd/v1",
-		HTTPHealthPath: "/healthz",
+		HTTPListen:      ":0",
+		HTTPBasePath:    "/api/pgwd/v1",
+		HTTPHealthPath:  "/healthz",
 		HTTPMetricsPath: "/metrics",
 	}
 	srv := New(cfg, nil)
@@ -99,9 +99,9 @@ func TestServer_HandleMetrics_WithStore(t *testing.T) {
 	}
 
 	cfg := &config.Config{
-		HTTPListen:     ":0",
-		HTTPBasePath:   "/api/pgwd/v1",
-		HTTPHealthPath: "/healthz",
+		HTTPListen:      ":0",
+		HTTPBasePath:    "/api/pgwd/v1",
+		HTTPHealthPath:  "/healthz",
 		HTTPMetricsPath: "/metrics",
 	}
 	srv := New(cfg, st)

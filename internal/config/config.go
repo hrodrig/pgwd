@@ -59,7 +59,7 @@ type Config struct {
 	LokiBearerToken string // Authorization: Bearer <token>; empty = not set
 
 	// Behavior
-	Interval                int // seconds; 0 = run once
+	Interval                int    // seconds; 0 = run once
 	LogLevel                string // "info" (default) or "debug"; debug = verbose dry-run stats
 	DryRun                  bool
 	ForceNotification       bool   // send a test notification regardless of thresholds (to validate delivery/format)

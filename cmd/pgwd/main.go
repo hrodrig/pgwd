@@ -19,13 +19,13 @@ import (
 
 	"github.com/hrodrig/pgwd/internal/checker"
 	"github.com/hrodrig/pgwd/internal/config"
-	"github.com/hrodrig/pgwd/internal/validator"
 	"github.com/hrodrig/pgwd/internal/httpsrv"
 	"github.com/hrodrig/pgwd/internal/kube"
 	"github.com/hrodrig/pgwd/internal/notify"
 	"github.com/hrodrig/pgwd/internal/openbsd"
 	"github.com/hrodrig/pgwd/internal/postgres"
 	"github.com/hrodrig/pgwd/internal/store"
+	"github.com/hrodrig/pgwd/internal/validator"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 

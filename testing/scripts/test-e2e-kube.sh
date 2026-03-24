@@ -87,7 +87,7 @@ echo "Running pgwd -kube-postgres -kube-loki with -force-notification (daemon mo
   -kube-local-port 15432 \
   -kube-loki pgwd-e2e/svc/loki \
   -kube-loki-local-port 13100 \
-  -db-url 'postgres://pgwd:DISCOVER_MY_PASSWORD@localhost:15432/pgwd?sslmode=disable' \
+  -db-url 'postgres://pgwd:pgwd@localhost:15432/pgwd?sslmode=disable' \
   -force-notification \
   -interval 60 &
 PGWD_PID=$!

@@ -9,9 +9,9 @@ import (
 
 func TestValidateDatabases(t *testing.T) {
 	tests := []struct {
-		name    string
-		cfg     *config.Config
-		wantErr bool
+		name     string
+		cfg      *config.Config
+		wantErr  bool
 		contains string
 	}{
 		{"no databases", &config.Config{}, false, ""},
@@ -35,10 +35,10 @@ func TestValidateDatabases(t *testing.T) {
 
 func TestValidateClient(t *testing.T) {
 	tests := []struct {
-		name      string
-		cfg       *config.Config
-		wantErr   bool
-		contains  string
+		name     string
+		cfg      *config.Config
+		wantErr  bool
+		contains string
 	}{
 		{"has client", &config.Config{Client: "x"}, false, ""},
 		{"no client single-db", &config.Config{Client: ""}, true, "client is required"},
