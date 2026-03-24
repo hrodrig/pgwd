@@ -72,7 +72,7 @@ docker compose -f testing/compose.yaml up -d --scale client=0
 - Monitors 3 databases (ports 5432, 5433, 5434)
 - Stores metrics in `/tmp/pgwd-test.db` (SQLite, ncruces driver)
 - Exposes HTTP on `:8080`; health and metrics at `/api/pgwd/v1/healthz` and `/api/pgwd/v1/metrics`
-- `log_level: debug` — prints `[client/database] total=X active=Y ...` every 5 seconds (interval: 5)
+- `log_level: info` (default) — minimal logs; set `log_level: debug` to print `[client/database] total=X active=Y ...` every 5 seconds
 
 **Verify endpoints:**
 
@@ -86,7 +86,7 @@ curl http://localhost:8080/api/pgwd/v1/metrics
 
 **Port conflict:** If `:8080` is in use, edit `http.listen` in `local-test.conf` (e.g. `:8081`).
 
-**Less verbose logs:** Set `log_level: info` in the config to suppress periodic stats (only errors and notifications).
+**Verbose stats:** Set `log_level: debug` in the config to print connection stats every interval.
 
 ---
 

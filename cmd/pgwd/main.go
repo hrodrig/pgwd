@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -683,6 +684,19 @@ func logDryRunStats(cluster, client, database string, res runCheckResult) {
 	}
 }
 
+func logStartupBanner(cfg *config.Config) {
+	commit := Commit
+	if commit == "" {
+		commit = "unknown"
+	}
+	built := BuildDate
+	if built == "" {
+		built = "unknown"
+	}
+	log.Printf("pgwd: starting %s (commit %s, built %s) %s/%s log_level=%s",
+		Version, commit, built, runtime.GOOS, runtime.GOARCH, cfg.LogLevel)
+}
+
 func logConfigTrace(path string, configLoaded bool, hasCLIArgs bool) {
 	if path != "" {
 		if configLoaded {
@@ -720,7 +734,7 @@ func logConfigTrace(path string, configLoaded bool, hasCLIArgs bool) {
 func main() {
 	handleVersion()
 
-	cfg, _ := loadAndParseConfig()
+	cfg, loaded, configPath := loadAndParseConfig()
 	applyDBURLOverride(&cfg)
 	if cfg.ValidateK8sAccess {
 		if err := kube.ValidateKubernetesAccess(context.Background(), cfg.KubeContext); err != nil {
@@ -747,7 +761,9 @@ func main() {
 	if st != nil {
 		defer st.Close()
 	}
-	defer setupHTTPIfConfigured(&cfg, st)()
+	httpCleanup := setupHTTPIfConfigured(&cfg, st)
+	defer httpCleanup()
+	maybeLogConfigTrace(&cfg, configPath, loaded, len(os.Args) > 1)
 
 	for _, t := range targets {
 		runOneTarget(ctx, t, &cfg, senders, st, targets)
@@ -758,7 +774,7 @@ func main() {
 	runTickerLoop(ctx, &cfg, senders, st, targets)
 }
 
-func loadAndParseConfig() (config.Config, bool) {
+func loadAndParseConfig() (config.Config, bool, string) {
 	path := config.ConfigPath()
 	cfg, loaded, err := config.FromFile(path)
 	if err != nil {
@@ -774,8 +790,14 @@ func loadAndParseConfig() (config.Config, bool) {
 		printVersion()
 		os.Exit(0)
 	}
-	logConfigTrace(path, loaded, len(os.Args) > 1)
-	return cfg, loaded
+	logStartupBanner(&cfg)
+	return cfg, loaded, path
+}
+
+func maybeLogConfigTrace(cfg *config.Config, path string, loaded bool, hasCLIArgs bool) {
+	if cfg.LogLevel == "debug" {
+		logConfigTrace(path, loaded, hasCLIArgs)
+	}
 }
 
 func applyDBURLOverride(cfg *config.Config) {
