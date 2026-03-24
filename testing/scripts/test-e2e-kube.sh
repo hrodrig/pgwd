@@ -39,12 +39,26 @@ make build
 echo "Running pgwd -validate-k8s-access..."
 ./pgwd -validate-k8s-access
 
-echo "Running pgwd -kube-postgres with -dry-run..."
-./pgwd -client pgwd-e2e-test \
-  -kube-postgres pgwd-e2e/svc/postgres \
-  -kube-local-port 15432 \
-  -db-url 'postgres://pgwd:DISCOVER_MY_PASSWORD@localhost:15432/pgwd?sslmode=disable' \
-  -dry-run
+echo "Running pgwd -kube-postgres with -dry-run (DISCOVER_MY_PASSWORD)..."
+# SPDY exec for password discovery can be flaky on freshly-created Kind clusters;
+# retry up to 3 times with a short pause between attempts.
+DISCOVER_OK=0
+for attempt in 1 2 3; do
+  if ./pgwd -client pgwd-e2e-test \
+    -kube-postgres pgwd-e2e/svc/postgres \
+    -kube-local-port 15432 \
+    -db-url 'postgres://pgwd:DISCOVER_MY_PASSWORD@localhost:15432/pgwd?sslmode=disable' \
+    -dry-run; then
+    DISCOVER_OK=1
+    break
+  fi
+  echo "  password discovery attempt $attempt/3 failed, retrying in 3s..."
+  sleep 3
+done
+if [ "$DISCOVER_OK" -ne 1 ]; then
+  echo "ERROR: DISCOVER_MY_PASSWORD dry-run failed after 3 attempts"
+  exit 1
+fi
 
 echo "Running pgwd multi-database (databases: 3 Postgres via port-forward)..."
 PF1_PID=""
@@ -92,23 +106,27 @@ echo "Running pgwd -kube-postgres -kube-loki with -force-notification (daemon mo
   -interval 60 &
 PGWD_PID=$!
 
-echo "Waiting for pgwd to send notification..."
-sleep 5
-
-echo "Verifying log reached Loki..."
-LOKI_RESULT=$(curl -sf "http://127.0.0.1:13100/loki/api/v1/query_range?query=%7Bapp%3D%22pgwd%22%7D&limit=1" 2>/dev/null || echo "")
-echo "--- Loki query response (raw) ---"
-echo "$LOKI_RESULT"
-echo "--- end ---"
-if [ -z "$LOKI_RESULT" ]; then
+echo "Waiting for pgwd to send notification and Loki to index..."
+# Loki may need extra time to ingest and make the log queryable; poll with backoff.
+LOKI_OK=0
+for wait_secs in 5 5 10 10; do
+  sleep "$wait_secs"
+  echo "  querying Loki (after ${wait_secs}s wait)..."
+  LOKI_RESULT=$(curl -sf "http://127.0.0.1:13100/loki/api/v1/query_range?query=%7Bapp%3D%22pgwd%22%7D&limit=1" 2>/dev/null || echo "")
+  if [ -n "$LOKI_RESULT" ] && echo "$LOKI_RESULT" | grep -q 'pgwd'; then
+    LOKI_OK=1
+    echo "--- Loki query response (raw) ---"
+    echo "$LOKI_RESULT"
+    echo "--- end ---"
+    break
+  fi
+done
+if [ "$LOKI_OK" -ne 1 ]; then
   kill $PGWD_PID 2>/dev/null || true
-  echo "ERROR: Could not query Loki or no results. Push may have failed."
-  exit 1
-fi
-if ! echo "$LOKI_RESULT" | grep -q 'pgwd'; then
-  kill $PGWD_PID 2>/dev/null || true
-  echo "ERROR: Loki query returned no pgwd logs. Push may have failed."
-  echo "Response: $LOKI_RESULT"
+  echo "--- Loki query response (raw) ---"
+  echo "$LOKI_RESULT"
+  echo "--- end ---"
+  echo "ERROR: Could not verify pgwd logs in Loki after multiple attempts."
   exit 1
 fi
 
