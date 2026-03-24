@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hrodrig/pgwd/internal/checker"
 	"github.com/hrodrig/pgwd/internal/config"
 	"github.com/hrodrig/pgwd/internal/httpsrv"
 	"github.com/hrodrig/pgwd/internal/kube"
@@ -308,159 +309,17 @@ func applyThresholdDefaults(ctx context.Context, pool *pgxpool.Pool, cfg *config
 		maxConn = cfg.TestMaxConnections
 	}
 	if !cfg.UsesLevelMode() && maxConn > 0 {
-		applySingleThresholdDefaults(cfg, maxConn)
+		checker.ApplySingleThresholdDefaults(cfg, maxConn)
 	}
-	if err := validateThresholdConfig(cfg, maxConn, maxConnErr); err != nil {
+	if err := checker.ValidateThresholdConfig(cfg, maxConn, maxConnErr); err != nil {
 		return err
 	}
 	return nil
 }
 
-func applySingleThresholdDefaults(cfg *config.Config, maxConn int) {
-	percent := cfg.DefaultThresholdPercent
-	if percent < 1 {
-		percent = 1
-	}
-	if percent > 100 {
-		percent = 100
-	}
-	threshold := (maxConn * percent) / 100
-	if threshold < 1 {
-		threshold = 1
-	}
-	if cfg.ThresholdTotal == 0 {
-		cfg.ThresholdTotal = threshold
-	}
-	if cfg.ThresholdActive == 0 {
-		cfg.ThresholdActive = threshold
-	}
-}
-
-func validateThresholdConfig(cfg *config.Config, maxConn int, maxConnErr error) error {
-	if cfg.UsesLevelMode() && maxConn == 0 {
-		if maxConnErr != nil {
-			return fmt.Errorf("threshold-levels mode requires max_connections; could not read from server: %w", maxConnErr)
-		}
-		return fmt.Errorf("threshold-levels mode requires max_connections; server returned 0")
-	}
-	if cfg.HasAnyThreshold() || cfg.DryRun || cfg.ForceNotification {
-		return nil
-	}
-	if maxConnErr != nil {
-		return fmt.Errorf("no thresholds set and could not default from server (total/active default to default-threshold-percent of max_connections). Set -threshold-total and/or -threshold-active, or use -dry-run or -force-notification: %w", maxConnErr)
-	}
-	if maxConn == 0 {
-		return fmt.Errorf("no thresholds set and could not default from server (server returned max_connections=0). Set -threshold-total and/or -threshold-active, or use -dry-run or -force-notification")
-	}
-	return fmt.Errorf("no thresholds set. Set -threshold-total and/or -threshold-active, or use -dry-run or -force-notification")
-}
-
-// levelFromPercent returns 1, 2, or 3 when percent >= levels[0], levels[1], levels[2]; 0 otherwise.
-func levelFromPercent(percent int, levels []int) int {
-	for i := len(levels) - 1; i >= 0; i-- {
-		if percent >= levels[i] {
-			return i + 1
-		}
-	}
-	return 0
-}
-
-func levelToLabel(level int) string {
-	switch level {
-	case 1:
-		return "attention"
-	case 2:
-		return "alert"
-	case 3, 4, 5:
-		return "danger"
-	default:
-		return "attention"
-	}
-}
-
-func title(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
-}
-
-func baseEvent(stats postgres.ConnectionStats, maxConn int, override bool, cluster, client, ns, db string) notify.Event {
-	return notify.Event{
-		Stats:                    stats,
-		MaxConnections:           maxConn,
-		MaxConnectionsIsOverride: override,
-		Cluster:                  cluster,
-		Client:                   client,
-		Namespace:                ns,
-		Database:                 db,
-	}
-}
-
-func collectLevelModeEvent(ev notify.Event, cfg *config.Config, stats postgres.ConnectionStats, maxConn int) *notify.Event {
-	levels := config.ParseThresholdLevels(cfg.ThresholdLevels)
-	if len(levels) < 3 {
-		return nil
-	}
-	totalPercent := stats.Total * 100 / maxConn
-	activePercent := stats.Active * 100 / maxConn
-	totalLevel := levelFromPercent(totalPercent, levels)
-	activeLevel := levelFromPercent(activePercent, levels)
-	highestLevel := totalLevel
-	threshold := "total"
-	thresholdValue := 0
-	if activeLevel > totalLevel {
-		highestLevel = activeLevel
-		threshold = "active"
-		thresholdValue = (maxConn * levels[activeLevel-1]) / 100
-	} else if totalLevel > 0 {
-		thresholdValue = (maxConn * levels[totalLevel-1]) / 100
-	}
-	if highestLevel == 0 {
-		return nil
-	}
-	val := stats.Total
-	if threshold == "active" {
-		val = stats.Active
-	}
-	e := ev
-	e.Threshold = threshold
-	e.ThresholdValue = thresholdValue
-	e.Level = levelToLabel(highestLevel)
-	e.Message = fmt.Sprintf("%s connections %d >= %d (%d%% of max) — %s", title(threshold), val, thresholdValue, levels[highestLevel-1], e.Level)
-	return &e
-}
-
-func collectExplicitThresholdEvents(ev notify.Event, cfg *config.Config, stats postgres.ConnectionStats, maxConn int) []notify.Event {
-	var events []notify.Event
-	levels := config.ParseThresholdLevels(config.DefaultThresholdLevels)
-	addLevel := maxConn > 0 && len(levels) >= 3
-	if cfg.ThresholdTotal > 0 && stats.Total >= cfg.ThresholdTotal {
-		e := ev
-		e.Threshold = "total"
-		e.ThresholdValue = cfg.ThresholdTotal
-		e.Message = fmt.Sprintf("Total connections %d >= %d", stats.Total, cfg.ThresholdTotal)
-		if addLevel {
-			e.Level = levelToLabel(levelFromPercent(stats.Total*100/maxConn, levels))
-		}
-		events = append(events, e)
-	}
-	if cfg.ThresholdActive > 0 && stats.Active >= cfg.ThresholdActive {
-		e := ev
-		e.Threshold = "active"
-		e.ThresholdValue = cfg.ThresholdActive
-		e.Message = fmt.Sprintf("Active connections %d >= %d", stats.Active, cfg.ThresholdActive)
-		if addLevel {
-			e.Level = levelToLabel(levelFromPercent(stats.Active*100/maxConn, levels))
-		}
-		events = append(events, e)
-	}
-	return events
-}
-
 func collectEvents(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, stats postgres.ConnectionStats, maxConn int, cluster, client, ns, db string) []notify.Event {
 	var events []notify.Event
-	ev := baseEvent(stats, maxConn, cfg.TestMaxConnections > 0, cluster, client, ns, db)
+	ev := checker.BaseEvent(stats, maxConn, cfg.TestMaxConnections > 0, cluster, client, ns, db)
 
 	if cfg.ThresholdStale > 0 && cfg.StaleAge > 0 {
 		if e := collectStaleEvent(ctx, pool, cfg, ev); e != nil {
@@ -468,11 +327,11 @@ func collectEvents(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, 
 		}
 	}
 	if cfg.UsesLevelMode() && maxConn > 0 {
-		if e := collectLevelModeEvent(ev, cfg, stats, maxConn); e != nil {
+		if e := checker.CollectLevelModeEvent(ev, cfg, stats, maxConn); e != nil {
 			events = append(events, *e)
 		}
 	} else {
-		events = append(events, collectExplicitThresholdEvents(ev, cfg, stats, maxConn)...)
+		events = append(events, checker.CollectExplicitThresholdEvents(ev, cfg, stats, maxConn)...)
 	}
 	if cfg.ThresholdIdle > 0 && stats.Idle >= cfg.ThresholdIdle {
 		e := ev
@@ -564,40 +423,12 @@ func doRunCheck(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, clu
 	return res, nil
 }
 
-func allStringsEqual(sl []string, v string) bool {
-	for _, s := range sl {
-		if s != v {
-			return false
-		}
-	}
-	return true
-}
-
-func stateAndThresholdFromEvents(events []notify.Event) (state, threshold string) {
-	if len(events) == 0 {
-		return "ok", ""
-	}
-	state, threshold = "attention", events[0].Threshold
-	for _, e := range events {
-		if e.Threshold == "connect_failure" || e.Threshold == "too_many_clients" {
-			return "connect_failure", e.Threshold
-		}
-		if e.Level == "danger" {
-			return "danger", e.Threshold
-		}
-		if e.Level == "alert" {
-			state, threshold = "alert", e.Threshold
-		}
-	}
-	return state, threshold
-}
-
 func applyHysteresisFilter(ctx context.Context, st *store.Store, cfg *config.Config, client, cluster, db, state string, events []notify.Event) []notify.Event {
 	if st == nil || cfg.ConfirmAlert <= 1 || state == "ok" {
 		return events
 	}
 	last, _ := st.LastStates(ctx, client, cluster, db, cfg.ConfirmAlert-1)
-	if len(last) >= cfg.ConfirmAlert-1 && allStringsEqual(last, state) {
+	if len(last) >= cfg.ConfirmAlert-1 && checker.AllStringsEqual(last, state) {
 		return events
 	}
 	var filtered []notify.Event
@@ -650,7 +481,7 @@ func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, se
 		if cfg.DryRun && cfg.LogLevel == "debug" {
 			logDryRunStats(cluster, client, db, res)
 		}
-		state, thr := stateAndThresholdFromEvents(res.Events)
+		state, thr := checker.StateAndThresholdFromEvents(res.Events)
 		res.Events = applyHysteresisFilter(ctx, st, cfg, client, cluster, db, state, res.Events)
 		sendEvents(ctx, senders, cfg, res.Events)
 		if st != nil {
