@@ -32,6 +32,7 @@ client: "prod-db-primary"
 # -----------------------------------------------------------------------------
 interval: 60
 dry_run: true
+log_level: info    # info (default) or debug; debug = verbose dry-run stats
 notify_on_connect_failure: false
 
 # -----------------------------------------------------------------------------

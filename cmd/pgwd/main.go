@@ -85,6 +85,7 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.BoolVar(&cfg.NotifyOnConnectFailure, "notify-on-connect-failure", cfg.NotifyOnConnectFailure, "Send an alert to notifiers when Postgres connection fails (infrastructure alert) (PGWD_NOTIFY_ON_CONNECT_FAILURE)")
 	flag.IntVar(&cfg.TestMaxConnections, "test-max-connections", cfg.TestMaxConnections, "Override server max_connections for defaults and display (for testing alerts; 0 = use server) (PGWD_TEST_MAX_CONNECTIONS)")
 	flag.BoolVar(&cfg.ValidateK8sAccess, "validate-k8s-access", cfg.ValidateK8sAccess, "Validate cluster connectivity and list pods, then exit. Use -kube-context to select context. (PGWD_VALIDATE_K8S_ACCESS)")
+	flag.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "Log level: info (default) or debug. Debug = verbose dry-run stats every interval (PGWD_LOG_LEVEL)")
 	flag.Parse()
 	return *showVersionFlag
 }
@@ -645,8 +646,8 @@ func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, se
 			log.Printf("stats: %v", err)
 			return
 		}
-		if cfg.DryRun {
-			logDryRunStats(res)
+		if cfg.DryRun && cfg.LogLevel == "debug" {
+			logDryRunStats(cluster, client, db, res)
 		}
 		state, thr := stateAndThresholdFromEvents(res.Events)
 		res.Events = applyHysteresisFilter(ctx, st, cfg, client, cluster, db, state, res.Events)
@@ -665,11 +666,20 @@ func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, se
 	}
 }
 
-func logDryRunStats(res runCheckResult) {
+func logDryRunStats(cluster, client, database string, res runCheckResult) {
+	// target = cluster (if k8s) / client (monitor id) / database (Postgres DB name)
+	parts := []string{client}
+	if database != "" {
+		parts = append(parts, database)
+	}
+	target := strings.Join(parts, "/")
+	if cluster != "" {
+		target = cluster + "/" + target
+	}
 	if res.MaxConn > 0 {
-		log.Printf("total=%d active=%d idle=%d max_connections=%d", res.Stats.Total, res.Stats.Active, res.Stats.Idle, res.MaxConn)
+		log.Printf("[%s] total=%d active=%d idle=%d max_connections=%d", target, res.Stats.Total, res.Stats.Active, res.Stats.Idle, res.MaxConn)
 	} else {
-		log.Printf("total=%d active=%d idle=%d", res.Stats.Total, res.Stats.Active, res.Stats.Idle)
+		log.Printf("[%s] total=%d active=%d idle=%d", target, res.Stats.Total, res.Stats.Active, res.Stats.Idle)
 	}
 }
 

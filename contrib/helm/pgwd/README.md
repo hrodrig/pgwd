@@ -128,6 +128,7 @@ podMonitor:
 | `secrets.existingSecret` | Use existing Secret name | `""` |
 | `config.enabled` | Use config file instead of env | `false` |
 | `config.extra` | Full pgwd YAML config | See values.yaml |
+| `env.PGWD_LOG_LEVEL` | Log level: `info` or `debug` (debug = verbose dry-run stats) | `info` |
 | `persistence.enabled` | Use PVC for SQLite | `true` |
 | `persistence.size` | PVC size | `1Gi` |
 | `service.enabled` | Create Service | `true` |

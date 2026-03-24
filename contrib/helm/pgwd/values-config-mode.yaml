@@ -5,6 +5,7 @@ config:
     client: pgwd-k8s
     interval: 60
     dry_run: false
+    log_level: info
     notify_on_connect_failure: true
     databases:
       - url: postgres://user:password@postgres.default.svc.cluster.local:5432/mydb

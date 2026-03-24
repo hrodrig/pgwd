@@ -66,6 +66,7 @@ config:
     client: "pgwd-k8s"
     interval: 60
     dry_run: false
+    log_level: info
     notify_on_connect_failure: true
     sqlite:
       path: /var/lib/pgwd/pgwd.db
@@ -88,6 +89,7 @@ config:
 env:
   PGWD_CLIENT: "pgwd-k8s"
   PGWD_INTERVAL: "60"
+  PGWD_LOG_LEVEL: "info"
   PGWD_HTTP_LISTEN: ":8080"
   PGWD_SQLITE_PATH: "/var/lib/pgwd/pgwd.db"
   # PGWD_NOTIFICATIONS_SLACK_WEBHOOK: from secrets

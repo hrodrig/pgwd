@@ -31,6 +31,7 @@ type fileConfigDB struct {
 type fileConfig struct {
 	Client                 string         `yaml:"client"`
 	DryRun                 bool           `yaml:"dry_run"`
+	LogLevel               string         `yaml:"log_level"`
 	Interval               int            `yaml:"interval"`
 	NotifyOnConnectFailure bool           `yaml:"notify_on_connect_failure"`
 	Databases              []fileConfigDB `yaml:"databases"`
@@ -100,6 +101,7 @@ func fileConfigToConfig(fc fileConfig) Config {
 		Client:                  fc.Client,
 		DefaultThresholdPercent: fc.DB.DefaultThresholdPercent,
 		DryRun:                  fc.DryRun,
+		LogLevel:                fc.LogLevel,
 		Interval:                fc.Interval,
 		KubePostgres:            fc.Kube.Postgres,
 		KubeContext:             fc.Kube.Context,
@@ -232,6 +234,13 @@ func applyGeneralDefaults(c *Config) {
 	}
 	if c.ThresholdLevels == "" {
 		c.ThresholdLevels = DefaultThresholdLevels
+	}
+	if c.LogLevel == "" {
+		c.LogLevel = "info"
+	}
+	// Normalize log_level: only info and debug supported
+	if c.LogLevel != "debug" && c.LogLevel != "info" {
+		c.LogLevel = "info"
 	}
 }
 

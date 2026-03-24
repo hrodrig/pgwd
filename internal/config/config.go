@@ -60,6 +60,7 @@ type Config struct {
 
 	// Behavior
 	Interval                int // seconds; 0 = run once
+	LogLevel                string // "info" (default) or "debug"; debug = verbose dry-run stats
 	DryRun                  bool
 	ForceNotification       bool   // send a test notification regardless of thresholds (to validate delivery/format)
 	NotifyOnConnectFailure  bool   // when Postgres connection fails, send an alert to notifiers (infrastructure alert)
@@ -274,6 +275,12 @@ func applyEnvBehaviour(cfg *Config) {
 	if _, ok := os.LookupEnv("PGWD_VALIDATE_K8S_ACCESS"); ok {
 		cfg.ValidateK8sAccess = envBool("VALIDATE_K8S_ACCESS", false)
 	}
+	if v := env("LOG_LEVEL", ""); v != "" {
+		cfg.LogLevel = v
+		if cfg.LogLevel != "debug" && cfg.LogLevel != "info" {
+			cfg.LogLevel = "info"
+		}
+	}
 }
 
 // FromEnv builds config from environment variables (PGWD_*).
@@ -300,6 +307,7 @@ func FromEnv() Config {
 		LokiOrgID:               env("NOTIFICATIONS_LOKI_ORG_ID", ""),
 		LokiBearerToken:         env("NOTIFICATIONS_LOKI_BEARER_TOKEN", ""),
 		Interval:                envInt("INTERVAL", 0),
+		LogLevel:                env("LOG_LEVEL", "info"),
 		DryRun:                  envBool("DRY_RUN", false),
 		ForceNotification:       envBool("FORCE_NOTIFICATION", false),
 		NotifyOnConnectFailure:  envBool("NOTIFY_ON_CONNECT_FAILURE", false),
