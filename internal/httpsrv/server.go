@@ -62,7 +62,13 @@ func (s *Server) Stop(ctx context.Context) error {
 	return s.server.Shutdown(ctx)
 }
 
-func (s *Server) handleHealth(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if s.st != nil {
+		if err := s.st.Ping(r.Context()); err != nil {
+			http.Error(w, "store unavailable: "+err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+	}
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
 }

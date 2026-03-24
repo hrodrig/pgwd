@@ -103,24 +103,18 @@ func TestStore_LatestRecords(t *testing.T) {
 	if len(recs) != 2 {
 		t.Fatalf("LatestRecords: want 2 targets, got %d", len(recs))
 	}
-	// c1/d1: last was attention (Total=15)
-	// c2/d2: last was ok (Total=20)
-	var gotC1, gotC2 bool
+	recByTarget := make(map[string]Record)
 	for _, r := range recs {
-		if r.Client == "c1" && r.Database == "d1" {
-			gotC1 = true
-			if r.Total != 15 || r.State != "attention" {
-				t.Errorf("c1/d1: got Total=%d State=%q", r.Total, r.State)
-			}
-		}
-		if r.Client == "c2" && r.Database == "d2" {
-			gotC2 = true
-			if r.Total != 20 || r.Stale != 1 {
-				t.Errorf("c2/d2: got Total=%d Stale=%d", r.Total, r.Stale)
-			}
-		}
+		recByTarget[r.Client+"/"+r.Database] = r
 	}
-	if !gotC1 || !gotC2 {
-		t.Error("LatestRecords: missing expected targets")
+	if r, ok := recByTarget["c1/d1"]; !ok {
+		t.Error("LatestRecords: missing c1/d1")
+	} else if r.Total != 15 || r.State != "attention" {
+		t.Errorf("c1/d1: got Total=%d State=%q, want 15/attention", r.Total, r.State)
+	}
+	if r, ok := recByTarget["c2/d2"]; !ok {
+		t.Error("LatestRecords: missing c2/d2")
+	} else if r.Total != 20 || r.Stale != 1 {
+		t.Errorf("c2/d2: got Total=%d Stale=%d, want 20/1", r.Total, r.Stale)
 	}
 }

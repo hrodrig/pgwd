@@ -1,0 +1,16 @@
+{{- if .Values.podMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ include "pgwd.fullname" . }}
+  labels:
+    {{- include "pgwd.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "pgwd.selectorLabels" . | nindent 6 }}
+  podMetricsEndpoints:
+    - port: http
+      path: {{ .Values.podMonitor.path }}
+      interval: {{ .Values.podMonitor.interval }}
+{{- end }}

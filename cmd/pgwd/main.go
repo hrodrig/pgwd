@@ -527,10 +527,10 @@ func sendEvents(ctx context.Context, senders []notify.Sender, cfg *config.Config
 
 // runCheckResult is returned by doRunCheck for store integration.
 type runCheckResult struct {
-	Stats            postgres.ConnectionStats
-	MaxConn          int
-	Events           []notify.Event
-	StaleCount       int   // from target StaleAge (for alerts)
+	Stats              postgres.ConnectionStats
+	MaxConn            int
+	Events             []notify.Event
+	StaleCount         int // from target StaleAge (for alerts)
 	StaleCountForStore int // from SqliteStaleAge if >0, else StaleCount (for store)
 }
 
@@ -590,6 +590,54 @@ func stateAndThresholdFromEvents(events []notify.Event) (state, threshold string
 	return state, threshold
 }
 
+func applyHysteresisFilter(ctx context.Context, st *store.Store, cfg *config.Config, client, cluster, db, state string, events []notify.Event) []notify.Event {
+	if st == nil || cfg.ConfirmAlert <= 1 || state == "ok" {
+		return events
+	}
+	last, _ := st.LastStates(ctx, client, cluster, db, cfg.ConfirmAlert-1)
+	if len(last) >= cfg.ConfirmAlert-1 && allStringsEqual(last, state) {
+		return events
+	}
+	var filtered []notify.Event
+	for _, e := range events {
+		if e.Threshold == "connect_failure" || e.Threshold == "too_many_clients" {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered
+}
+
+func trySendResolutionNotification(ctx context.Context, st *store.Store, cfg *config.Config, senders []notify.Sender, res runCheckResult, cluster, client, ns, db string) {
+	if st == nil || cfg.ConfirmOk < 1 {
+		return
+	}
+	last, _ := st.LastStates(ctx, client, cluster, db, cfg.ConfirmOk+1)
+	if len(last) < cfg.ConfirmOk+1 {
+		return
+	}
+	for i := 0; i < cfg.ConfirmOk && i < len(last); i++ {
+		if last[i] != "ok" {
+			return
+		}
+	}
+	if last[cfg.ConfirmOk] == "ok" || last[cfg.ConfirmOk] == "" {
+		return
+	}
+	ev := notify.Event{
+		Stats:          res.Stats,
+		Threshold:      "resolution",
+		ThresholdValue: 0,
+		Message:        fmt.Sprintf("PostgreSQL connections returned to normal. total=%d active=%d idle=%d", res.Stats.Total, res.Stats.Active, res.Stats.Idle),
+		Level:          "ok",
+		MaxConnections: res.MaxConn,
+		Cluster:        cluster,
+		Client:         client,
+		Namespace:      ns,
+		Database:       db,
+	}
+	sendEvents(ctx, senders, cfg, []notify.Event{ev})
+}
+
 func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, senders []notify.Sender, st *store.Store, cluster, client, ns, db string) func() {
 	return func() {
 		res, err := doRunCheck(ctx, pool, cfg, cluster, client, ns, db)
@@ -598,27 +646,10 @@ func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, se
 			return
 		}
 		if cfg.DryRun {
-			if res.MaxConn > 0 {
-				log.Printf("total=%d active=%d idle=%d max_connections=%d", res.Stats.Total, res.Stats.Active, res.Stats.Idle, res.MaxConn)
-			} else {
-				log.Printf("total=%d active=%d idle=%d", res.Stats.Total, res.Stats.Active, res.Stats.Idle)
-			}
+			logDryRunStats(res)
 		}
 		state, thr := stateAndThresholdFromEvents(res.Events)
-		// Hysteresis: require confirm_alert consecutive bad checks before sending alerts
-		if st != nil && cfg.ConfirmAlert > 1 && state != "ok" {
-			last, _ := st.LastStates(ctx, client, cluster, db, cfg.ConfirmAlert-1)
-			if len(last) < cfg.ConfirmAlert-1 || !allStringsEqual(last, state) {
-				// Not enough consecutive bad → filter out non-urgent events (connect_failure/too_many_clients always send)
-				var filtered []notify.Event
-				for _, e := range res.Events {
-					if e.Threshold == "connect_failure" || e.Threshold == "too_many_clients" {
-						filtered = append(filtered, e)
-					}
-				}
-				res.Events = filtered
-			}
-		}
+		res.Events = applyHysteresisFilter(ctx, st, cfg, client, cluster, db, state, res.Events)
 		sendEvents(ctx, senders, cfg, res.Events)
 		if st != nil {
 			if err := st.Insert(ctx, store.Record{
@@ -627,36 +658,18 @@ func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, se
 				MaxConnections: res.MaxConn, State: state, Threshold: thr,
 			}); err != nil {
 				log.Printf("store insert: %v", err)
-			} else if state == "ok" && cfg.ConfirmOk >= 1 {
-				// Resolution: require confirm_ok consecutive ok, and we must have been in bad state before
-				last, _ := st.LastStates(ctx, client, cluster, db, cfg.ConfirmOk+1)
-				if len(last) >= cfg.ConfirmOk+1 {
-					allRecentOk := true
-					for i := 0; i < cfg.ConfirmOk && i < len(last); i++ {
-						if last[i] != "ok" {
-							allRecentOk = false
-							break
-						}
-					}
-					prevWasBad := last[cfg.ConfirmOk] != "ok" && last[cfg.ConfirmOk] != ""
-					if allRecentOk && prevWasBad {
-						ev := notify.Event{
-							Stats:          res.Stats,
-							Threshold:      "resolution",
-							ThresholdValue: 0,
-							Message:        fmt.Sprintf("PostgreSQL connections returned to normal. total=%d active=%d idle=%d", res.Stats.Total, res.Stats.Active, res.Stats.Idle),
-							Level:          "ok",
-							MaxConnections: res.MaxConn,
-							Cluster:        cluster,
-							Client:         client,
-							Namespace:      ns,
-							Database:       db,
-						}
-						sendEvents(ctx, senders, cfg, []notify.Event{ev})
-					}
-				}
+			} else if state == "ok" {
+				trySendResolutionNotification(ctx, st, cfg, senders, res, cluster, client, ns, db)
 			}
 		}
+	}
+}
+
+func logDryRunStats(res runCheckResult) {
+	if res.MaxConn > 0 {
+		log.Printf("total=%d active=%d idle=%d max_connections=%d", res.Stats.Total, res.Stats.Active, res.Stats.Idle, res.MaxConn)
+	} else {
+		log.Printf("total=%d active=%d idle=%d", res.Stats.Total, res.Stats.Active, res.Stats.Idle)
 	}
 }
 
@@ -697,8 +710,46 @@ func logConfigTrace(path string, configLoaded bool, hasCLIArgs bool) {
 func main() {
 	handleVersion()
 
+	cfg, _ := loadAndParseConfig()
+	applyDBURLOverride(&cfg)
+	if cfg.ValidateK8sAccess {
+		if err := kube.ValidateKubernetesAccess(context.Background(), cfg.KubeContext); err != nil {
+			log.Fatalf("validate-k8s-access: %v", err)
+		}
+		os.Exit(0)
+	}
+	validateConfig(&cfg)
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if !cfg.UsesDatabases() {
+		defer setupKube(ctx, &cfg)()
+		defer setupKubeLoki(ctx, &cfg)()
+	}
+	if cfg.KubePostgres == "" && cfg.KubeLoki == "" {
+		openbsd.ApplyPledge()
+	}
+
+	senders := buildSenders(&cfg)
+	targets := cfg.Targets()
+	st := openStoreIfConfigured(&cfg)
+	if st != nil {
+		defer st.Close()
+	}
+	defer setupHTTPIfConfigured(&cfg, st)()
+
+	for _, t := range targets {
+		runOneTarget(ctx, t, &cfg, senders, st, targets)
+	}
+	if cfg.Interval <= 0 {
+		return
+	}
+	runTickerLoop(ctx, &cfg, senders, st, targets)
+}
+
+func loadAndParseConfig() (config.Config, bool) {
 	path := config.ConfigPath()
-	hasCLIArgs := len(os.Args) > 1
 	cfg, loaded, err := config.FromFile(path)
 	if err != nil {
 		log.Fatalf("pgwd: config file %s: %v", path, err)
@@ -713,96 +764,70 @@ func main() {
 		printVersion()
 		os.Exit(0)
 	}
-	logConfigTrace(path, loaded, hasCLIArgs)
+	logConfigTrace(path, loaded, len(os.Args) > 1)
+	return cfg, loaded
+}
 
-	// -db-url override: when config has databases, CLI -db-url + one-shot (interval 0) uses single target from CLI.
+func applyDBURLOverride(cfg *config.Config) {
 	if cfg.DBURL != "" && cfg.Interval <= 0 && cfg.UsesDatabases() {
-		cfg.Databases = nil // Targets() will use DBURL as single target
+		cfg.Databases = nil
 	}
+}
 
-	if cfg.ValidateK8sAccess {
-		ctx := context.Background()
-		if err := kube.ValidateKubernetesAccess(ctx, cfg.KubeContext); err != nil {
-			log.Fatalf("validate-k8s-access: %v", err)
+func openStoreIfConfigured(cfg *config.Config) *store.Store {
+	if cfg.SqlitePath == "" {
+		return nil
+	}
+	st, err := store.Open(cfg.SqlitePath, cfg.SqliteMaxMetrics)
+	if err != nil {
+		log.Fatalf("sqlite: %v", err)
+	}
+	return st
+}
+
+func setupHTTPIfConfigured(cfg *config.Config, st *store.Store) func() {
+	if cfg.HTTPListen == "" {
+		return func() {}
+	}
+	httpSrv := httpsrv.New(cfg, st)
+	if err := httpSrv.Start(); err != nil {
+		log.Fatalf("http: %v", err)
+	}
+	log.Printf("pgwd: HTTP listening on %s (%s%s)", cfg.HTTPListen, cfg.HTTPBasePath, cfg.HTTPHealthPath)
+	return func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := httpSrv.Stop(shutdownCtx); err != nil {
+			log.Printf("http shutdown: %v", err)
 		}
-		os.Exit(0)
 	}
-	validateConfig(&cfg)
+}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Config, senders []notify.Sender, st *store.Store, targets []config.DatabaseTarget) {
+	targetCfg := cfg.ConfigForTarget(t)
+	runCluster, runClient, runNamespace, runDatabase := runContextStrings(ctx, targetCfg, t.URL)
 
-	if !cfg.UsesDatabases() {
-		kubeCleanup := setupKube(ctx, &cfg)
-		defer kubeCleanup()
-
-		kubeLokiCleanup := setupKubeLoki(ctx, &cfg)
-		defer kubeLokiCleanup()
-	}
-
-	// On OpenBSD: skip pledge when using kube. pgwd spawns kubectl; if pgwd has pledged,
-	// kubectl inherits it and fails (pledge "rpath", syscall 59). Without pledge, kubectl works.
-	if cfg.KubePostgres == "" && cfg.KubeLoki == "" {
-		openbsd.ApplyPledge()
-	}
-
-	senders := buildSenders(&cfg)
-	targets := cfg.Targets()
-
-	var st *store.Store
-	if cfg.SqlitePath != "" {
-		var err error
-		st, err = store.Open(cfg.SqlitePath, cfg.SqliteMaxMetrics)
-		if err != nil {
-			log.Fatalf("sqlite: %v", err)
+	pool, err := postgres.Pool(ctx, t.URL)
+	if err != nil {
+		notifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err)
+		if len(targets) == 1 {
+			log.Fatal("postgres connect failed (check database URL, connectivity, and credentials)")
 		}
-		defer st.Close()
-	}
-	if cfg.HTTPListen != "" {
-		httpSrv := httpsrv.New(&cfg, st)
-		if err := httpSrv.Start(); err != nil {
-			log.Fatalf("http: %v", err)
-		}
-		defer func() {
-			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			if err := httpSrv.Stop(shutdownCtx); err != nil {
-				log.Printf("http shutdown: %v", err)
-			}
-		}()
-		log.Printf("pgwd: HTTP listening on %s (%s%s)", cfg.HTTPListen, cfg.HTTPBasePath, cfg.HTTPHealthPath)
-	}
-
-	runOne := func(t config.DatabaseTarget) {
-		targetCfg := cfg.ConfigForTarget(t)
-		runCluster, runClient, runNamespace, runDatabase := runContextStrings(ctx, targetCfg, t.URL)
-
-		pool, err := postgres.Pool(ctx, t.URL)
-		if err != nil {
-			notifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err)
-			if len(targets) == 1 {
-				log.Fatal("postgres connect failed (check database URL, connectivity, and credentials)")
-			}
-			log.Printf("postgres connect failed [%s]: %v", t.Client, err)
-			return // skip this target, continue with others
-		}
-		defer pool.Close()
-
-		if err := applyThresholdDefaults(ctx, pool, targetCfg); err != nil {
-			notifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err)
-			log.Printf("threshold config error [%s]: %v", t.Client, err)
-			return
-		}
-		run := makeRunFunc(ctx, pool, targetCfg, senders, st, runCluster, runClient, runNamespace, runDatabase)
-		run()
-	}
-
-	for _, t := range targets {
-		runOne(t)
-	}
-	if cfg.Interval <= 0 {
+		log.Printf("postgres connect failed [%s]: %v", t.Client, err)
 		return
 	}
+	defer pool.Close()
+
+	if err := applyThresholdDefaults(ctx, pool, targetCfg); err != nil {
+		notifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err)
+		log.Printf("threshold config error [%s]: %v", t.Client, err)
+		return
+	}
+	run := makeRunFunc(ctx, pool, targetCfg, senders, st, runCluster, runClient, runNamespace, runDatabase)
+	run()
+}
+
+func runTickerLoop(ctx context.Context, cfg *config.Config, senders []notify.Sender, st *store.Store, targets []config.DatabaseTarget) {
 	ticker := time.NewTicker(time.Duration(cfg.Interval) * time.Second)
 	defer ticker.Stop()
 	for {
@@ -811,7 +836,7 @@ func main() {
 			return
 		case <-ticker.C:
 			for _, t := range targets {
-				runOne(t)
+				runOneTarget(ctx, t, cfg, senders, st, targets)
 			}
 		}
 	}

@@ -2,7 +2,21 @@
 
 When pgwd runs **inside** Kubernetes as a Deployment, use **direct service URLs**. No kubectl or port-forward needed.
 
-## Quick start
+## Helm (recommended)
+
+Use the [Helm chart](../helm/pgwd/) for a full deployment with Secret, ConfigMap, PVC, Service, and probes:
+
+```bash
+helm install pgwd ./contrib/helm/pgwd \
+  --namespace monitoring \
+  --set secrets.dbUrl="postgres://user:pass@postgres.default.svc.cluster.local:5432/mydb" \
+  --set secrets.slackWebhook="https://hooks.slack.com/..." \
+  --set secrets.lokiUrl="http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+```
+
+See [contrib/helm/pgwd/README.md](../helm/pgwd/README.md) for configuration options.
+
+## Raw manifests
 
 1. Create a Secret with the DB URL (or individual credentials):
 

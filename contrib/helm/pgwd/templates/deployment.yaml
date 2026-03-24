@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pgwd.fullname" . }}
+  labels:
+    {{- include "pgwd.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "pgwd.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "pgwd.labels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "pgwd.fullname" . }}
+      {{- else if .Values.serviceAccount.name }}
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: {{ include "pgwd.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            {{- if .Values.config.enabled }}
+            - name: PGWD_CONFIG
+              value: /etc/pgwd/pgwd.conf
+            {{- else }}
+            {{- if or .Values.secrets.existingSecret (and .Values.secrets.create (not .Values.secrets.existingSecret) (or .Values.secrets.dbUrl .Values.secrets.slackWebhook .Values.secrets.lokiUrl)) }}
+            {{- $secretName := .Values.secrets.existingSecret | default (printf "%s-secrets" (include "pgwd.fullname" .)) }}
+            {{- if or .Values.secrets.dbUrl .Values.secrets.existingSecret }}
+            - name: PGWD_DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: url
+            {{- end }}
+            {{- if or .Values.secrets.slackWebhook .Values.secrets.existingSecret }}
+            - name: PGWD_NOTIFICATIONS_SLACK_WEBHOOK
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: slack-webhook
+            {{- end }}
+            {{- if or .Values.secrets.lokiUrl .Values.secrets.existingSecret }}
+            - name: PGWD_NOTIFICATIONS_LOKI_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName }}
+                  key: loki-url
+            {{- end }}
+            {{- end }}
+            {{- end }}
+            {{- range $key, $val := .Values.env }}
+            - name: {{ $key }}
+              {{- if kindIs "string" $val }}
+              value: {{ $val | quote }}
+              {{- else }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $val.secretKeyRef.name }}
+                  key: {{ $val.secretKeyRef.key }}
+              {{- end }}
+            {{- end }}
+          volumeMounts:
+            {{- if .Values.config.enabled }}
+            - name: config
+              mountPath: /etc/pgwd
+              readOnly: true
+            {{- end }}
+            - name: data
+              mountPath: /var/lib/pgwd
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        {{- if .Values.config.enabled }}
+        - name: config
+          configMap:
+            name: {{ include "pgwd.fullname" . }}-config
+        {{- end }}
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim | default (printf "%s-data" (include "pgwd.fullname" .)) }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

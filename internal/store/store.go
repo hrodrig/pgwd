@@ -8,7 +8,8 @@ import (
 	"path/filepath"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/ncruces/go-sqlite3/driver"
+	_ "github.com/ncruces/go-sqlite3/embed"
 )
 
 const schema = `
@@ -58,7 +59,7 @@ func Open(path string, maxMetrics int) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return nil, fmt.Errorf("mkdir %s: %w", filepath.Dir(path), err)
 	}
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite3", "file:"+path)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite %s: %w", path, err)
 	}
@@ -75,6 +76,11 @@ func Open(path string, maxMetrics int) (*Store, error) {
 // Close closes the database connection.
 func (s *Store) Close() error {
 	return s.db.Close()
+}
+
+// Ping verifies the database connection is alive. Used for /healthz.
+func (s *Store) Ping(ctx context.Context) error {
+	return s.db.PingContext(ctx)
 }
 
 // Insert inserts one metrics record and evicts oldest rows if over maxMetrics (FIFO).

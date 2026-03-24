@@ -80,9 +80,9 @@ type Config struct {
 	ConfirmOk    int // consecutive "ok" checks before resolution notification (default 1)
 
 	// HTTP: metrics and health endpoint for Kubernetes probes. Optional.
-	HTTPListen    string // e.g. ":8080"; empty = disabled
-	HTTPBasePath  string // e.g. "/api/pgwd/v1"; paths relative to this
-	HTTPHealthPath string // e.g. "/healthz" → base_path + health_path
+	HTTPListen      string // e.g. ":8080"; empty = disabled
+	HTTPBasePath    string // e.g. "/api/pgwd/v1"; paths relative to this
+	HTTPHealthPath  string // e.g. "/healthz" → base_path + health_path
 	HTTPMetricsPath string // e.g. "/metrics" → base_path + metrics_path
 }
 

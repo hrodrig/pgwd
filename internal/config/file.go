@@ -29,23 +29,23 @@ type fileConfigDB struct {
 
 // fileConfig mirrors the YAML structure: db, databases, kube, notifications, and top-level keys.
 type fileConfig struct {
-	Client                 string        `yaml:"client"`
-	DryRun                 bool          `yaml:"dry_run"`
-	Interval               int           `yaml:"interval"`
-	NotifyOnConnectFailure bool          `yaml:"notify_on_connect_failure"`
-	Databases []fileConfigDB `yaml:"databases"`
-	DB        fileConfigDB   `yaml:"db"`
-	Sqlite struct {
+	Client                 string         `yaml:"client"`
+	DryRun                 bool           `yaml:"dry_run"`
+	Interval               int            `yaml:"interval"`
+	NotifyOnConnectFailure bool           `yaml:"notify_on_connect_failure"`
+	Databases              []fileConfigDB `yaml:"databases"`
+	DB                     fileConfigDB   `yaml:"db"`
+	Sqlite                 struct {
 		Path       string `yaml:"path"`
 		MaxMetrics int    `yaml:"max_metrics"`
 		StaleAge   int    `yaml:"stale_age"`
 	} `yaml:"sqlite"`
 	ConfirmAlert int `yaml:"confirm_alert"`
-	ConfirmOk     int `yaml:"confirm_ok"`
-	HTTP struct {
-		Listen     string `yaml:"listen"`
-		BasePath   string `yaml:"base_path"`
-		HealthPath string `yaml:"healthz_path"`
+	ConfirmOk    int `yaml:"confirm_ok"`
+	HTTP         struct {
+		Listen      string `yaml:"listen"`
+		BasePath    string `yaml:"base_path"`
+		HealthPath  string `yaml:"healthz_path"`
 		MetricsPath string `yaml:"metrics_path"`
 	} `yaml:"http"`
 	Kube struct {
@@ -159,8 +159,8 @@ func mergeDBTarget(baseClient string, base, over fileConfigDB) DatabaseTarget {
 		ThresholdTotal:          orZero(over.Threshold.Total, base.Threshold.Total),
 		ThresholdActive:         orZero(over.Threshold.Active, base.Threshold.Active),
 		ThresholdIdle:           orZero(over.Threshold.Idle, base.Threshold.Idle),
-		ThresholdStale:         orZero(over.Threshold.Stale, base.Threshold.Stale),
-		ThresholdLevels:        orEmpty(over.Threshold.Levels, base.Threshold.Levels),
+		ThresholdStale:          orZero(over.Threshold.Stale, base.Threshold.Stale),
+		ThresholdLevels:         orEmpty(over.Threshold.Levels, base.Threshold.Levels),
 	}
 	if t.Client == "" && baseClient != "" {
 		t.Client = baseClient + "-" + databaseNameFromURL(t.URL)
@@ -191,7 +191,6 @@ func orEmpty(a, b string) string {
 	return b
 }
 
-
 func databaseNameFromURL(raw string) string {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -206,6 +205,13 @@ func databaseNameFromURL(raw string) string {
 
 // ApplyDefaults sets default values for fields that are zero. Call after FromFile when no file exists.
 func ApplyDefaults(c *Config) {
+	applyKubeDefaults(c)
+	applyGeneralDefaults(c)
+	applySqliteAndConfirmDefaults(c)
+	applyHTTPDefaults(c)
+}
+
+func applyKubeDefaults(c *Config) {
 	if c.KubePasswordVar == "" {
 		c.KubePasswordVar = "POSTGRES_PASSWORD"
 	}
@@ -218,12 +224,18 @@ func ApplyDefaults(c *Config) {
 	if c.KubeLokiRemotePort == 0 {
 		c.KubeLokiRemotePort = 3100
 	}
+}
+
+func applyGeneralDefaults(c *Config) {
 	if c.DefaultThresholdPercent == 0 {
 		c.DefaultThresholdPercent = 80
 	}
 	if c.ThresholdLevels == "" {
 		c.ThresholdLevels = DefaultThresholdLevels
 	}
+}
+
+func applySqliteAndConfirmDefaults(c *Config) {
 	if c.SqlitePath != "" && c.SqliteMaxMetrics <= 0 {
 		c.SqliteMaxMetrics = 10000
 	}
@@ -233,15 +245,19 @@ func ApplyDefaults(c *Config) {
 	if c.ConfirmOk <= 0 {
 		c.ConfirmOk = 1
 	}
-	if c.HTTPListen != "" {
-		if c.HTTPBasePath == "" {
-			c.HTTPBasePath = "/api/pgwd/v1"
-		}
-		if c.HTTPHealthPath == "" {
-			c.HTTPHealthPath = "/healthz"
-		}
-		if c.HTTPMetricsPath == "" {
-			c.HTTPMetricsPath = "/metrics"
-		}
+}
+
+func applyHTTPDefaults(c *Config) {
+	if c.HTTPListen == "" {
+		return
+	}
+	if c.HTTPBasePath == "" {
+		c.HTTPBasePath = "/api/pgwd/v1"
+	}
+	if c.HTTPHealthPath == "" {
+		c.HTTPHealthPath = "/healthz"
+	}
+	if c.HTTPMetricsPath == "" {
+		c.HTTPMetricsPath = "/metrics"
 	}
 }

@@ -137,7 +137,7 @@ func resolvePodFromService(ctx context.Context, clientset *kubernetes.Clientset,
 	}
 	list, err := clientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
 		LabelSelector: metav1.FormatLabelSelector(&metav1.LabelSelector{MatchLabels: svc.Spec.Selector}),
-		Limit:        1,
+		Limit:         1,
 	})
 	if err != nil {
 		return "", fmt.Errorf("list pods for service %s: %w", svcName, err)
@@ -173,10 +173,10 @@ func GetPasswordFromPod(ctx context.Context, kubeContext, namespace, podName, co
 		Resource("pods").Namespace(namespace).Name(podName).
 		SubResource("exec")
 	opts := &corev1.PodExecOptions{
-		Command:   []string{"printenv", envVar},
-		Stdout:    true,
-		Stderr:    true,
-		TTY:       false,
+		Command: []string{"printenv", envVar},
+		Stdout:  true,
+		Stderr:  true,
+		TTY:     false,
 	}
 	if container != "" {
 		opts.Container = container

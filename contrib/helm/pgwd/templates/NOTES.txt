@@ -1,0 +1,17 @@
+pgwd has been installed.
+
+1. Check that the pod is running:
+
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/name=pgwd
+
+2. View logs:
+
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/name=pgwd -f
+
+3. Scrape metrics ( Prometheus ):
+
+  {{ include "pgwd.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:8080/api/pgwd/v1/metrics
+
+4. Test health (from another pod with curl):
+
+  kubectl run -n {{ .Release.Namespace }} curl --rm -i --restart=Never --image=curlimages/curl -- curl -s http://{{ include "pgwd.fullname" . }}:8080/api/pgwd/v1/healthz

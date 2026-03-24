@@ -1,0 +1,11 @@
+{{- if .Values.config.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "pgwd.fullname" . }}-config
+  labels:
+    {{- include "pgwd.labels" . | nindent 4 }}
+data:
+  pgwd.conf: |
+{{ .Values.config.extra | indent 4 }}
+{{- end }}
