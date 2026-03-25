@@ -29,6 +29,8 @@ Kubernetes and container deployments are **not** in scope here — they are cove
 | Alpine 3.x | tarball | OpenRC |
 | FreeBSD 15 | tarball | rc.d (sysrc/service) |
 | OpenBSD 7.x | tarball | rc.d (rcctl) |
+| NetBSD 10.x | tarball | rc.d (/etc/rc.d) |
+| DragonFly BSD 6.x | tarball | rc.d (sysrc/service) |
 
 ## Prerequisites
 
@@ -41,8 +43,8 @@ Kubernetes and container deployments are **not** in scope here — they are cove
 
 1. **VMs accessible via SSH as root.** Any topology works: VMs behind a firewall with port-forwarded SSH (same public IP, different ports), direct IPs, cloud instances, or local VMs.
 2. **At least 3 PostgreSQL instances** reachable from the VMs (same subnet or routed). Used for multi-database testing. These can be 3 separate hosts, 3 containers, or 3 databases on one server.
-3. **Python 3** on each target VM (required by Ansible and the notification mock). Debian, Ubuntu, AlmaLinux, and OpenSUSE include it. Minimal distros need manual install: Alpine `apk add python3`, Arch `pacman -S python`, FreeBSD `pkg install python3`, OpenBSD `pkg_add python%3`.
-4. **BSD hosts** need `ansible_python_interpreter: /usr/local/bin/python3` in inventory (Python installs to `/usr/local/` on BSD). See `hosts.yml.example`.
+3. **Python 3** on each target VM (required by Ansible and the notification mock). Debian, Ubuntu, AlmaLinux, and OpenSUSE include it. Minimal distros need manual install: Alpine `apk add python3`, Arch `pacman -S python`, FreeBSD `pkg install python3`, OpenBSD `pkg_add python%3`, NetBSD `pkg_add python312` (then `ln -s /usr/pkg/bin/python3.12 /usr/pkg/bin/python3`), DragonFly `pkg install python3`.
+4. **BSD hosts** need `ansible_python_interpreter` in inventory: FreeBSD/OpenBSD/DragonFly use `/usr/local/bin/python3`, NetBSD uses `/usr/pkg/bin/python3`. See `hosts.yml.example`.
 
 ## Quick start
 

@@ -72,3 +72,16 @@ all:
           ansible_user: root
           platform_vars: openbsd
           # pgwd_local_package: "/tmp/dist/pgwd_v0.5.10_openbsd_amd64.tar.gz"
+        pgwd-netbsd:
+          ansible_host: 203.0.113.10
+          ansible_port: 2294
+          ansible_user: root
+          ansible_python_interpreter: /usr/pkg/bin/python3
+          platform_vars: netbsd
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.5.10_netbsd_amd64.tar.gz"
+        pgwd-dragonflybsd:
+          ansible_host: 203.0.113.10
+          ansible_port: 2293
+          ansible_user: root
+          platform_vars: dragonflybsd
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.5.10_dragonfly_amd64.tar.gz"
