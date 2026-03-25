@@ -43,7 +43,9 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 - [FAQ](#faq)
 - [Docker](#docker)
 - [systemd](#systemd)
+- [Debian / Ubuntu](#debian--ubuntu)
 - [AlmaLinux](#almalinux)
+- [OpenSUSE](#opensuse)
 - [Arch Linux](#arch-linux)
 - [Alpine Linux (OpenRC)](#alpine-linux-openrc)
 - [OpenBSD](#openbsd)
@@ -565,6 +567,7 @@ curl -sSL https://raw.githubusercontent.com/hrodrig/pgwd/main/scripts/install.sh
 | **Homebrew (macOS)** | `brew install hrodrig/pgwd/pgwd` |
 | **Debian/Ubuntu** | `wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.deb && sudo dpkg -i /tmp/pgwd.deb` |
 | **Fedora / RHEL / AlmaLinux / Rocky / Oracle Linux** | Same `.rpm`: `sudo dnf install https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.rpm` |
+| **OpenSUSE** | Same `.rpm` via zypper: see [OpenSUSE](#opensuse) |
 | **Alpine** | `wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.tar.gz \| tar -xzf - -C /usr/local/bin` — see [Alpine (OpenRC)](#alpine-linux-openrc) |
 | **OpenBSD** | tarball with rc.d: see [OpenBSD](#openbsd) |
 | **FreeBSD** | port or tarball: see [FreeBSD](#freebsd) |
@@ -972,6 +975,40 @@ To change the interval, edit the timer: `OnUnitActiveSec=5min` → e.g. `OnUnitA
 
 ---
 
+## Debian / Ubuntu
+
+Debian and Ubuntu use **systemd** and **`.deb`** packages. The same `.deb` works on both. Packages install the binary to `/usr/bin/pgwd`, config to `/etc/pgwd/pgwd.conf`, man page, and systemd units.
+
+**Install from GitHub** (replace version / arch):
+
+```bash
+wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.deb
+sudo dpkg -i /tmp/pgwd.deb
+```
+
+**Local `.deb`** (e.g. from `make snapshot` → `dist/`):
+
+```bash
+sudo dpkg -i ./pgwd_v0.5.10_linux_amd64.deb
+```
+
+**Configure and test**
+
+```bash
+sudo nano /etc/pgwd/pgwd.conf   # client, db.url, notifications, interval, etc.
+pgwd -config /etc/pgwd/pgwd.conf -dry-run -interval 0
+sudo systemctl enable --now pgwd.service
+sudo systemctl status pgwd.service
+```
+
+**Timer** instead of daemon: `sudo systemctl enable --now pgwd.timer` (set `interval: 0` in config for one-shot per tick). See [systemd](#systemd) and [contrib/systemd/README.md](contrib/systemd/README.md).
+
+**Validated:** Debian 13 (Trixie) and Ubuntu 24.04 — install, `pgwd -dry-run`, daemon (systemd), notifications (Loki + Slack), timer, and clean uninstall.
+
+[↑ Back to top](#top)
+
+---
+
 ## AlmaLinux
 
 [AlmaLinux](https://almalinux.org/) is **RHEL-compatible**: **systemd**, **`dnf`**, and the same **`.rpm`** as Fedora, RHEL, Rocky Linux, and Oracle Linux. Packages install the binary to `/usr/bin/pgwd`, config to `/etc/pgwd/pgwd.conf`, man page, and units under `/usr/lib/systemd/system/` (paths may match your major version).
@@ -998,6 +1035,40 @@ sudo systemctl status pgwd.service
 ```
 
 **Timer** instead of daemon: `sudo systemctl enable --now pgwd.timer` (set `interval: 0` in config for one-shot per tick). See [systemd](#systemd) and [contrib/systemd/README.md](contrib/systemd/README.md).
+
+[↑ Back to top](#top)
+
+---
+
+## OpenSUSE
+
+[OpenSUSE](https://www.opensuse.org/) uses **systemd** and **`zypper`**. The same **`.rpm`** release asset works, installed via `zypper` instead of `dnf`.
+
+**Install from GitHub** (replace version / arch):
+
+```bash
+sudo zypper --non-interactive install --allow-unsigned-rpm \
+  "https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.rpm"
+```
+
+**Local `.rpm`** (e.g. from `make snapshot` → `dist/`):
+
+```bash
+sudo zypper --non-interactive install --allow-unsigned-rpm ./pgwd_v0.5.10_linux_amd64.rpm
+```
+
+**Configure and test**
+
+```bash
+sudo nano /etc/pgwd/pgwd.conf   # client, db.url, notifications, interval, etc.
+pgwd -config /etc/pgwd/pgwd.conf -dry-run -interval 0
+sudo systemctl enable --now pgwd.service
+sudo systemctl status pgwd.service
+```
+
+**Timer** instead of daemon: `sudo systemctl enable --now pgwd.timer` (set `interval: 0` in config for one-shot per tick). See [systemd](#systemd) and [contrib/systemd/README.md](contrib/systemd/README.md).
+
+**Validated:** OpenSUSE Leap / Tumbleweed — install, `pgwd -dry-run`, daemon (systemd), notifications (Loki + Slack), timer, and clean uninstall.
 
 [↑ Back to top](#top)
 

@@ -57,14 +57,18 @@ all:
           # pgwd_local_package: "/tmp/dist/pgwd_v0.5.10_linux_amd64.tar.gz"
 
     bsd:
+      vars:
+        ansible_python_interpreter: /usr/local/bin/python3
       hosts:
         pgwd-freebsd:
           ansible_host: 203.0.113.10
           ansible_port: 2295
           ansible_user: root
           platform_vars: freebsd
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.5.10_freebsd_amd64.tar.gz"
         pgwd-openbsd:
           ansible_host: 203.0.113.10
           ansible_port: 2296
           ansible_user: root
           platform_vars: openbsd
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.5.10_openbsd_amd64.tar.gz"

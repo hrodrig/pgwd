@@ -1,6 +1,14 @@
 ---
-# OpenBSD — tarball only (Phase 2), rc.d
+# OpenBSD — tarball only, rc.d via rcctl
 pgwd_install_method: tarball
 pgwd_init_system: rcd
 pgwd_binary_path: /usr/local/bin/pgwd
 pgwd_tarball_os: openbsd
+
+pgwd_rcd_script_src: contrib/openbsd/pgwd
+pgwd_rcd_script_dest: /etc/rc.d/pgwd
+pgwd_rcd_enable_cmd: "rcctl enable pgwd"
+pgwd_rcd_disable_cmd: "rcctl disable pgwd"
+pgwd_rcd_start_cmd: "rcctl start pgwd"
+pgwd_rcd_stop_cmd: "rcctl stop pgwd"
+pgwd_rcd_status_cmd: "rcctl check pgwd"

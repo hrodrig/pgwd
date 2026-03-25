@@ -1,6 +1,14 @@
 ---
-# FreeBSD — tarball only (Phase 2), rc.d
+# FreeBSD — tarball only, rc.d via sysrc/service
 pgwd_install_method: tarball
 pgwd_init_system: rcd
 pgwd_binary_path: /usr/local/bin/pgwd
 pgwd_tarball_os: freebsd
+
+pgwd_rcd_script_src: contrib/freebsd/rc.d/pgwd
+pgwd_rcd_script_dest: /usr/local/etc/rc.d/pgwd
+pgwd_rcd_enable_cmd: "sysrc pgwd_enable=YES"
+pgwd_rcd_disable_cmd: "sysrc pgwd_enable=NO"
+pgwd_rcd_start_cmd: "service pgwd start"
+pgwd_rcd_stop_cmd: "service pgwd stop"
+pgwd_rcd_status_cmd: "service pgwd status"

@@ -38,7 +38,7 @@
 # --- rc.d: remove rc.d script ---
 - name: "rcd: remove rc.d script"
   ansible.builtin.file:
-    path: /usr/local/etc/rc.d/pgwd
+    path: "{{ pgwd_rcd_script_dest }}"
     state: absent
   when: pgwd_init_system == "rcd"
 

@@ -143,25 +143,35 @@
     - pgwd_daemon_state == "stopped"
 
 # ==================== rc.d (FreeBSD/OpenBSD) ====================
+# Uses variables from platform_vars: pgwd_rcd_script_src, pgwd_rcd_script_dest,
+# pgwd_rcd_enable_cmd, pgwd_rcd_disable_cmd, pgwd_rcd_start_cmd,
+# pgwd_rcd_stop_cmd, pgwd_rcd_status_cmd.
+
 - name: "rcd: install rc.d script"
   ansible.builtin.copy:
-    src: "{{ _repo_root }}/contrib/freebsd/rc.d/pgwd"
-    dest: /usr/local/etc/rc.d/pgwd
+    src: "{{ _repo_root }}/{{ pgwd_rcd_script_src }}"
+    dest: "{{ pgwd_rcd_script_dest }}"
     mode: "0755"
   when:
     - pgwd_init_system == "rcd"
     - pgwd_daemon_state == "started"
 
 - name: "rcd: enable pgwd"
-  ansible.builtin.command: sysrc pgwd_enable=YES
+  ansible.builtin.shell: "{{ pgwd_rcd_enable_cmd }}"
+  args:
+    executable: /bin/sh
   changed_when: true
   when:
     - pgwd_init_system == "rcd"
     - pgwd_daemon_state == "started"
 
 - name: "rcd: start pgwd"
-  ansible.builtin.command: service pgwd start
-  changed_when: true
+  ansible.builtin.shell: "{{ pgwd_rcd_start_cmd }}"
+  args:
+    executable: /bin/sh
+  register: rcd_start
+  changed_when: rcd_start.rc == 0
+  failed_when: rcd_start.rc != 0 and 'already running' not in (rcd_start.stderr | default(''))
   when:
     - pgwd_init_system == "rcd"
     - pgwd_daemon_state == "started"
@@ -174,7 +184,9 @@
     - pgwd_daemon_state == "started"
 
 - name: "rcd: verify running"
-  ansible.builtin.command: service pgwd status
+  ansible.builtin.shell: "{{ pgwd_rcd_status_cmd }}"
+  args:
+    executable: /bin/sh
   register: rcd_status
   changed_when: false
   failed_when: false
@@ -193,7 +205,9 @@
     - pgwd_daemon_state == "started"
 
 - name: "rcd: stop pgwd"
-  ansible.builtin.command: service pgwd stop
+  ansible.builtin.shell: "{{ pgwd_rcd_stop_cmd }}"
+  args:
+    executable: /bin/sh
   changed_when: true
   failed_when: false
   when:
@@ -201,7 +215,9 @@
     - pgwd_daemon_state == "stopped"
 
 - name: "rcd: disable pgwd"
-  ansible.builtin.command: sysrc pgwd_enable=NO
+  ansible.builtin.shell: "{{ pgwd_rcd_disable_cmd }}"
+  args:
+    executable: /bin/sh
   changed_when: true
   failed_when: false
   when:

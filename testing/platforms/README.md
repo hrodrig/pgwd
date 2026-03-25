@@ -19,16 +19,16 @@ Kubernetes and container deployments are **not** in scope here — they are cove
 
 ## Supported platforms
 
-| Platform | Install method | Init system | Phase |
-|---|---|---|---|
-| Debian 13 | .deb | systemd | 1 |
-| Ubuntu 24.x | .deb | systemd | 1 |
-| AlmaLinux 9 | .rpm (dnf) | systemd | 1 |
-| OpenSUSE | .rpm (zypper) | systemd | 1 |
-| Arch Linux | tarball | systemd | 1 |
-| Alpine 3.x | tarball | OpenRC | 1 |
-| FreeBSD 15 | tarball | rc.d | 2 |
-| OpenBSD 7.x | tarball | rc.d | 2 |
+| Platform | Install method | Init system |
+|---|---|---|
+| Debian 13 | .deb | systemd |
+| Ubuntu 24.x | .deb | systemd |
+| AlmaLinux 9 | .rpm (dnf) | systemd |
+| OpenSUSE | .rpm (zypper) | systemd |
+| Arch Linux | tarball | systemd |
+| Alpine 3.x | tarball | OpenRC |
+| FreeBSD 15 | tarball | rc.d (sysrc/service) |
+| OpenBSD 7.x | tarball | rc.d (rcctl) |
 
 ## Prerequisites
 
@@ -41,7 +41,8 @@ Kubernetes and container deployments are **not** in scope here — they are cove
 
 1. **VMs accessible via SSH as root.** Any topology works: VMs behind a firewall with port-forwarded SSH (same public IP, different ports), direct IPs, cloud instances, or local VMs.
 2. **At least 3 PostgreSQL instances** reachable from the VMs (same subnet or routed). Used for multi-database testing. These can be 3 separate hosts, 3 containers, or 3 databases on one server.
-3. **Python 3** on each target VM (required by Ansible and the notification mock). Debian, Ubuntu, AlmaLinux, and OpenSUSE include it. Minimal distros need manual install: Alpine `apk add python3`, Arch `pacman -S python`, FreeBSD `pkg install python3`.
+3. **Python 3** on each target VM (required by Ansible and the notification mock). Debian, Ubuntu, AlmaLinux, and OpenSUSE include it. Minimal distros need manual install: Alpine `apk add python3`, Arch `pacman -S python`, FreeBSD `pkg install python3`, OpenBSD `pkg_add python%3`.
+4. **BSD hosts** need `ansible_python_interpreter: /usr/local/bin/python3` in inventory (Python installs to `/usr/local/` on BSD). See `hosts.yml.example`.
 
 ## Quick start
 

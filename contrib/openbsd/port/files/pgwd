@@ -13,5 +13,6 @@ daemon_flags=$pgwd_flags
 [ -n "$pgwd_env" ] && eval "export $pgwd_env"
 
 . /etc/rc.d/rc.subr
+rc_bg=YES
 rc_reload=NO
 rc_cmd $1
