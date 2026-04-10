@@ -44,8 +44,10 @@ help:
 	@echo "  lint-fix           Fix formatting (gofmt -s -w)"
 	@echo ""
 	@echo "Docker:"
-	@echo "  docker-build       Build image with version info"
-	@echo "  docker-scan        Build image and run Grype (security scan)"
+	@echo "  docker-build              Build image (native platform) as pgwd"
+	@echo "  docker-buildx-amd64       Build linux/amd64 only, load as pgwd:amd64"
+	@echo "  docker-buildx-amd64-push  Push linux/amd64 (needs DOCKER_IMAGE=registry/img:tag)"
+	@echo "  docker-scan               Build image and run Grype (security scan)"
 	@echo ""
 	@echo "Release:"
 	@echo "  release-check      Run all checks (lint, test, test-integration, test-e2e-kube, docker-scan)"
@@ -169,6 +171,27 @@ docker-build:
 	$(check-docker)
 	docker build --build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILDDATE=$(BUILDDATE) -t pgwd .
 
+# linux/amd64 only — useful from Apple Silicon or when the target VPS is amd64. Loads into local Docker as pgwd:amd64.
+.PHONY: docker-buildx-amd64
+docker-buildx-amd64:
+	$(check-docker)
+	@docker buildx version >/dev/null 2>&1 || { echo "Error: docker buildx not available"; exit 1; }
+	docker buildx build --platform linux/amd64 \
+		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILDDATE=$(BUILDDATE) \
+		-t pgwd:amd64 --load .
+
+# Push linux/amd64 to your registry (GHCR, Docker Hub, etc.). Login first: docker login <registry>
+# Example: make docker-buildx-amd64-push DOCKER_IMAGE=ghcr.io/myorg/pgwd:develop-amd64
+DOCKER_IMAGE ?=
+.PHONY: docker-buildx-amd64-push
+docker-buildx-amd64-push:
+	$(check-docker)
+	@docker buildx version >/dev/null 2>&1 || { echo "Error: docker buildx not available"; exit 1; }
+	@[ -n "$(DOCKER_IMAGE)" ] || { echo "Error: set DOCKER_IMAGE (e.g. ghcr.io/org/pgwd:develop-amd64)"; exit 1; }
+	docker buildx build --platform linux/amd64 --provenance=false \
+		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILDDATE=$(BUILDDATE) \
+		-t $(DOCKER_IMAGE) --push .
+
 # Build image as pgwd:scan and run Grype (--fail-on high). Requires: docker, grype on PATH.
 docker-scan:
 	$(check-docker)
@@ -190,7 +213,7 @@ release-check:
 	@echo "All release checks passed."
 
 # Release: only from main. Requires release-check to pass. Merge develop → main, update VERSION, then: git tag v0.1.0 && make release
-.PHONY: help release snapshot docker-build docker-scan lint lint-fix test-integration
+.PHONY: help release snapshot docker-build docker-buildx-amd64 docker-buildx-amd64-push docker-scan lint lint-fix test-integration
 release: release-check
 	$(check-docker)
 	@branch=$$(git branch --show-current 2>/dev/null); \

@@ -6,6 +6,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+### Added
+
+- **Makefile:** **`docker-buildx-amd64`** — build **linux/amd64** only and **`--load`** as **`pgwd:amd64`** (e.g. from macOS ARM). **`docker-buildx-amd64-push`** — same platform, **`DOCKER_IMAGE=registry/path:tag`** required, **`--push`** (e.g. private registry); **`--provenance=false`** for broad registry compatibility.
+
 ## [0.5.10] - 2026-03-24
 
 ### Added
