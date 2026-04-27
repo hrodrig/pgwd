@@ -8,7 +8,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ### Security
 
-- **Dependencies:** `github.com/jackc/pgx/v5` updated to **v5.9.0** (addresses GHSA memory-safety advisory; Dependabot #4).
+- **Dependencies:** `github.com/jackc/pgx/v5` updated to **v5.9.2** (memory-safety advisory, Dependabot #4 — fixed from **v5.9.0**; GHSA-j88v-2chj-qfwx / CVE-2026-41889 placeholder confusion with dollar-quoted literals, Dependabot #5 — requires **v5.9.2**).
 
 ### Removed
 

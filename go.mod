@@ -3,7 +3,7 @@ module github.com/hrodrig/pgwd
 go 1.26
 
 require (
-	github.com/jackc/pgx/v5 v5.9.0
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/ncruces/go-sqlite3 v0.32.0
 	golang.org/x/sys v0.42.0
 	gopkg.in/yaml.v3 v3.0.1
