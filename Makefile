@@ -52,7 +52,6 @@ help:
 	@echo "Release:"
 	@echo "  release-check      Run all checks (lint, test, test-integration, test-e2e-kube, docker-scan)"
 	@echo "  release            Full release (from main only; runs release-check first)"
-	@echo "  release-helm       Push Helm chart to ghcr.io (run after release; requires GITHUB_TOKEN)"
 	@echo "  snapshot           Goreleaser snapshot build (outputs to dist/)"
 	@echo "  port-freebsd-sync  Sync VERSION to contrib/freebsd/Makefile (run before port update)"
 	@echo ""
@@ -231,19 +230,6 @@ port-freebsd-sync:
 	@sed -i.bak "s/^PORTVERSION=.*/PORTVERSION=\t$(PORT_VERSION)/" contrib/freebsd/Makefile
 	@rm -f contrib/freebsd/Makefile.bak
 	@echo "Updated contrib/freebsd/Makefile PORTVERSION to $(PORT_VERSION)"
-
-# Push Helm chart to ghcr.io (OCI). Run after release. Requires: helm, GITHUB_TOKEN (write:packages), gh (for username).
-# Usage: GITHUB_TOKEN=xxx make release-helm   or   gh auth token | xargs -I{} sh -c 'GITHUB_TOKEN={} make release-helm'
-.PHONY: release-helm
-release-helm:
-	@command -v helm >/dev/null 2>&1 || { echo "helm not found; install with: brew install helm"; exit 1; }
-	@[ -n "$${GITHUB_TOKEN}" ] || { echo "Error: set GITHUB_TOKEN (e.g. gh auth token)"; exit 1; }
-	@VERSION=$$(cat VERSION 2>/dev/null | tr -d '\n\r' | sed 's/^v//'); [ -n "$$VERSION" ] || { echo "Error: VERSION empty"; exit 1; }
-	@echo "Packaging Helm chart pgwd-$$VERSION.tgz..."
-	helm package contrib/helm/pgwd --version "$$VERSION" --app-version "$$VERSION"
-	@echo "$$GITHUB_TOKEN" | helm registry login ghcr.io -u $$(gh api user --jq .login 2>/dev/null || echo "oauth") --password-stdin
-	helm push pgwd-$$VERSION.tgz oci://ghcr.io/hrodrig/pgwd
-	@echo "Pushed pgwd:$$VERSION to ghcr.io"
 
 # Snapshot build (no tag required), outputs to dist/
 snapshot:

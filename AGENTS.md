@@ -7,7 +7,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 - **What it is:** Go CLI that monitors PostgreSQL connection counts (total, active, idle, stale) and notifies via Slack and/or Loki when configured thresholds are exceeded.
 - **Entrypoint:** `cmd/pgwd/main.go`. Packages: `internal/config`, `internal/postgres`, `internal/notify` (Slack, Loki).
 - **Config:** Config file (YAML) at `/etc/pgwd/pgwd.conf` or `-config` / `PGWD_CONFIG`. Use `databases:` for one or more Postgres (canonical). Legacy `db:` deprecated (emits warning, removed in v1.0). `kube.postgres` not supported with `databases`; use `db` for kube until per-db kube exists. When file loads, env vars ignored; otherwise `ApplyDefaults` + `ApplyEnv`. CLI flags override. See `internal/config`, `contrib/pgwd.conf.example`.
-- **Kubernetes:** Optional `-kube-postgres namespace/svc/name` (or `pod/name`) runs `kubectl port-forward` and connects to localhost; URL password `DISCOVER_MY_PASSWORD` reads password from pod env. Optional `-kube-loki namespace/svc/loki` runs port-forward to Loki when Loki is inside the cluster and pgwd runs outside. Requires `kubectl` in PATH (pgwd checks at startup and exits with a clear error if missing). See `internal/kube`.
+- **Kubernetes:** Optional `-kube-postgres namespace/svc/name` (or `pod/name`) runs `kubectl port-forward` and connects to localhost; URL password `DISCOVER_MY_PASSWORD` reads password from pod env. Optional `-kube-loki namespace/svc/loki` runs port-forward to Loki when Loki is inside the cluster and pgwd runs outside. Requires `kubectl` in PATH (pgwd checks at startup and exits with a clear error if missing). See `internal/kube`. **Helm / in-cluster deployment manifests** are in **[pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted)**; see `contrib/HELM.md` and `contrib/k8s/README.md`.
 - **Connect failure:** When Postgres connection fails, pgwd always sends a `connect_failure` (or `too_many_clients` if the error is "too many clients already") event to all notifiers if any are configured and not `-dry-run`. No extra flag is required. Senders are built before connecting so the alert can be sent on failure.
 
 ## Setup and build
@@ -56,6 +56,8 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 - `internal/kube/` — Kubernetes port-forward, pod resolution, password discovery; `RequireKubectl()` at startup when `-kube-postgres` is set.
 - `docs/` — sequence diagrams (Mermaid), VHS demo tape.
 - `contrib/systemd/` — systemd units (daemon, timer, one-shot).
+- `contrib/HELM.md` — pointer to the Helm chart in **pgwd-selfhosted** (this repo does not ship the chart).
+- `contrib/k8s/README.md` — Kubernetes deployment notes (raw manifests); Helm lives in pgwd-selfhosted.
 - `testing/platforms/` — Ansible roles and playbooks for multi-platform install/test/uninstall validation (Linux, BSD). See `testing/platforms/README.md`.
 - `tools/` — scripts for scanning before merging to main: `tools/scan.sh` (govulncheck, optional Grype). See `tools/README.md`. CI runs govulncheck in the Security workflow.
 

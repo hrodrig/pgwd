@@ -1,4 +1,4 @@
-# Release: runs on tag push (v*). Publishes binaries, Docker image, and Helm chart to ghcr.io.
+# Release: runs on tag push (v*). Publishes binaries and Docker image to ghcr.io.
 # Trigger: git tag v0.5.10 && git push origin v0.5.10
 # Requires: release-check passed before tagging (make release-check).
 name: Release
@@ -36,17 +36,3 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Helm
-        uses: azure/setup-helm@v4
-        with:
-          version: 'v3.14.0'
-
-      - name: Package and push Helm chart
-        env:
-          HELM_EXPERIMENTAL_OCI: 1
-        run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          helm package contrib/helm/pgwd --version "$VERSION" --app-version "$VERSION"
-          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
-          helm push pgwd-${VERSION}.tgz oci://ghcr.io/${{ github.repository_owner }}/pgwd

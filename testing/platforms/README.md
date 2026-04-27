@@ -14,7 +14,7 @@ Kubernetes and container deployments are **not** in scope here — they are cove
 | Test suite | What it validates |
 |---|---|
 | `make test-platforms` | Binary on bare-metal OS (deb/rpm/tarball, systemd/OpenRC/rc.d) |
-| `make test-e2e-kube` | Binary in K8s (kube-postgres, port-forward, Helm chart) |
+| `make test-e2e-kube` | Binary with K8s (kube-postgres, port-forward, Loki check) |
 | `make docker-scan` | Container image (vulnerabilities) |
 
 ## Supported platforms
