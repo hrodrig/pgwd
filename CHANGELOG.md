@@ -6,6 +6,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+### Security
+
+- **Dependencies:** `github.com/jackc/pgx/v5` updated to **v5.9.0** (addresses GHSA memory-safety advisory; Dependabot #4).
+
 ### Added
 
 - **Makefile:** **`docker-buildx-amd64`** — build **linux/amd64** only and **`--load`** as **`pgwd:amd64`** (e.g. from macOS ARM). **`docker-buildx-amd64-push`** — same platform, **`DOCKER_IMAGE=registry/path:tag`** required, **`--push`** (e.g. private registry); **`--provenance=false`** for broad registry compatibility.

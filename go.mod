@@ -3,7 +3,7 @@ module github.com/hrodrig/pgwd
 go 1.26
 
 require (
-	github.com/jackc/pgx/v5 v5.7.2
+	github.com/jackc/pgx/v5 v5.9.0
 	github.com/ncruces/go-sqlite3 v0.32.0
 	golang.org/x/sys v0.42.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -40,7 +40,6 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/net v0.51.0 // indirect
 	golang.org/x/oauth2 v0.30.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
