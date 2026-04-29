@@ -47,6 +47,13 @@ type Record struct {
 	Threshold      string // e.g. total, active, or empty for ok
 }
 
+// ExportRow is one persisted metrics row (SQLite), including primary key and stored timestamp.
+type ExportRow struct {
+	ID       int64
+	TSMillis int64
+	Record
+}
+
 // Store persists metrics to SQLite with FIFO eviction.
 type Store struct {
 	db         *sql.DB
@@ -178,4 +185,52 @@ func (s *Store) LastStates(ctx context.Context, client, cluster, database string
 		states = append(states, st)
 	}
 	return states, rows.Err()
+}
+
+// QueryAllMetricsReadOnly opens sqlitePath in read-only mode and returns every row in `metrics`,
+// oldest first by `id`. Safe to use while another process holds a read-write connection (WAL).
+func QueryAllMetricsReadOnly(ctx context.Context, sqlitePath string) ([]ExportRow, error) {
+	abs, err := filepath.Abs(sqlitePath)
+	if err != nil {
+		return nil, fmt.Errorf("sqlite path: %w", err)
+	}
+	dsn := "file:" + filepath.ToSlash(abs) + "?mode=ro"
+	db, err := sql.Open("sqlite3", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite read-only: %w", err)
+	}
+	defer db.Close()
+
+	qrows, err := db.QueryContext(ctx,
+		`SELECT id, ts, client, cluster, namespace, database, total, active, idle, stale, max_connections, state, threshold
+		 FROM metrics ORDER BY id ASC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer qrows.Close()
+	var out []ExportRow
+	for qrows.Next() {
+		var r ExportRow
+		var cluster, ns, db sql.NullString
+		var thr sql.NullString
+		if err := qrows.Scan(&r.ID, &r.TSMillis, &r.Client, &cluster, &ns, &db,
+			&r.Total, &r.Active, &r.Idle, &r.Stale, &r.MaxConnections, &r.State, &thr); err != nil {
+			return nil, err
+		}
+		if cluster.Valid {
+			r.Cluster = cluster.String
+		}
+		if ns.Valid {
+			r.Namespace = ns.String
+		}
+		if db.Valid {
+			r.Database = db.String
+		}
+		if thr.Valid {
+			r.Threshold = thr.String
+		}
+		out = append(out, r)
+	}
+	return out, qrows.Err()
 }

@@ -1,5 +1,5 @@
 PORTNAME=	pgwd
-PORTVERSION=	0.5.10
+PORTVERSION=	0.6.4
 DISTVERSIONPREFIX=	v
 CATEGORIES=	sysutils
 MASTER_SITES=	https://github.com/hrodrig/pgwd/releases/download/v${PORTVERSION}/

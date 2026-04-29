@@ -21,12 +21,12 @@ func promLabel(key, val string) string {
 type Server struct {
 	mux    *http.ServeMux
 	cfg    *config.Config
-	st     *store.Store
+	st     store.MetricsStorer
 	server *http.Server
 }
 
 // New creates an HTTP server. cfg.HTTPListen must be non-empty. st can be nil (metrics returns empty).
-func New(cfg *config.Config, st *store.Store) *Server {
+func New(cfg *config.Config, st store.MetricsStorer) *Server {
 	mux := http.NewServeMux()
 	s := &Server{mux: mux, cfg: cfg, st: st}
 	base := strings.TrimSuffix(cfg.HTTPBasePath, "/")
@@ -77,7 +77,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	if s.st == nil {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("# No metrics (sqlite not configured)\n"))
+		w.Write([]byte("# No metrics store configured\n"))
 		return
 	}
 	recs, err := s.st.LatestRecords(r.Context())

@@ -1,5 +1,9 @@
 # pgwd — Documentation
 
+## Upgrading
+
+**[Upgrading from 0.5.x to 0.6.x](./UPGRADE-0.5-to-0.6.md)** — Checklist and links for moving from **0.5.10** (or earlier **0.5.x**) to **0.6.x**: config/CLI/env breaks introduced in **0.5.10**, optional **0.6.x** features (metrics store, HTTP, CSV export), and **Helm** moving to [pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted). For the raw rename table, see the [README breaking-changes section](../README.md#breaking-changes-upgrade-from-05x).
+
 ## Loki and Grafana alerts
 
 [Loki payload structure for Grafana alerts](./loki-grafana-alerts.md) — Labels, log line format, example LogQL queries, and how to build Grafana alert rules that react to pgwd notifications (attention, alert, danger).
@@ -33,14 +37,16 @@ A [VHS](https://github.com/charmbracelet/vhs) tape records a short terminal demo
 
 ### Render the demo
 
-From the **repository root**:
+From the **repository root**, run **both** lines below. **Do not** run `vhs docs/demo.tape` alone from an interactive **zsh** session (with Oh My Zsh or custom prompts): VHS inherits that shell and the recording can break (`git_prompt_info: command not found`, garbled prompt, wrong `PATH`).
 
 ```bash
 make install
 bash -c "vhs docs/demo.tape"
 ```
 
-Using `bash -c` avoids zsh/Oh My Zsh prompt issues. Output is written to `docs/demo.gif` (or the path set by `Output` in the tape). To produce MP4 instead, change the `Output` line in `demo.tape` to e.g. `Output docs/demo.mp4` and run again.
+Wrapping VHS in **`bash -c "..."`** starts a clean bash subshell for the recorder, matching `Set Shell "bash"` inside the tape. This is the same command required when **`VERSION` changes** before release (see `.cursor/rules/release-tests.mdc`).
+
+Output is written to `docs/demo.gif` (or the path set by `Output` in the tape). To produce MP4 instead, change the `Output` line in `demo.tape` to e.g. `Output docs/demo.mp4` and run the same two commands again.
 
 ### Tape location
 
@@ -49,4 +55,4 @@ Using `bash -c` avoids zsh/Oh My Zsh prompt issues. Output is written to `docs/d
 
 ### Prompt / Oh My Zsh issues
 
-If you see `git_prompt_info: command not found` or a broken prompt in the GIF, use `bash -c "vhs docs/demo.tape"` (see Render the demo above) so VHS does not inherit your zsh/Oh My Zsh setup.
+Symptoms: `git_prompt_info: command not found`, broken prompt in the GIF, or wrong pgwd binary. Fix: use the exact **two-command** flow in [Render the demo](#render-the-demo) (`make install` then `bash -c "vhs docs/demo.tape"`); do not invoke `vhs` directly from an interactive zsh.

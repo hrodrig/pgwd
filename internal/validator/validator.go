@@ -5,9 +5,11 @@ package validator
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/hrodrig/pgwd/internal/config"
 	"github.com/hrodrig/pgwd/internal/kube"
+	"github.com/hrodrig/pgwd/internal/metricsstore"
 )
 
 // Validate runs all config validations. Returns the first error encountered.
@@ -36,6 +38,9 @@ func Validate(cfg *config.Config) error {
 		return err
 	}
 	if err := ValidateKubeLoki(cfg); err != nil {
+		return err
+	}
+	if err := ValidateMetricsStore(cfg); err != nil {
 		return err
 	}
 	return nil
@@ -141,4 +146,24 @@ func ValidateKubeLoki(cfg *config.Config) error {
 	}
 	_, _, err := kube.ParseKubePostgres(cfg.KubeLoki)
 	return err
+}
+
+// ValidateMetricsStore checks metrics_store / sqlite when a backend is selected.
+func ValidateMetricsStore(cfg *config.Config) error {
+	d := metricsstore.Driver(cfg)
+	switch d {
+	case "":
+		return nil
+	case metricsstore.DriverSQLite:
+		if strings.TrimSpace(cfg.SqlitePath) == "" {
+			return fmt.Errorf("pgwd: metrics store (sqlite): sqlite.path is required when using the SQLite metrics backend")
+		}
+	case metricsstore.DriverPostgres, metricsstore.DriverMySQL:
+		if strings.TrimSpace(cfg.MetricsStoreDSN) == "" {
+			return fmt.Errorf("pgwd: metrics store (%s): metrics_store.dsn (or PGWD_METRICS_STORE_DSN) is required", d)
+		}
+	default:
+		return fmt.Errorf("pgwd: metrics store: unsupported metrics_store.driver %q (use sqlite, postgres, or mysql)", cfg.MetricsStoreDriver)
+	}
+	return nil
 }

@@ -41,6 +41,10 @@ type fileConfig struct {
 		MaxMetrics int    `yaml:"max_metrics"`
 		StaleAge   int    `yaml:"stale_age"`
 	} `yaml:"sqlite"`
+	MetricsStore struct {
+		Driver string `yaml:"driver"`
+		DSN    string `yaml:"dsn"`
+	} `yaml:"metrics_store"`
 	ConfirmAlert int `yaml:"confirm_alert"`
 	ConfirmOk    int `yaml:"confirm_ok"`
 	HTTP         struct {
@@ -119,6 +123,8 @@ func fileConfigToConfig(fc fileConfig) Config {
 		SqlitePath:              fc.Sqlite.Path,
 		SqliteMaxMetrics:        fc.Sqlite.MaxMetrics,
 		SqliteStaleAge:          fc.Sqlite.StaleAge,
+		MetricsStoreDriver:      fc.MetricsStore.Driver,
+		MetricsStoreDSN:         fc.MetricsStore.DSN,
 		ConfirmAlert:            fc.ConfirmAlert,
 		ConfirmOk:               fc.ConfirmOk,
 		HTTPListen:              fc.HTTP.Listen,

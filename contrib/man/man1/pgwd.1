@@ -1,6 +1,6 @@
 .\" pgwd(1) - Postgres Watch Dog
 .\" Manual page for pgwd
-.TH PGWD 1 "2026-03-24" "pgwd v0.5.10" "User Commands"
+.TH PGWD 1 "2026-04-29" "pgwd v0.6.4" "User Commands"
 .SH NAME
 pgwd \- monitor PostgreSQL connections and notify via Slack/Loki
 .SH SYNOPSIS
@@ -116,6 +116,12 @@ Override server max_connections for testing alerts. Env: PGWD_TEST_MAX_CONNECTIO
 .TP
 .BR \-version
 Print version and exit.
+.TP
+.BR \-export\-metrics\-format " \fIformat\fR"
+Export persisted metrics from the configured store, then exit. \fIformat\fR: \fBcsv\fR (writes \-export-metrics-destination). Reading uses \fBinternal/metricsstore\fR (SQLite only; PostgreSQL/MySQL metrics drivers are not implemented yet). Env: PGWD_EXPORT_METRICS_FORMAT.
+.TP
+.BR \-export\-metrics\-destination " \fIpath\fR"
+Output file for \fBcsv\fR export. Env: PGWD_EXPORT_METRICS_DESTINATION.
 .SH EXAMPLES
 .TP
 Minimal one-shot with Slack:

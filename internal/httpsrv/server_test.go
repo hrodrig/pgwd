@@ -75,8 +75,8 @@ func TestServer_HandleMetrics_NoStore(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Errorf("handleMetrics: status = %d, want 200", rec.Code)
 	}
-	if !strings.Contains(rec.Body.String(), "No metrics (sqlite not configured)") {
-		t.Errorf("handleMetrics: want 'No metrics (sqlite not configured)', got %q", rec.Body.String())
+	if !strings.Contains(rec.Body.String(), "No metrics store configured") {
+		t.Errorf("handleMetrics: want 'No metrics store configured', got %q", rec.Body.String())
 	}
 }
 

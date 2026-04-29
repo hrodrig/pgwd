@@ -21,6 +21,8 @@ import (
 	"github.com/hrodrig/pgwd/internal/config"
 	"github.com/hrodrig/pgwd/internal/httpsrv"
 	"github.com/hrodrig/pgwd/internal/kube"
+	"github.com/hrodrig/pgwd/internal/metricsexport"
+	"github.com/hrodrig/pgwd/internal/metricsstore"
 	"github.com/hrodrig/pgwd/internal/notify"
 	"github.com/hrodrig/pgwd/internal/openbsd"
 	"github.com/hrodrig/pgwd/internal/postgres"
@@ -89,6 +91,8 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.IntVar(&cfg.TestMaxConnections, "test-max-connections", cfg.TestMaxConnections, "Override server max_connections for defaults and display (for testing alerts; 0 = use server) (PGWD_TEST_MAX_CONNECTIONS)")
 	flag.BoolVar(&cfg.ValidateK8sAccess, "validate-k8s-access", cfg.ValidateK8sAccess, "Validate cluster connectivity and list pods, then exit. Use -kube-context to select context. (PGWD_VALIDATE_K8S_ACCESS)")
 	flag.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "Log level: info (default) or debug. Debug = verbose dry-run stats every interval (PGWD_LOG_LEVEL)")
+	flag.StringVar(&cfg.ExportMetricsFormat, "export-metrics-format", cfg.ExportMetricsFormat, "Export persisted metrics from the configured metrics store; format: csv (file). Then exit (PGWD_EXPORT_METRICS_FORMAT)")
+	flag.StringVar(&cfg.ExportMetricsDestination, "export-metrics-destination", cfg.ExportMetricsDestination, "Output path for -export-metrics-format csv (PGWD_EXPORT_METRICS_DESTINATION)")
 	flag.Parse()
 	return *showVersionFlag
 }
@@ -97,6 +101,21 @@ func validateConfig(cfg *config.Config) {
 	if err := validator.Validate(cfg); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func exportMetricsAndExit(cfg *config.Config) {
+	format := strings.TrimSpace(cfg.ExportMetricsFormat)
+	dest := strings.TrimSpace(cfg.ExportMetricsDestination)
+	if format == "" || dest == "" {
+		log.Fatal("pgwd: -export-metrics-format and -export-metrics-destination must both be set (e.g. -export-metrics-format csv -export-metrics-destination /path/out.csv)")
+	}
+	ctx := context.Background()
+	n, err := metricsexport.Export(ctx, format, dest, cfg)
+	if err != nil {
+		log.Fatalf("pgwd: metrics export: %v", err)
+	}
+	log.Printf("pgwd: exported %d metrics row(s) via format=%q to %s", n, format, dest)
+	os.Exit(0)
 }
 
 // setupKube starts port-forward and updates cfg.DBURL when -kube-postgres is set.
@@ -345,7 +364,7 @@ func doRunCheck(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, clu
 	return res, nil
 }
 
-func applyHysteresisFilter(ctx context.Context, st *store.Store, cfg *config.Config, client, cluster, db, state string, events []notify.Event) []notify.Event {
+func applyHysteresisFilter(ctx context.Context, st store.MetricsStorer, cfg *config.Config, client, cluster, db, state string, events []notify.Event) []notify.Event {
 	if st == nil || cfg.ConfirmAlert <= 1 || state == "ok" {
 		return events
 	}
@@ -362,7 +381,7 @@ func applyHysteresisFilter(ctx context.Context, st *store.Store, cfg *config.Con
 	return filtered
 }
 
-func trySendResolutionNotification(ctx context.Context, st *store.Store, cfg *config.Config, senders []notify.Sender, res runCheckResult, cluster, client, ns, db string) {
+func trySendResolutionNotification(ctx context.Context, st store.MetricsStorer, cfg *config.Config, senders []notify.Sender, res runCheckResult, cluster, client, ns, db string) {
 	if st == nil || cfg.ConfirmOk < 1 {
 		return
 	}
@@ -393,7 +412,7 @@ func trySendResolutionNotification(ctx context.Context, st *store.Store, cfg *co
 	sendEvents(ctx, senders, cfg, []notify.Event{ev})
 }
 
-func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, senders []notify.Sender, st *store.Store, cluster, client, ns, db string) func() {
+func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, cluster, client, ns, db string) func() {
 	return func() {
 		res, err := doRunCheck(ctx, pool, cfg, cluster, client, ns, db)
 		if err != nil {
@@ -407,11 +426,12 @@ func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, se
 		res.Events = applyHysteresisFilter(ctx, st, cfg, client, cluster, db, state, res.Events)
 		sendEvents(ctx, senders, cfg, res.Events)
 		if st != nil {
-			if err := st.Insert(ctx, store.Record{
+			rec := store.Record{
 				Client: client, Cluster: cluster, Namespace: ns, Database: db,
 				Total: res.Stats.Total, Active: res.Stats.Active, Idle: res.Stats.Idle, Stale: res.StaleCountForStore,
 				MaxConnections: res.MaxConn, State: state, Threshold: thr,
-			}); err != nil {
+			}
+			if err := st.Insert(ctx, rec); err != nil {
 				log.Printf("store insert: %v", err)
 			} else if state == "ok" {
 				trySendResolutionNotification(ctx, st, cfg, senders, res, cluster, client, ns, db)
@@ -489,6 +509,9 @@ func main() {
 
 	cfg, loaded, configPath := loadAndParseConfig()
 	applyDBURLOverride(&cfg)
+	if strings.TrimSpace(cfg.ExportMetricsFormat) != "" {
+		exportMetricsAndExit(&cfg)
+	}
 	if cfg.ValidateK8sAccess {
 		if err := kube.ValidateKubernetesAccess(context.Background(), cfg.KubeContext); err != nil {
 			log.Fatalf("validate-k8s-access: %v", err)
@@ -559,18 +582,29 @@ func applyDBURLOverride(cfg *config.Config) {
 	}
 }
 
-func openStoreIfConfigured(cfg *config.Config) *store.Store {
-	if cfg.SqlitePath == "" {
+func openStoreIfConfigured(cfg *config.Config) store.MetricsStorer {
+	switch metricsstore.Driver(cfg) {
+	case metricsstore.DriverSQLite:
+		if cfg.SqlitePath == "" {
+			return nil
+		}
+		st, err := store.Open(cfg.SqlitePath, cfg.SqliteMaxMetrics)
+		if err != nil {
+			log.Fatalf("sqlite metrics store: %v", err)
+		}
+		return st
+	case metricsstore.DriverPostgres, metricsstore.DriverMySQL:
+		st, err := store.OpenSQLMetrics(metricsstore.Driver(cfg), cfg.MetricsStoreDSN, cfg.SqliteMaxMetrics)
+		if err != nil {
+			log.Fatalf("metrics SQL store: %v", err)
+		}
+		return st
+	default:
 		return nil
 	}
-	st, err := store.Open(cfg.SqlitePath, cfg.SqliteMaxMetrics)
-	if err != nil {
-		log.Fatalf("sqlite: %v", err)
-	}
-	return st
 }
 
-func setupHTTPIfConfigured(cfg *config.Config, st *store.Store) func() {
+func setupHTTPIfConfigured(cfg *config.Config, st store.MetricsStorer) func() {
 	if cfg.HTTPListen == "" {
 		return func() {}
 	}
@@ -588,7 +622,7 @@ func setupHTTPIfConfigured(cfg *config.Config, st *store.Store) func() {
 	}
 }
 
-func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Config, senders []notify.Sender, st *store.Store, targets []config.DatabaseTarget) {
+func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, targets []config.DatabaseTarget) {
 	targetCfg := cfg.ConfigForTarget(t)
 	runCluster, runClient, runNamespace, runDatabase := runContextStrings(ctx, targetCfg, t.URL)
 
@@ -612,7 +646,7 @@ func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Conf
 	run()
 }
 
-func runTickerLoop(ctx context.Context, cfg *config.Config, senders []notify.Sender, st *store.Store, targets []config.DatabaseTarget) {
+func runTickerLoop(ctx context.Context, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, targets []config.DatabaseTarget) {
 	ticker := time.NewTicker(time.Duration(cfg.Interval) * time.Second)
 	defer ticker.Stop()
 	for {

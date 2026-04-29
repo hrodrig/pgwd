@@ -6,6 +6,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-04-29
+
+### Added
+
+- **Metrics store (PostgreSQL / MySQL):** Optional **`metrics_store.driver`** + **`metrics_store.dsn`** persist check history like SQLite (FIFO cap **`sqlite.max_metrics`** applies to all backends). Implementation in **`internal/store/sqlstore.go`** (pgx stdlib + **`github.com/go-sql-driver/mysql`**). Daemon, **`/metrics`**, hysteresis, and CSV export use **`internal/metricsstore`** and the **`store.MetricsStorer`** interface.
+
+### Documentation
+
+- **Multi-database:** Document limitations — **`databases:`** cannot be combined with **`-kube-postgres`**; SQLite hysteresis/history is keyed by **`(client, cluster, database)`** (not URL host), so use a **unique `client` per entry** when the same DB name appears on different hosts (README, `AGENTS.md`, `contrib/pgwd.conf.example`).
+- **Upgrade guide:** **`docs/UPGRADE-0.5-to-0.6.md`** — operator checklist from **0.5.10** (or earlier **0.5.x**) to **0.6.x**, with links to README breaking-changes table, CHANGELOG, Helm move, and optional metrics/HTTP features. Linked from **`docs/README.md`** and the README breaking-changes section.
+
+## [0.6.0] - 2026-04-26
+
+### Added
+
+- **CSV export (metrics store):** **`-export-metrics-format csv`** + **`-export-metrics-destination`** / **`PGWD_EXPORT_METRICS_*`** (env when no config file) reads persisted metrics through **`internal/metricsstore`** (SQLite file via **`sqlite.path`**; **PostgreSQL/MySQL** metrics persistence is **not implemented** — **`metrics_store.driver`** / **`metrics_store.dsn`** reserved, **`ErrSQLMetricsStoreNotImplemented`**). Writes an **RFC4180** CSV (`id`, `ts_ms`, `ts_utc`, labels, counts, state, threshold), then **exits**. SQLite uses a **read-only** open (safe alongside the daemon). **`internal/metricsexport`** formats the sink (CSV now).
+
 ### Security
 
 - **Dependencies:** `github.com/jackc/pgx/v5` updated to **v5.9.2** (memory-safety advisory, Dependabot #4 — fixed from **v5.9.0**; GHSA-j88v-2chj-qfwx / CVE-2026-41889 placeholder confusion with dollar-quoted literals, Dependabot #5 — requires **v5.9.2**).
@@ -14,9 +31,18 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 - **Helm:** In-repo chart under `contrib/helm/pgwd/` and OCI chart push from this repository’s release workflow / `make release-helm`. The maintained chart is **[pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted)** (`run/kubernetes/helm/pgwd/`). See **`contrib/HELM.md`**.
 
-### Added
+### Added (highlights since 0.5.10)
 
-- **Makefile:** **`docker-buildx-amd64`** — build **linux/amd64** only and **`--load`** as **`pgwd:amd64`** (e.g. from macOS ARM). **`docker-buildx-amd64-push`** — same platform, **`DOCKER_IMAGE=registry/path:tag`** required, **`--push`** (e.g. private registry); **`--provenance=false`** for broad registry compatibility.
+- **Makefile:** **`docker-buildx-amd64`** / **`docker-buildx-amd64-push`** — **linux/amd64** image build and push (e.g. from macOS ARM).
+- **Daemon mode** with **resolution notifications**, **SQLite** metrics store, **HTTP** `/healthz` and Prometheus **`/metrics`**, **hysteresis** (`confirm_alert` / `confirm_ok`), **`log_level`** (info/debug).
+- **Multi-database** config (`databases:`), **`-db-url`** one-shot override, **client-go** kube port-forward (optional **`-kube-postgres`** / **`-kube-loki`** without shelling to kubectl for the data path).
+- **Packages / layout:** `internal/checker`, `internal/validator`, `internal/httpsrv`, `internal/store`; expanded tests and **e2e kube** (multi-Postgres compose).
+- **Ansible** **`testing/platforms/`** — automated install/daemon/notify/timer/uninstall across Linux and BSD (Phase 1); **NetBSD** and **DragonFly** vars; **OpenBSD** port scaffolding and **FreeBSD** port release docs.
+
+### Changed
+
+- **Config file** layout and **CLI/env** names for DB thresholds and notifications (see README breaking-changes table). **`client`** required.
+- **CI / release:** workflow and image metadata updates; Helm chart publishing removed from app repo (see Removed).
 
 ## [0.5.10] - 2026-03-24
 
@@ -284,7 +310,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.5.8...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.6.4...HEAD
+[0.6.4]: https://github.com/hrodrig/pgwd/compare/v0.6.0...v0.6.4
+[0.6.0]: https://github.com/hrodrig/pgwd/compare/v0.5.10...v0.6.0
+[0.5.10]: https://github.com/hrodrig/pgwd/compare/v0.5.8...v0.5.10
 [0.5.8]: https://github.com/hrodrig/pgwd/compare/v0.5.7...v0.5.8
 [0.5.7]: https://github.com/hrodrig/pgwd/compare/v0.5.4...v0.5.7
 [0.5.4]: https://github.com/hrodrig/pgwd/compare/v0.5.0...v0.5.4

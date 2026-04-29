@@ -20,7 +20,8 @@
 # runs against that single URL only (ignores databases from config for that run).
 #   kube.*                    → -kube-*
 #   notifications.*           → -notifications-*
-# CLI-only: -config, -force-notification, -test-max-connections, -validate-k8s-access
+# CLI-only: -config, -force-notification, -test-max-connections, -validate-k8s-access,
+#           -export-metrics-format, -export-metrics-destination
 
 # -----------------------------------------------------------------------------
 # Instance identity (required when multiple pgwd instances run)
@@ -39,8 +40,10 @@ notify_on_connect_failure: false
 # Database connection and thresholds (databases: canonical; db: deprecated)
 # -----------------------------------------------------------------------------
 # Each entry: url (required), optional client, stale_age, default_threshold_percent, threshold.
-# client: optional; defaults to base client + "-" + db name from URL path.
-# kube.postgres is not supported with databases.
+# client: optional; defaults to base client + "-" + db name from URL path (NOT the hostname).
+#   If two URLs use the same path db name on different hosts, set explicit distinct clients
+#   or SQLite history / hysteresis / resolution will collide (key is client+cluster+database).
+# kube.postgres / -kube-postgres is NOT supported with databases: (multi-DB = direct URLs only).
 #
 databases:
   - url: postgres://user:pass@localhost:5432/mydb
@@ -94,6 +97,14 @@ databases:
 #   path: /var/lib/pgwd/pgwd.db   # state and metrics history
 #   max_metrics: 10000            # FIFO eviction when exceeded
 #   stale_age: 300                # optional; seconds for stale count in store (0 = use db.stale_age)
+#
+# Optional: persist metrics to PostgreSQL or MySQL instead of SQLite (same FIFO semantics; max rows: sqlite.max_metrics).
+# metrics_store:
+#   driver: postgres   # or mysql, postgresql (alias), sqlite (requires sqlite.path)
+#   dsn: "postgres://user:pass@host:5432/pgwd_metrics?sslmode=disable"
+#   # MySQL example: "user:pass@tcp(host:3306)/pgwd_metrics?parseTime=true"
+# CSV export reads the configured backend via internal/metricsstore.
+# One-shot CSV: pgwd -config ... -export-metrics-format csv -export-metrics-destination /path/out.csv
 #
 # -----------------------------------------------------------------------------
 # State stability (hysteresis)

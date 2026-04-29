@@ -75,6 +75,14 @@ type Config struct {
 	SqlitePath       string // e.g. /var/lib/pgwd/pgwd.db
 	SqliteMaxMetrics int    // max rows; FIFO eviction when exceeded (default 10000)
 	SqliteStaleAge   int    // seconds for stale count in store; 0 = use db.stale_age or 0 (independent of alert stale)
+	// MetricsStoreDriver / MetricsStoreDSN: PostgreSQL or MySQL metrics backend (optional; see internal/store/sqlstore.go).
+	// Empty driver + sqlite.path implies sqlite. FIFO cap uses sqlite.max_metrics for all backends.
+	MetricsStoreDriver string
+	MetricsStoreDSN    string
+	// ExportMetricsFormat + ExportMetricsDestination: one-shot export via internal/metricsstore + internal/metricsexport.
+	// Format "csv" writes destination as a file path.
+	ExportMetricsFormat      string
+	ExportMetricsDestination string
 
 	// Hysteresis: require N consecutive checks before alert/resolution (avoids brief spikes/false recoveries).
 	ConfirmAlert int // consecutive "bad" checks before sending alert (default 1)
@@ -133,6 +141,7 @@ func ApplyEnv(cfg *Config) {
 	applyEnvThresholds(cfg)
 	applyEnvNotifiers(cfg)
 	applyEnvSqliteAndHTTP(cfg)
+	applyEnvMetricsStoreAndExport(cfg)
 	applyEnvBehaviour(cfg)
 }
 
@@ -173,6 +182,21 @@ func applyEnvSqliteAndHTTP(cfg *Config) {
 	}
 	if v := env("HTTP_METRICS_PATH", ""); v != "" {
 		cfg.HTTPMetricsPath = v
+	}
+}
+
+func applyEnvMetricsStoreAndExport(cfg *Config) {
+	if v := env("METRICS_STORE_DRIVER", ""); v != "" {
+		cfg.MetricsStoreDriver = v
+	}
+	if v := env("METRICS_STORE_DSN", ""); v != "" {
+		cfg.MetricsStoreDSN = v
+	}
+	if v := env("EXPORT_METRICS_FORMAT", ""); v != "" {
+		cfg.ExportMetricsFormat = v
+	}
+	if v := env("EXPORT_METRICS_DESTINATION", ""); v != "" {
+		cfg.ExportMetricsDestination = v
 	}
 }
 
@@ -286,44 +310,48 @@ func applyEnvBehaviour(cfg *Config) {
 // FromEnv builds config from environment variables (PGWD_*).
 func FromEnv() Config {
 	return Config{
-		DBURL:                   env("DB_URL", ""),
-		KubePostgres:            env("KUBE_POSTGRES", ""),
-		KubeContext:             env("KUBE_CONTEXT", ""),
-		KubeLocalPort:           envInt("KUBE_LOCAL_PORT", 5432),
-		KubePasswordVar:         env("KUBE_PASSWORD_VAR", "POSTGRES_PASSWORD"),
-		KubePasswordContainer:   env("KUBE_PASSWORD_CONTAINER", ""),
-		KubeLoki:                env("KUBE_LOKI", ""),
-		KubeLokiLocalPort:       envInt("KUBE_LOKI_LOCAL_PORT", 3100),
-		KubeLokiRemotePort:      envInt("KUBE_LOKI_REMOTE_PORT", 3100),
-		Client:                  env("CLIENT", ""),
-		ThresholdTotal:          envInt("DB_THRESHOLD_TOTAL", 0),
-		ThresholdActive:         envInt("DB_THRESHOLD_ACTIVE", 0),
-		ThresholdIdle:           envInt("DB_THRESHOLD_IDLE", 0),
-		StaleAge:                envInt("DB_STALE_AGE", 0),
-		ThresholdStale:          envInt("DB_THRESHOLD_STALE", 0),
-		SlackWebhook:            env("NOTIFICATIONS_SLACK_WEBHOOK", ""),
-		LokiURL:                 env("NOTIFICATIONS_LOKI_URL", ""),
-		LokiLabels:              env("NOTIFICATIONS_LOKI_LABELS", ""),
-		LokiOrgID:               env("NOTIFICATIONS_LOKI_ORG_ID", ""),
-		LokiBearerToken:         env("NOTIFICATIONS_LOKI_BEARER_TOKEN", ""),
-		Interval:                envInt("INTERVAL", 0),
-		LogLevel:                env("LOG_LEVEL", "info"),
-		DryRun:                  envBool("DRY_RUN", false),
-		ForceNotification:       envBool("FORCE_NOTIFICATION", false),
-		NotifyOnConnectFailure:  envBool("NOTIFY_ON_CONNECT_FAILURE", false),
-		DefaultThresholdPercent: envInt("DB_DEFAULT_THRESHOLD_PERCENT", 80),
-		ThresholdLevels:         env("DB_THRESHOLD_LEVELS", DefaultThresholdLevels),
-		TestMaxConnections:      envInt("TEST_MAX_CONNECTIONS", 0),
-		ValidateK8sAccess:       envBool("VALIDATE_K8S_ACCESS", false),
-		SqlitePath:              env("SQLITE_PATH", ""),
-		SqliteMaxMetrics:        envInt("SQLITE_MAX_METRICS", 0),
-		SqliteStaleAge:          envInt("SQLITE_STALE_AGE", 0),
-		ConfirmAlert:            envInt("CONFIRM_ALERT", 1),
-		ConfirmOk:               envInt("CONFIRM_OK", 1),
-		HTTPListen:              env("HTTP_LISTEN", ""),
-		HTTPBasePath:            env("HTTP_BASE_PATH", ""),
-		HTTPHealthPath:          env("HTTP_HEALTHZ_PATH", ""),
-		HTTPMetricsPath:         env("HTTP_METRICS_PATH", ""),
+		DBURL:                    env("DB_URL", ""),
+		KubePostgres:             env("KUBE_POSTGRES", ""),
+		KubeContext:              env("KUBE_CONTEXT", ""),
+		KubeLocalPort:            envInt("KUBE_LOCAL_PORT", 5432),
+		KubePasswordVar:          env("KUBE_PASSWORD_VAR", "POSTGRES_PASSWORD"),
+		KubePasswordContainer:    env("KUBE_PASSWORD_CONTAINER", ""),
+		KubeLoki:                 env("KUBE_LOKI", ""),
+		KubeLokiLocalPort:        envInt("KUBE_LOKI_LOCAL_PORT", 3100),
+		KubeLokiRemotePort:       envInt("KUBE_LOKI_REMOTE_PORT", 3100),
+		Client:                   env("CLIENT", ""),
+		ThresholdTotal:           envInt("DB_THRESHOLD_TOTAL", 0),
+		ThresholdActive:          envInt("DB_THRESHOLD_ACTIVE", 0),
+		ThresholdIdle:            envInt("DB_THRESHOLD_IDLE", 0),
+		StaleAge:                 envInt("DB_STALE_AGE", 0),
+		ThresholdStale:           envInt("DB_THRESHOLD_STALE", 0),
+		SlackWebhook:             env("NOTIFICATIONS_SLACK_WEBHOOK", ""),
+		LokiURL:                  env("NOTIFICATIONS_LOKI_URL", ""),
+		LokiLabels:               env("NOTIFICATIONS_LOKI_LABELS", ""),
+		LokiOrgID:                env("NOTIFICATIONS_LOKI_ORG_ID", ""),
+		LokiBearerToken:          env("NOTIFICATIONS_LOKI_BEARER_TOKEN", ""),
+		Interval:                 envInt("INTERVAL", 0),
+		LogLevel:                 env("LOG_LEVEL", "info"),
+		DryRun:                   envBool("DRY_RUN", false),
+		ForceNotification:        envBool("FORCE_NOTIFICATION", false),
+		NotifyOnConnectFailure:   envBool("NOTIFY_ON_CONNECT_FAILURE", false),
+		DefaultThresholdPercent:  envInt("DB_DEFAULT_THRESHOLD_PERCENT", 80),
+		ThresholdLevels:          env("DB_THRESHOLD_LEVELS", DefaultThresholdLevels),
+		TestMaxConnections:       envInt("TEST_MAX_CONNECTIONS", 0),
+		ValidateK8sAccess:        envBool("VALIDATE_K8S_ACCESS", false),
+		SqlitePath:               env("SQLITE_PATH", ""),
+		SqliteMaxMetrics:         envInt("SQLITE_MAX_METRICS", 0),
+		SqliteStaleAge:           envInt("SQLITE_STALE_AGE", 0),
+		ConfirmAlert:             envInt("CONFIRM_ALERT", 1),
+		ConfirmOk:                envInt("CONFIRM_OK", 1),
+		HTTPListen:               env("HTTP_LISTEN", ""),
+		HTTPBasePath:             env("HTTP_BASE_PATH", ""),
+		HTTPHealthPath:           env("HTTP_HEALTHZ_PATH", ""),
+		HTTPMetricsPath:          env("HTTP_METRICS_PATH", ""),
+		MetricsStoreDriver:       env("METRICS_STORE_DRIVER", ""),
+		MetricsStoreDSN:          env("METRICS_STORE_DSN", ""),
+		ExportMetricsFormat:      env("EXPORT_METRICS_FORMAT", ""),
+		ExportMetricsDestination: env("EXPORT_METRICS_DESTINATION", ""),
 	}
 }
 

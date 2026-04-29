@@ -118,3 +118,21 @@ func TestStore_LatestRecords(t *testing.T) {
 		t.Errorf("c2/d2: got Total=%d Stale=%d, want 20/1", r.Total, r.Stale)
 	}
 }
+
+func TestQueryAllMetricsReadOnly_Empty(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "empty.db")
+	st, err := Open(path, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.Close()
+	rows, err := QueryAllMetricsReadOnly(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("want 0 rows, got %d", len(rows))
+	}
+}

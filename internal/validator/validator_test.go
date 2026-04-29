@@ -208,6 +208,34 @@ func TestValidateKubeLoki(t *testing.T) {
 	}
 }
 
+func TestValidateMetricsStore(t *testing.T) {
+	tests := []struct {
+		name     string
+		cfg      *config.Config
+		wantErr  bool
+		contains string
+	}{
+		{"no store", &config.Config{}, false, ""},
+		{"sqlite path only", &config.Config{SqlitePath: "/tmp/x.db"}, false, ""},
+		{"sqlite driver no path", &config.Config{MetricsStoreDriver: "sqlite"}, true, "sqlite.path is required"},
+		{"postgres no dsn", &config.Config{MetricsStoreDriver: "postgres"}, true, "metrics_store.dsn"},
+		{"postgres with dsn", &config.Config{MetricsStoreDriver: "postgres", MetricsStoreDSN: "postgres://h/p"}, false, ""},
+		{"mysql with dsn", &config.Config{MetricsStoreDriver: "mysql", MetricsStoreDSN: "u@tcp(h:3306)/d"}, false, ""},
+		{"unsupported driver", &config.Config{MetricsStoreDriver: "oracle"}, true, "unsupported"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateMetricsStore(tt.cfg)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if err != nil && tt.contains != "" && !strings.Contains(err.Error(), tt.contains) {
+				t.Fatalf("error = %v, want substring %q", err, tt.contains)
+			}
+		})
+	}
+}
+
 func TestValidate_Integration(t *testing.T) {
 	tests := []struct {
 		name    string

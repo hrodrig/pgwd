@@ -6,7 +6,7 @@
   <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.5.10-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.6.4-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![CI](https://github.com/hrodrig/pgwd/actions/workflows/ci.yml/badge.svg)](https://github.com/hrodrig/pgwd/actions)
 [![codecov](https://codecov.io/gh/hrodrig/pgwd/graph/badge.svg)](https://codecov.io/gh/hrodrig/pgwd)
@@ -21,7 +21,7 @@
 
 Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via **Slack** and/or **Loki** when configured thresholds are exceeded. It can also alert on **stale connections** (connections that stay open and never close).
 
-**Documentation:** [Sequence diagrams](docs/README.md#sequence-diagrams) (Mermaid) for each use case, [audited against the code](docs/sequence/AUDIT.md), terminal demo (recorded with [VHS](https://github.com/charmbracelet/vhs)), and `man pgwd` (included in .deb/.rpm packages) — see [docs/](docs/README.md). **Scanning** before release (govulncheck, Grype): [tools/README.md](tools/README.md).
+**Documentation:** [Sequence diagrams](docs/README.md#sequence-diagrams) (Mermaid) for each use case, [audited against the code](docs/sequence/AUDIT.md), [terminal demo](docs/README.md#terminal-demo-vhs) (VHS — regenerate with `make install` then `bash -c "vhs docs/demo.tape"`), [upgrading 0.5.x → 0.6.x](docs/UPGRADE-0.5-to-0.6.md) (operator checklist; index under [docs/README — Upgrading](docs/README.md#upgrading)), and `man pgwd` (included in .deb/.rpm packages) — see [docs/](docs/README.md). **Scanning** before release (govulncheck, Grype): [tools/README.md](tools/README.md).
 
 ![Terminal demo](docs/demo.gif)
 
@@ -105,6 +105,8 @@ If you use CLI flags or env vars for notifications or DB thresholds, update your
 
 Config file keys unchanged.
 
+**Consolidated upgrade guide (0.5.x → 0.6.x):** [docs/UPGRADE-0.5-to-0.6.md](docs/UPGRADE-0.5-to-0.6.md) — checklist, Helm move, and optional 0.6.x features.
+
 ---
 
 ## Configuration: config file, env, CLI
@@ -131,6 +133,11 @@ PGWD_CONFIG=/path/to/pgwd.conf pgwd
 **CLI overrides env, env overrides config file.** Use env for secrets and overrides; use config file for base settings.
 
 **`-db-url` override (one-shot):** When the config file has `databases:` (multi-DB), passing `-db-url` and `-interval 0` runs against that single URL only, ignoring the databases from config for that run. Useful for quick ad-hoc checks without editing the config.
+
+### Multi-database limitations
+
+- **`-kube-postgres` / `kube.postgres` and `databases:` are mutually exclusive.** Validation rejects that combination. Multi-DB mode expects **direct** Postgres URLs (e.g. in-cluster DNS, VPN, or plain TCP). To use port-forward from **outside** the cluster, use **single-DB** config (`db:` or one URL) with `-kube-postgres`, or run **one pgwd process per** forwarded instance.
+- **Persisted history and hysteresis** (SQLite) are keyed by **`(client, cluster, database)`**. The **host from the URL is not part of that key**. If several targets share the same database name and the same **derived** client (`base client` + `-` + name from the URL path), they **collide** in the store and resolution/hysteresis will be wrong. Give each `databases:` entry a **unique `client`** when monitoring the same logical DB name on different hosts.
 
 ### Using only environment variables
 
@@ -257,7 +264,7 @@ pgwd -db-url "postgres://..." -notifications-loki-url "http://localhost:3100/lok
 
 | Scenario | Suggestion |
 |----------|------------|
-| **Many Postgres instances** | Use `databases:` in one config (daemon mode) for multiple direct URLs, or one config per instance with cron when instances are diverse (different clusters, kube contexts). |
+| **Many Postgres instances** | Use `databases:` in one config (daemon mode) for multiple **direct** URLs. You cannot combine `databases:` with `-kube-postgres`. Use a **distinct `client` per entry** when the same DB name appears on different hosts (see [Multi-database limitations](#multi-database-limitations)). For diverse setups (different clusters, kube contexts), one config per instance with cron may be simpler. |
 | **Cron check every 5 min** | One-shot (`interval` 0 or unset), one or more thresholds, Slack or Loki. Run from cron every 5 minutes. No resolution alerts, /metrics, or hysteresis. |
 | **Long-running watcher** | Daemon with `-interval 60` (or 120). Run under systemd/supervisor; stop with SIGTERM. **Recommended** for resolution notifications, Prometheus /metrics, and hysteresis. |
 | **Detect connection leaks** | Use `stale-age` + `threshold-stale` (e.g. 600 and 1). Alert when any connection stays open longer than 10 min. |
@@ -423,6 +430,7 @@ When you run pgwd as a Deployment (Docker image in K8s), use **direct service UR
 - **Loki:** `notifications.loki.url` with in-cluster DNS, e.g. `http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push`.
 - **Passwords:** From a Secret via env (`PGWD_*` or `-config`). No `DISCOVER_MY_PASSWORD` — that requires cluster access (pgwd outside K8s) to read the Postgres pod env.
 - **HTTP:** Set `http.listen: ":8080"` for `/healthz` and `/metrics` (liveness, Prometheus).
+- **CSV export (metrics store):** Check history is persisted under **`sqlite.path`** (SQLite) or **`metrics_store.driver`** + **`metrics_store.dsn`** (PostgreSQL / MySQL). To dump stored rows: **`pgwd -config /etc/pgwd/pgwd.conf -export-metrics-format csv -export-metrics-destination /path/out.csv`**. SQLite export opens the file **read-only** (safe while the daemon runs). Overwrites the CSV each run; use **cron** for periodic snapshots. See **`internal/metricsstore`** and **`contrib/pgwd.conf.example`**.
 
 Simplest: use env vars from Secrets (no config file). Example Deployment env:
 
@@ -565,17 +573,17 @@ curl -sSL https://raw.githubusercontent.com/hrodrig/pgwd/main/scripts/install.sh
 | Platform | Command |
 |----------|---------|
 | **Homebrew (macOS)** | `brew install hrodrig/pgwd/pgwd` |
-| **Debian/Ubuntu** | `wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.deb && sudo dpkg -i /tmp/pgwd.deb` |
-| **Fedora / RHEL / AlmaLinux / Rocky / Oracle Linux** | Same `.rpm`: `sudo dnf install https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.rpm` |
+| **Debian/Ubuntu** | `wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_linux_amd64.deb && sudo dpkg -i /tmp/pgwd.deb` |
+| **Fedora / RHEL / AlmaLinux / Rocky / Oracle Linux** | Same `.rpm`: `sudo dnf install https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_linux_amd64.rpm` |
 | **OpenSUSE** | Same `.rpm` via zypper: see [OpenSUSE](#opensuse) |
-| **Alpine** | `wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.tar.gz \| tar -xzf - -C /usr/local/bin` — see [Alpine (OpenRC)](#alpine-linux-openrc) |
+| **Alpine** | `wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_linux_amd64.tar.gz \| tar -xzf - -C /usr/local/bin` — see [Alpine (OpenRC)](#alpine-linux-openrc) |
 | **OpenBSD** | tarball with rc.d: see [OpenBSD](#openbsd) |
 | **FreeBSD** | port or tarball: see [FreeBSD](#freebsd) |
 | **NetBSD** | tarball with rc.d: see [NetBSD](#netbsd) |
 | **DragonFly BSD** | tarball with rc.d: see [DragonFly BSD](#dragonfly-bsd) |
 | **illumos / Solaris** | tarball with SMF: see [Solaris](#solaris) |
 
-Replace `v0.5.10` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets. If a tag is not published yet, build packages locally with `make snapshot` and install the `.rpm` / `.deb` from `dist/`. **AlmaLinux 8/9:** see [AlmaLinux](#almalinux).
+Replace `v0.6.4` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets. If a tag is not published yet, build packages locally with `make snapshot` and install the `.rpm` / `.deb` from `dist/`. **AlmaLinux 8/9:** see [AlmaLinux](#almalinux).
 
 **Pre-built binaries:** [Releases](https://github.com/hrodrig/pgwd/releases) provide binaries (tar.gz, zip), `.deb`, and `.rpm` packages for Linux, macOS, and Windows (amd64 and arm64). The `.deb` and `.rpm` packages include the man page (`man pgwd`) and install `/etc/pgwd/pgwd.conf` (edit before use). The `.rpm` is the same artifact for Fedora, RHEL, AlmaLinux, Rocky Linux, and Oracle Linux (`dnf`); **AlmaLinux** + **systemd** were validated (install, `pgwd -dry-run -interval 0`, `systemctl enable --now pgwd.service`).
 
@@ -590,7 +598,7 @@ make install
 # Install man page: make install-man  (MANDIR=/usr/share/man for system-wide)
 ```
 
-**Release (GitHub):** See [Release steps](#release-steps) below for the full workflow. Quick: from `main`, `git tag v0.5.10`, `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
+**Release (GitHub):** See [Release steps](#release-steps) below for the full workflow. Quick: from `main`, `git tag v0.6.4`, `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
 
 ### Release steps
 
@@ -619,7 +627,10 @@ make release-check
 ```bash
 echo "1.0.0" > VERSION
 # Edit CHANGELOG.md: move [Unreleased] items into [1.0.0], update compare links
-git add VERSION CHANGELOG.md README.md  # README badge if needed
+# Regenerate docs/demo.gif so embedded version matches (from repo root):
+make install && bash -c "vhs docs/demo.tape"
+# Update contrib/man/man1/pgwd.1 — .TH date and version (see man-page-sync rule)
+git add VERSION CHANGELOG.md README.md docs/demo.gif contrib/man/man1/pgwd.1  # README badge if needed
 git commit -m "Release 1.0.0"
 git push origin develop
 ```
@@ -802,7 +813,7 @@ Yes. Use one-shot mode (`PGWD_INTERVAL=0` or omit it). Run pgwd every 5 minutes 
 <details>
 <summary><strong>Can I monitor multiple Postgres instances?</strong></summary>
 
-Yes. Use `databases:` in one config for multi-DB in daemon mode. For many diverse instances (different clusters, kube contexts), cron with one config per instance is often simpler: one cron entry per config. See [Example: multiple services](#example-multiple-services-and-heartbeat-via-bash--cron) and `contrib/pgwd.conf.example` for `databases:` syntax.
+Yes. Use `databases:` in one config for multi-DB in daemon mode (direct URLs only; not with `-kube-postgres`). Use a **unique `client` per entry** when the same database name is used on different hosts. See [Multi-database limitations](#multi-database-limitations), [Example: multiple services](#example-multiple-services-and-heartbeat-via-bash--cron), and `contrib/pgwd.conf.example`.
 </details>
 
 <details>
@@ -844,7 +855,7 @@ When you use `-db-threshold-levels 75,85,95` (default), pgwd fires one alert per
 **Published image (each release):** Multi-arch images (linux/amd64, linux/arm64) are published to [GitHub Container Registry](https://github.com/hrodrig/pgwd/pkgs/container/pgwd) as `ghcr.io/hrodrig/pgwd`. Use a version tag or `latest`:
 
 ```bash
-docker pull ghcr.io/hrodrig/pgwd:v0.5.10
+docker pull ghcr.io/hrodrig/pgwd:v0.6.4
 # or
 docker pull ghcr.io/hrodrig/pgwd:latest
 ```
@@ -870,13 +881,13 @@ This runs `docker build` with `--build-arg VERSION=...`, `--build-arg COMMIT=...
 
 **Validate the image**
 
-Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.5.10`), or `pgwd` if you built locally with `make docker-build`:
+Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.6.4`), or `pgwd` if you built locally with `make docker-build`:
 
 ```bash
 # Help (no DB needed)
 docker run --rm ghcr.io/hrodrig/pgwd:latest -h
 
-# Version (should show e.g. pgwd v0.5.10 (commit ..., built ...))
+# Version (should show e.g. pgwd v0.6.4 (commit ..., built ...))
 docker run --rm ghcr.io/hrodrig/pgwd:latest --version
 
 # Expect "missing database URL" (validates startup path)
@@ -982,14 +993,14 @@ Debian and Ubuntu use **systemd** and **`.deb`** packages. The same `.deb` works
 **Install from GitHub** (replace version / arch):
 
 ```bash
-wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.deb
+wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_linux_amd64.deb
 sudo dpkg -i /tmp/pgwd.deb
 ```
 
 **Local `.deb`** (e.g. from `make snapshot` → `dist/`):
 
 ```bash
-sudo dpkg -i ./pgwd_v0.5.10_linux_amd64.deb
+sudo dpkg -i ./pgwd_v0.6.4_linux_amd64.deb
 ```
 
 **Configure and test**
@@ -1016,13 +1027,13 @@ sudo systemctl status pgwd.service
 **Install from GitHub** (replace version / arch):
 
 ```bash
-sudo dnf install -y "https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.rpm"
+sudo dnf install -y "https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_linux_amd64.rpm"
 ```
 
 **Local `.rpm`** (e.g. from `make snapshot` → `dist/`, when a release is not on GitHub yet):
 
 ```bash
-sudo dnf install -y ./pgwd_v0.5.10_linux_amd64.rpm
+sudo dnf install -y ./pgwd_v0.6.4_linux_amd64.rpm
 ```
 
 **Configure and test**
@@ -1048,13 +1059,13 @@ sudo systemctl status pgwd.service
 
 ```bash
 sudo zypper --non-interactive install --allow-unsigned-rpm \
-  "https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.rpm"
+  "https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_linux_amd64.rpm"
 ```
 
 **Local `.rpm`** (e.g. from `make snapshot` → `dist/`):
 
 ```bash
-sudo zypper --non-interactive install --allow-unsigned-rpm ./pgwd_v0.5.10_linux_amd64.rpm
+sudo zypper --non-interactive install --allow-unsigned-rpm ./pgwd_v0.6.4_linux_amd64.rpm
 ```
 
 **Configure and test**
@@ -1078,10 +1089,10 @@ sudo systemctl status pgwd.service
 
 Arch Linux uses **systemd**. There is no official **`pacman`** package in the Arch repos yet; install the **Linux release tarball** from [Releases](https://github.com/hrodrig/pgwd/releases) or a community **[AUR](https://aur.archlinux.org/)** package (e.g. `pgwd-bin`) when one exists — verify the PKGBUILD and checksums.
 
-**Tarball install** — extract the archive, then install the binary and config layout (replace `v0.5.10` / `amd64` as needed):
+**Tarball install** — extract the archive, then install the binary and config layout (replace `v0.6.4` / `amd64` as needed):
 
 ```bash
-wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.tar.gz | tar -xzf -
+wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_linux_amd64.tar.gz | tar -xzf -
 sudo install -Dm755 pgwd /usr/local/bin/pgwd
 sudo ln -sf /usr/local/bin/pgwd /usr/bin/pgwd
 sudo install -Dm644 share/man/man1/pgwd.1 /usr/local/share/man/man1/pgwd.1
@@ -1115,7 +1126,7 @@ Alpine uses **OpenRC** (rc.d), not systemd. Config: `/etc/pgwd/pgwd.conf`.
 **Install** — tar.gz (binario estático, musl-compatible):
 
 ```bash
-wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.tar.gz | tar -xzf - -C /usr/local/bin
+wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_linux_amd64.tar.gz | tar -xzf - -C /usr/local/bin
 # arm64: replace amd64 with arm64
 ```
 
@@ -1151,7 +1162,7 @@ OpenBSD uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-ku
 **Install** — tarball includes binary, rc.d script, and config example:
 
 ```bash
-tar xzf pgwd_v0.5.10_openbsd_amd64.tar.gz
+tar xzf pgwd_v0.6.4_openbsd_amd64.tar.gz
 doas install -m755 pgwd /usr/local/bin/
 doas install -m555 share/openbsd/rc.d/pgwd /etc/rc.d/pgwd
 doas mkdir -p /etc/pgwd
@@ -1189,7 +1200,7 @@ make install
 **Install from tarball** (or use the [one-liner](#install) which works on FreeBSD and installs only the binary):
 
 ```bash
-fetch -o /tmp/pgwd.tgz https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_freebsd_amd64.tar.gz
+fetch -o /tmp/pgwd.tgz https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_freebsd_amd64.tar.gz
 tar -xzf /tmp/pgwd.tgz -C /tmp
 sudo install -m755 /tmp/pgwd /usr/local/bin/
 sudo mkdir -p /usr/local/etc/pgwd
@@ -1218,7 +1229,7 @@ NetBSD uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-kub
 **Install** — tarball includes binary, rc.d script, and config example:
 
 ```bash
-tar xzf pgwd_v0.5.10_netbsd_amd64.tar.gz
+tar xzf pgwd_v0.6.4_netbsd_amd64.tar.gz
 install -m755 pgwd /usr/local/bin/
 install -m555 share/netbsd/rc.d/pgwd /etc/rc.d/pgwd
 mkdir -p /etc/pgwd
@@ -1241,7 +1252,7 @@ See [contrib/netbsd/README.md](contrib/netbsd/README.md) for details.
 **Install** — tarball includes binary, rc.d script, and config example:
 
 ```bash
-tar xzf pgwd_v0.5.10_dragonfly_amd64.tar.gz
+tar xzf pgwd_v0.6.4_dragonfly_amd64.tar.gz
 install -m755 pgwd /usr/local/bin/
 install -m555 share/dragonfly/rc.d/pgwd /etc/rc.d/pgwd
 mkdir -p /etc/pgwd
@@ -1266,7 +1277,7 @@ See [contrib/dragonflybsd/README.md](contrib/dragonflybsd/README.md) for details
 **Install** — tarball includes binary, SMF manifest, method script, and config example:
 
 ```bash
-curl -L -o /tmp/pgwd.tar.gz "https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_solaris_amd64.tar.gz"
+curl -L -o /tmp/pgwd.tar.gz "https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_solaris_amd64.tar.gz"
 cd /tmp && tar xzf pgwd.tar.gz
 
 pfexec mkdir -p /usr/local/bin /lib/svc/manifest/site /etc/pgwd
@@ -1295,8 +1306,9 @@ Target **v1.0.0** by early July.
 |---------|--------|-------|
 | **0.4.0** | Mar 2026 ✅ | Loki auth (-notifications-loki-org-id, -notifications-loki-bearer-token), kube-loki, Grafana org ID docs, notification sent log. |
 | **0.5.0** | Mar 2026 ✅ | Loki database/cluster labels and log line, Grafana alert docs, security hardening (zlib, compose, k8s). |
-| **0.6.0** | May | **CSV metrics** — save time series to file. |
-| **0.7.0** | May–Jun | **DB metrics** — save to database (PostgreSQL/TimescaleDB). Last 0.x before 1.0. |
+| **0.6.0** | Apr 2026 ✅ | **CSV export** — dump persisted metrics via `-export-metrics-format csv` / `metricsstore` (SQLite). Plus daemon/multi-DB, SQLite store, HTTP `/metrics`, Helm chart moved to pgwd-selfhosted, pgx security updates, Ansible platform tests, and more (see CHANGELOG). |
+| **0.6.4** | Apr 2026 ✅ | **PostgreSQL/MySQL metrics store** (`metrics_store.driver` / `dsn`), shared **`MetricsStorer`** interface, CSV export for SQL backends. See CHANGELOG. |
+| **0.7.0** | May–Jun | **Extended metrics** — TimescaleDB or additional persistence options. Last 0.x before 1.0. |
 | **1.0.0** | Early Jul | **Breaking:** remove threshold-total and threshold-active. Stable API. Criteria: 100+ tests, logo, deprecations removed. |
 
 [↑ Back to top](#top)
