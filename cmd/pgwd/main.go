@@ -68,6 +68,9 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.IntVar(&cfg.ThresholdIdle, "db-threshold-idle", cfg.ThresholdIdle, "Alert when idle connections >= N (PGWD_DB_THRESHOLD_IDLE)")
 	flag.IntVar(&cfg.StaleAge, "db-stale-age", cfg.StaleAge, "Consider connection stale if open longer than N seconds (PGWD_DB_STALE_AGE)")
 	flag.IntVar(&cfg.ThresholdStale, "db-threshold-stale", cfg.ThresholdStale, "Alert when stale connections (open > stale-age) >= N (PGWD_DB_THRESHOLD_STALE)")
+	flag.IntVar(&cfg.LongQueryMinSeconds, "db-long-query-min-seconds", cfg.LongQueryMinSeconds, "Alert on active queries running longer than N seconds; 0=off. Requires metrics store; uses cooldown (PGWD_DB_LONG_QUERY_MIN_SECONDS)")
+	flag.IntVar(&cfg.LongQueryCooldownSeconds, "db-long-query-cooldown-seconds", cfg.LongQueryCooldownSeconds, "Min seconds between long_query notifications per target; default 3600 when min-seconds set (PGWD_DB_LONG_QUERY_COOLDOWN_SECONDS)")
+	flag.IntVar(&cfg.LongQueryMinCount, "db-long-query-min-count", cfg.LongQueryMinCount, "Alert when count of long-running queries >= N; default 1 (PGWD_DB_LONG_QUERY_MIN_COUNT)")
 	flag.StringVar(&cfg.SlackWebhook, "notifications-slack-webhook", cfg.SlackWebhook, "Slack Incoming Webhook URL (PGWD_NOTIFICATIONS_SLACK_WEBHOOK)")
 	flag.StringVar(&cfg.LokiURL, "notifications-loki-url", cfg.LokiURL, "Loki push API URL, e.g. http://localhost:3100/loki/api/v1/push (PGWD_NOTIFICATIONS_LOKI_URL)")
 	flag.StringVar(&cfg.LokiLabels, "notifications-loki-labels", cfg.LokiLabels, "Loki labels, e.g. app=pgwd,env=prod (PGWD_NOTIFICATIONS_LOKI_LABELS)")
@@ -267,6 +270,11 @@ func collectEvents(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, 
 			events = append(events, *e)
 		}
 	}
+	if cfg.LongQueryMinSeconds > 0 {
+		if e := collectLongQueryEvent(ctx, pool, cfg, ev); e != nil {
+			events = append(events, *e)
+		}
+	}
 	if cfg.UsesLevelMode() && maxConn > 0 {
 		if e := checker.CollectLevelModeEvent(ev, cfg, stats, maxConn); e != nil {
 			events = append(events, *e)
@@ -307,24 +315,45 @@ func collectStaleEvent(ctx context.Context, pool *pgxpool.Pool, cfg *config.Conf
 	return &e
 }
 
-func sendEvents(ctx context.Context, senders []notify.Sender, cfg *config.Config, events []notify.Event) {
+func collectLongQueryEvent(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, ev notify.Event) *notify.Event {
+	n, err := postgres.LongQueryCount(ctx, pool, cfg.LongQueryMinSeconds)
+	if err != nil {
+		log.Printf("long query count: %v", err)
+		return nil
+	}
+	if n < cfg.LongQueryMinCount {
+		return nil
+	}
+	e := ev
+	e.Threshold = "long_query"
+	e.ThresholdValue = cfg.LongQueryMinCount
+	e.Level = "attention"
+	e.Message = fmt.Sprintf("Long-running queries (active, runtime > %ds): %d >= %d", cfg.LongQueryMinSeconds, n, cfg.LongQueryMinCount)
+	return &e
+}
+
+// sendEvents delivers each event to all senders. Returns thresholds for which at least one send succeeded (dry-run: empty).
+func sendEvents(ctx context.Context, senders []notify.Sender, cfg *config.Config, events []notify.Event) map[string]bool {
+	sent := make(map[string]bool)
 	for _, ev := range events {
 		if cfg.DryRun {
 			log.Printf("[dry-run] would send: %s", ev.Message)
 			continue
 		}
-		sent := 0
+		n := 0
 		for _, s := range senders {
 			if err := s.Send(ctx, ev); err != nil {
 				log.Printf("notify: %v", err)
 			} else {
-				sent++
+				n++
 			}
 		}
-		if sent > 0 {
+		if n > 0 {
+			sent[ev.Threshold] = true
 			log.Printf("Notification sent: %s", ev.Message)
 		}
 	}
+	return sent
 }
 
 // runCheckResult is returned by doRunCheck for store integration.
@@ -374,11 +403,39 @@ func applyHysteresisFilter(ctx context.Context, st store.MetricsStorer, cfg *con
 	}
 	var filtered []notify.Event
 	for _, e := range events {
-		if e.Threshold == "connect_failure" || e.Threshold == "too_many_clients" {
+		if e.Threshold == "connect_failure" || e.Threshold == "too_many_clients" || e.Threshold == "long_query" {
 			filtered = append(filtered, e)
 		}
 	}
 	return filtered
+}
+
+func applyLongQueryCooldownFilter(ctx context.Context, st store.MetricsStorer, cfg *config.Config, client, cluster, db string, events []notify.Event) []notify.Event {
+	if cfg.LongQueryMinSeconds <= 0 || st == nil {
+		return events
+	}
+	cd, ok := st.(store.AlertCooldownRecorder)
+	if !ok {
+		return events
+	}
+	var out []notify.Event
+	for _, e := range events {
+		if e.Threshold != "long_query" {
+			out = append(out, e)
+			continue
+		}
+		last, has, err := cd.LastLongQueryAlert(ctx, client, cluster, db)
+		if err != nil {
+			log.Printf("long_query cooldown read: %v", err)
+			out = append(out, e)
+			continue
+		}
+		if has && time.Since(last) < time.Duration(cfg.LongQueryCooldownSeconds)*time.Second {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 func trySendResolutionNotification(ctx context.Context, st store.MetricsStorer, cfg *config.Config, senders []notify.Sender, res runCheckResult, cluster, client, ns, db string) {
@@ -422,9 +479,18 @@ func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, se
 		if cfg.DryRun && cfg.LogLevel == "debug" {
 			logDryRunStats(cluster, client, db, res)
 		}
+		statePre, _ := checker.StateAndThresholdFromEvents(res.Events)
+		res.Events = applyHysteresisFilter(ctx, st, cfg, client, cluster, db, statePre, res.Events)
+		res.Events = applyLongQueryCooldownFilter(ctx, st, cfg, client, cluster, db, res.Events)
 		state, thr := checker.StateAndThresholdFromEvents(res.Events)
-		res.Events = applyHysteresisFilter(ctx, st, cfg, client, cluster, db, state, res.Events)
-		sendEvents(ctx, senders, cfg, res.Events)
+		sent := sendEvents(ctx, senders, cfg, res.Events)
+		if sent["long_query"] && st != nil {
+			if cd, ok := st.(store.AlertCooldownRecorder); ok {
+				if err := cd.SetLongQueryAlert(ctx, client, cluster, db, time.Now()); err != nil {
+					log.Printf("long_query cooldown write: %v", err)
+				}
+			}
+		}
 		if st != nil {
 			rec := store.Record{
 				Client: client, Cluster: cluster, Namespace: ns, Database: db,
@@ -566,6 +632,7 @@ func loadAndParseConfig() (config.Config, bool, string) {
 		printVersion()
 		os.Exit(0)
 	}
+	config.FinalizeAfterFlags(&cfg)
 	logStartupBanner(&cfg)
 	return cfg, loaded, path
 }

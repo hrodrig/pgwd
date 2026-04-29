@@ -56,6 +56,10 @@ databases:
       levels: "75,85,95"    # 3-tier: attention, alert, danger
       stale: 0
       total: 0
+    # Long-running queries (state=active, query age). Requires sqlite.path or metrics_store.
+    # long_query_min_seconds: 300       # 0 = off
+    # long_query_cooldown_seconds: 3600 # min time between long_query alerts per target (default 3600 if min set)
+    # long_query_min_count: 1          # alert when count >= N
 
 # Multi-DB example (uncomment and adjust):
 # databases:

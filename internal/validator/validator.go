@@ -43,6 +43,9 @@ func Validate(cfg *config.Config) error {
 	if err := ValidateMetricsStore(cfg); err != nil {
 		return err
 	}
+	if err := ValidateLongQueryAlerts(cfg); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -164,6 +167,23 @@ func ValidateMetricsStore(cfg *config.Config) error {
 		}
 	default:
 		return fmt.Errorf("pgwd: metrics store: unsupported metrics_store.driver %q (use sqlite, postgres, or mysql)", cfg.MetricsStoreDriver)
+	}
+	return nil
+}
+
+// ValidateLongQueryAlerts ensures long-query alerting is only enabled with a metrics store and sane cooldown.
+func ValidateLongQueryAlerts(cfg *config.Config) error {
+	if cfg.LongQueryMinSeconds <= 0 {
+		return nil
+	}
+	if metricsstore.Driver(cfg) == "" {
+		return fmt.Errorf("pgwd: long-query alerts require a metrics store (sqlite.path or metrics_store.driver + metrics_store.dsn) for notification cooldown")
+	}
+	if cfg.LongQueryCooldownSeconds <= 0 {
+		return fmt.Errorf("pgwd: long-query alerts require db.long_query_cooldown_seconds > 0 (or omit to use default 3600)")
+	}
+	if cfg.LongQueryMinCount <= 0 {
+		return fmt.Errorf("pgwd: long-query alerts require db.long_query_min_count > 0 (or omit to use default 1)")
 	}
 	return nil
 }

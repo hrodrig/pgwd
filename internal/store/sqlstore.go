@@ -115,10 +115,12 @@ func applyMetricsSchema(db *sql.DB, d sqlDialect) error {
 		if _, err := db.Exec(schemaPostgresIdxTarget); err != nil {
 			return err
 		}
-		return nil
+		return applyAlertCooldownSchema(db, d)
 	}
-	_, err := db.Exec(schemaMySQLTable())
-	return err
+	if _, err := db.Exec(schemaMySQLTable()); err != nil {
+		return err
+	}
+	return applyAlertCooldownSchema(db, d)
 }
 
 func normalizeSQLMetricsDriver(driver string) (sqlDialect, string, error) {

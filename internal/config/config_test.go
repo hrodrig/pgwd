@@ -749,15 +749,18 @@ func TestConfigForTarget(t *testing.T) {
 	}
 
 	target := DatabaseTarget{
-		URL:                     "postgres://target/targetdb",
-		Client:                  "target-client",
-		StaleAge:                600,
-		DefaultThresholdPercent: 90,
-		ThresholdTotal:          200,
-		ThresholdActive:         100,
-		ThresholdIdle:           50,
-		ThresholdStale:          10,
-		ThresholdLevels:         "60,70,80",
+		URL:                      "postgres://target/targetdb",
+		Client:                   "target-client",
+		StaleAge:                 600,
+		DefaultThresholdPercent:  90,
+		ThresholdTotal:           200,
+		ThresholdActive:          100,
+		ThresholdIdle:            50,
+		ThresholdStale:           10,
+		ThresholdLevels:          "60,70,80",
+		LongQueryMinSeconds:      120,
+		LongQueryCooldownSeconds: 1800,
+		LongQueryMinCount:        2,
 	}
 
 	got := base.ConfigForTarget(target)
@@ -772,6 +775,9 @@ func TestConfigForTarget(t *testing.T) {
 	assertIntField(t, "ThresholdIdle", got.ThresholdIdle, target.ThresholdIdle)
 	assertIntField(t, "ThresholdStale", got.ThresholdStale, target.ThresholdStale)
 	assertStrField(t, "ThresholdLevels", got.ThresholdLevels, target.ThresholdLevels)
+	assertIntField(t, "LongQueryMinSeconds", got.LongQueryMinSeconds, target.LongQueryMinSeconds)
+	assertIntField(t, "LongQueryCooldownSeconds", got.LongQueryCooldownSeconds, target.LongQueryCooldownSeconds)
+	assertIntField(t, "LongQueryMinCount", got.LongQueryMinCount, target.LongQueryMinCount)
 
 	// Non-target fields must be preserved from base
 	assertStrField(t, "SlackWebhook", got.SlackWebhook, base.SlackWebhook)

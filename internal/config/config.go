@@ -11,15 +11,18 @@ const DefaultThresholdLevels = "75,85,95"
 
 // DatabaseTarget is one Postgres instance to monitor. Used when config has multiple databases.
 type DatabaseTarget struct {
-	URL                     string
-	Client                  string // empty = derive from base client + "-" + db name from URL
-	StaleAge                int
-	DefaultThresholdPercent int
-	ThresholdTotal          int
-	ThresholdActive         int
-	ThresholdIdle           int
-	ThresholdStale          int
-	ThresholdLevels         string
+	URL                      string
+	Client                   string // empty = derive from base client + "-" + db name from URL
+	StaleAge                 int
+	DefaultThresholdPercent  int
+	ThresholdTotal           int
+	ThresholdActive          int
+	ThresholdIdle            int
+	ThresholdStale           int
+	ThresholdLevels          string
+	LongQueryMinSeconds      int
+	LongQueryCooldownSeconds int
+	LongQueryMinCount        int
 }
 
 // Config holds all pgwd settings from CLI and env (PGWD_*).
@@ -50,6 +53,10 @@ type Config struct {
 	ThresholdIdle   int
 	StaleAge        int // seconds; connections open longer than this are "stale"
 	ThresholdStale  int // alert when count of stale connections >= this
+	// Long-running query alerts (state=active, query_start age). Requires a metrics store for cooldown timestamps.
+	LongQueryMinSeconds      int // 0 = disabled; min query runtime in seconds to count as "long"
+	LongQueryCooldownSeconds int // min time between long_query notifications per target (default when min set: 3600)
+	LongQueryMinCount        int // alert when count of long-running queries >= this (default 1)
 
 	// Notifications
 	SlackWebhook    string
@@ -258,6 +265,15 @@ func applyEnvThresholds(cfg *Config) {
 	if v := envInt("DB_DEFAULT_THRESHOLD_PERCENT", -1); v >= 0 {
 		cfg.DefaultThresholdPercent = v
 	}
+	if v := envInt("DB_LONG_QUERY_MIN_SECONDS", -1); v >= 0 {
+		cfg.LongQueryMinSeconds = v
+	}
+	if v := envInt("DB_LONG_QUERY_COOLDOWN_SECONDS", -1); v >= 0 {
+		cfg.LongQueryCooldownSeconds = v
+	}
+	if v := envInt("DB_LONG_QUERY_MIN_COUNT", -1); v >= 0 {
+		cfg.LongQueryMinCount = v
+	}
 }
 
 func applyEnvNotifiers(cfg *Config) {
@@ -461,7 +477,7 @@ func (c *Config) UsesLevelMode() bool {
 // HasAnyThreshold returns true if at least one threshold is set or level mode is active.
 func (c *Config) HasAnyThreshold() bool {
 	return c.ThresholdTotal > 0 || c.ThresholdActive > 0 || c.ThresholdIdle > 0 ||
-		c.ThresholdStale > 0 || c.UsesLevelMode()
+		c.ThresholdStale > 0 || c.UsesLevelMode() || c.LongQueryMinSeconds > 0
 }
 
 // HasAnyNotifier returns true if Slack or Loki is configured.
@@ -476,15 +492,18 @@ func (c *Config) Targets() []DatabaseTarget {
 		return c.Databases
 	}
 	return []DatabaseTarget{{
-		URL:                     c.DBURL,
-		Client:                  c.Client,
-		StaleAge:                c.StaleAge,
-		DefaultThresholdPercent: c.DefaultThresholdPercent,
-		ThresholdTotal:          c.ThresholdTotal,
-		ThresholdActive:         c.ThresholdActive,
-		ThresholdIdle:           c.ThresholdIdle,
-		ThresholdStale:          c.ThresholdStale,
-		ThresholdLevels:         c.ThresholdLevels,
+		URL:                      c.DBURL,
+		Client:                   c.Client,
+		StaleAge:                 c.StaleAge,
+		DefaultThresholdPercent:  c.DefaultThresholdPercent,
+		ThresholdTotal:           c.ThresholdTotal,
+		ThresholdActive:          c.ThresholdActive,
+		ThresholdIdle:            c.ThresholdIdle,
+		ThresholdStale:           c.ThresholdStale,
+		ThresholdLevels:          c.ThresholdLevels,
+		LongQueryMinSeconds:      c.LongQueryMinSeconds,
+		LongQueryCooldownSeconds: c.LongQueryCooldownSeconds,
+		LongQueryMinCount:        c.LongQueryMinCount,
 	}}
 }
 
@@ -506,5 +525,8 @@ func (c *Config) ConfigForTarget(t DatabaseTarget) *Config {
 	out.ThresholdIdle = t.ThresholdIdle
 	out.ThresholdStale = t.ThresholdStale
 	out.ThresholdLevels = t.ThresholdLevels
+	out.LongQueryMinSeconds = t.LongQueryMinSeconds
+	out.LongQueryCooldownSeconds = t.LongQueryCooldownSeconds
+	out.LongQueryMinCount = t.LongQueryMinCount
 	return &out
 }

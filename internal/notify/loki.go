@@ -161,7 +161,7 @@ func thresholdToLevel(threshold string) string {
 		return "danger"
 	case "resolution":
 		return "ok"
-	case "total", "active", "idle", "stale":
+	case "total", "active", "idle", "stale", "long_query":
 		return "attention"
 	case "test":
 		return "attention"

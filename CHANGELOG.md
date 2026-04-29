@@ -6,6 +6,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+### Added
+
+- **Long-running query alerts:** Optional **`db.long_query_min_seconds`** (active queries with `now() - query_start` exceeding N seconds), **`db.long_query_cooldown_seconds`** (minimum interval between notifications per target; default 3600 when min is set), and **`db.long_query_min_count`**. Requires a **metrics store** (SQLite or SQL) to persist cooldown timestamps. Hysteresis does not gate `long_query` repeats; cooldown suppresses spam while the same condition persists.
+
 ## [0.6.4] - 2026-04-29
 
 ### Added

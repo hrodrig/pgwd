@@ -208,6 +208,33 @@ func TestValidateKubeLoki(t *testing.T) {
 	}
 }
 
+func TestValidateLongQueryAlerts(t *testing.T) {
+	if err := ValidateLongQueryAlerts(&config.Config{}); err != nil {
+		t.Errorf("no long query: %v", err)
+	}
+	err := ValidateLongQueryAlerts(&config.Config{LongQueryMinSeconds: 60})
+	if err == nil || !strings.Contains(err.Error(), "metrics store") {
+		t.Fatalf("want metrics store error: %v", err)
+	}
+	err = ValidateLongQueryAlerts(&config.Config{
+		LongQueryMinSeconds: 60, SqlitePath: "/tmp/x.db", LongQueryCooldownSeconds: 0,
+	})
+	if err == nil || !strings.Contains(err.Error(), "cooldown") {
+		t.Fatalf("want cooldown error: %v", err)
+	}
+	err = ValidateLongQueryAlerts(&config.Config{
+		LongQueryMinSeconds: 60, SqlitePath: "/tmp/x.db", LongQueryCooldownSeconds: 120, LongQueryMinCount: 0,
+	})
+	if err == nil || !strings.Contains(err.Error(), "min_count") {
+		t.Fatalf("want min_count error: %v", err)
+	}
+	if err := ValidateLongQueryAlerts(&config.Config{
+		LongQueryMinSeconds: 60, SqlitePath: "/tmp/x.db", LongQueryCooldownSeconds: 120, LongQueryMinCount: 1,
+	}); err != nil {
+		t.Errorf("valid: %v", err)
+	}
+}
+
 func TestValidateMetricsStore(t *testing.T) {
 	tests := []struct {
 		name     string

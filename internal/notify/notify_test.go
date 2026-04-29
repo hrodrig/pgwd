@@ -414,6 +414,7 @@ func TestThresholdToLevel(t *testing.T) {
 		{"active", "attention"},
 		{"idle", "attention"},
 		{"stale", "attention"},
+		{"long_query", "attention"},
 		{"test", "attention"},
 		{"unknown_threshold", "attention"},
 	}

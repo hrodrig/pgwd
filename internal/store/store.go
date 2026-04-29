@@ -30,6 +30,14 @@ CREATE TABLE IF NOT EXISTS metrics (
 );
 CREATE INDEX IF NOT EXISTS idx_metrics_ts ON metrics(ts);
 CREATE INDEX IF NOT EXISTS idx_metrics_target ON metrics(client, cluster, database);
+CREATE TABLE IF NOT EXISTS alert_cooldown (
+  client TEXT NOT NULL,
+  cluster TEXT NOT NULL DEFAULT '',
+  database TEXT NOT NULL DEFAULT '',
+  kind TEXT NOT NULL,
+  last_alert_ms INTEGER NOT NULL,
+  PRIMARY KEY (client, cluster, database, kind)
+);
 `
 
 // Record is one metrics row to insert.

@@ -25,6 +25,9 @@ type fileConfigDB struct {
 		Stale  int    `yaml:"stale"`
 		Total  int    `yaml:"total"`
 	} `yaml:"threshold"`
+	LongQueryMinSeconds      int `yaml:"long_query_min_seconds"`
+	LongQueryCooldownSeconds int `yaml:"long_query_cooldown_seconds"`
+	LongQueryMinCount        int `yaml:"long_query_min_count"`
 }
 
 // fileConfig mirrors the YAML structure: db, databases, kube, notifications, and top-level keys.
@@ -101,43 +104,46 @@ func FromFile(path string) (Config, bool, error) {
 
 func fileConfigToConfig(fc fileConfig) Config {
 	c := Config{
-		DBURL:                   fc.DB.URL,
-		Client:                  fc.Client,
-		DefaultThresholdPercent: fc.DB.DefaultThresholdPercent,
-		DryRun:                  fc.DryRun,
-		LogLevel:                fc.LogLevel,
-		Interval:                fc.Interval,
-		KubePostgres:            fc.Kube.Postgres,
-		KubeContext:             fc.Kube.Context,
-		KubeLocalPort:           fc.Kube.LocalPort,
-		KubeLoki:                fc.Kube.Loki,
-		KubeLokiLocalPort:       fc.Kube.LokiLocalPort,
-		KubeLokiRemotePort:      fc.Kube.LokiRemotePort,
-		KubePasswordContainer:   fc.Kube.PasswordContainer,
-		KubePasswordVar:         fc.Kube.PasswordVar,
-		LokiURL:                 fc.Notifications.Loki.URL,
-		LokiLabels:              fc.Notifications.Loki.Labels,
-		LokiOrgID:               fc.Notifications.Loki.OrgID,
-		LokiBearerToken:         fc.Notifications.Loki.BearerToken,
-		NotifyOnConnectFailure:  fc.NotifyOnConnectFailure,
-		SqlitePath:              fc.Sqlite.Path,
-		SqliteMaxMetrics:        fc.Sqlite.MaxMetrics,
-		SqliteStaleAge:          fc.Sqlite.StaleAge,
-		MetricsStoreDriver:      fc.MetricsStore.Driver,
-		MetricsStoreDSN:         fc.MetricsStore.DSN,
-		ConfirmAlert:            fc.ConfirmAlert,
-		ConfirmOk:               fc.ConfirmOk,
-		HTTPListen:              fc.HTTP.Listen,
-		HTTPBasePath:            fc.HTTP.BasePath,
-		HTTPHealthPath:          fc.HTTP.HealthPath,
-		HTTPMetricsPath:         fc.HTTP.MetricsPath,
-		SlackWebhook:            fc.Notifications.Slack.Webhook,
-		StaleAge:                fc.DB.StaleAge,
-		ThresholdTotal:          fc.DB.Threshold.Total,
-		ThresholdActive:         fc.DB.Threshold.Active,
-		ThresholdIdle:           fc.DB.Threshold.Idle,
-		ThresholdStale:          fc.DB.Threshold.Stale,
-		ThresholdLevels:         fc.DB.Threshold.Levels,
+		DBURL:                    fc.DB.URL,
+		Client:                   fc.Client,
+		DefaultThresholdPercent:  fc.DB.DefaultThresholdPercent,
+		DryRun:                   fc.DryRun,
+		LogLevel:                 fc.LogLevel,
+		Interval:                 fc.Interval,
+		KubePostgres:             fc.Kube.Postgres,
+		KubeContext:              fc.Kube.Context,
+		KubeLocalPort:            fc.Kube.LocalPort,
+		KubeLoki:                 fc.Kube.Loki,
+		KubeLokiLocalPort:        fc.Kube.LokiLocalPort,
+		KubeLokiRemotePort:       fc.Kube.LokiRemotePort,
+		KubePasswordContainer:    fc.Kube.PasswordContainer,
+		KubePasswordVar:          fc.Kube.PasswordVar,
+		LokiURL:                  fc.Notifications.Loki.URL,
+		LokiLabels:               fc.Notifications.Loki.Labels,
+		LokiOrgID:                fc.Notifications.Loki.OrgID,
+		LokiBearerToken:          fc.Notifications.Loki.BearerToken,
+		NotifyOnConnectFailure:   fc.NotifyOnConnectFailure,
+		SqlitePath:               fc.Sqlite.Path,
+		SqliteMaxMetrics:         fc.Sqlite.MaxMetrics,
+		SqliteStaleAge:           fc.Sqlite.StaleAge,
+		MetricsStoreDriver:       fc.MetricsStore.Driver,
+		MetricsStoreDSN:          fc.MetricsStore.DSN,
+		ConfirmAlert:             fc.ConfirmAlert,
+		ConfirmOk:                fc.ConfirmOk,
+		HTTPListen:               fc.HTTP.Listen,
+		HTTPBasePath:             fc.HTTP.BasePath,
+		HTTPHealthPath:           fc.HTTP.HealthPath,
+		HTTPMetricsPath:          fc.HTTP.MetricsPath,
+		SlackWebhook:             fc.Notifications.Slack.Webhook,
+		StaleAge:                 fc.DB.StaleAge,
+		ThresholdTotal:           fc.DB.Threshold.Total,
+		ThresholdActive:          fc.DB.Threshold.Active,
+		ThresholdIdle:            fc.DB.Threshold.Idle,
+		ThresholdStale:           fc.DB.Threshold.Stale,
+		ThresholdLevels:          fc.DB.Threshold.Levels,
+		LongQueryMinSeconds:      fc.DB.LongQueryMinSeconds,
+		LongQueryCooldownSeconds: fc.DB.LongQueryCooldownSeconds,
+		LongQueryMinCount:        fc.DB.LongQueryMinCount,
 	}
 
 	// Normalize to Databases: use databases if present, else wrap db as single target.
@@ -154,21 +160,25 @@ func fileConfigToConfig(fc fileConfig) Config {
 	}
 
 	ApplyDefaults(&c)
+	FinalizeAfterFlags(&c)
 	return c
 }
 
 // mergeDBTarget builds a DatabaseTarget from base db config and per-entry overrides.
 func mergeDBTarget(baseClient string, base, over fileConfigDB) DatabaseTarget {
 	t := DatabaseTarget{
-		URL:                     over.URL,
-		Client:                  over.Client,
-		StaleAge:                orZero(over.StaleAge, base.StaleAge),
-		DefaultThresholdPercent: orZero(over.DefaultThresholdPercent, base.DefaultThresholdPercent),
-		ThresholdTotal:          orZero(over.Threshold.Total, base.Threshold.Total),
-		ThresholdActive:         orZero(over.Threshold.Active, base.Threshold.Active),
-		ThresholdIdle:           orZero(over.Threshold.Idle, base.Threshold.Idle),
-		ThresholdStale:          orZero(over.Threshold.Stale, base.Threshold.Stale),
-		ThresholdLevels:         orEmpty(over.Threshold.Levels, base.Threshold.Levels),
+		URL:                      over.URL,
+		Client:                   over.Client,
+		StaleAge:                 orZero(over.StaleAge, base.StaleAge),
+		DefaultThresholdPercent:  orZero(over.DefaultThresholdPercent, base.DefaultThresholdPercent),
+		ThresholdTotal:           orZero(over.Threshold.Total, base.Threshold.Total),
+		ThresholdActive:          orZero(over.Threshold.Active, base.Threshold.Active),
+		ThresholdIdle:            orZero(over.Threshold.Idle, base.Threshold.Idle),
+		ThresholdStale:           orZero(over.Threshold.Stale, base.Threshold.Stale),
+		ThresholdLevels:          orEmpty(over.Threshold.Levels, base.Threshold.Levels),
+		LongQueryMinSeconds:      orZero(over.LongQueryMinSeconds, base.LongQueryMinSeconds),
+		LongQueryCooldownSeconds: orZero(over.LongQueryCooldownSeconds, base.LongQueryCooldownSeconds),
+		LongQueryMinCount:        orZero(over.LongQueryMinCount, base.LongQueryMinCount),
 	}
 	if t.Client == "" && baseClient != "" {
 		t.Client = baseClient + "-" + databaseNameFromURL(t.URL)
@@ -247,6 +257,18 @@ func applyGeneralDefaults(c *Config) {
 	// Normalize log_level: only info and debug supported
 	if c.LogLevel != "debug" && c.LogLevel != "info" {
 		c.LogLevel = "info"
+	}
+}
+
+// FinalizeAfterFlags applies derived defaults that depend on CLI flags (call after flag.Parse).
+func FinalizeAfterFlags(c *Config) {
+	if c.LongQueryMinSeconds > 0 {
+		if c.LongQueryMinCount <= 0 {
+			c.LongQueryMinCount = 1
+		}
+		if c.LongQueryCooldownSeconds <= 0 {
+			c.LongQueryCooldownSeconds = 3600
+		}
 	}
 }
 
