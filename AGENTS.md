@@ -14,7 +14,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 ## Setup and build
 
 - Install deps: `go mod download` (or `go build` will pull them).
-- Build binary: **`make build`** (reads **`VERSION`**, injects Version/Commit/BuildDate/Branch via ldflags). The repo root **`GNUmakefile`** holds the real rules (**GNU Make**). On **FreeBSD**, the root **`Makefile`** is a small **BSD Make** stub that forwards to **`gmake`** — install **`devel/gmake`** (`pkg install gmake`) if `make build` asks for it.
+- Build binary: **`make build`** (reads **`VERSION`**, injects Version/Commit/BuildDate/Branch via ldflags). The repo root **`GNUmakefile`** holds the real rules (**GNU Make**). On **FreeBSD**, the root **`Makefile`** is a small **BSD Make** stub that forwards to **`gmake`** — install **`devel/gmake`** (`pkg install gmake`) and **`lang/go`** (`pkg install go`) so **`go`** is on **`PATH`** (typically **`/usr/local/bin`**).
 - Install to `$GOBIN`: `make install`. Custom path: `GOBIN=/usr/local/bin make install`.
 - Cross-compile: `make build-linux`, `make build-darwin`, `make build-windows`, or `make build-all` (output in `dist/`).
 

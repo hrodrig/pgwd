@@ -599,7 +599,7 @@ make install
 # Install man page: make install-man  (MANDIR=/usr/share/man for system-wide)
 ```
 
-**FreeBSD:** `/usr/bin/make` is **BSD Make**; the repo ships a small **`Makefile`** stub that forwards to **`gmake`** (uses **`all`** + **`.DEFAULT`** with **`gmake $@`**, not **`$(.MAKE.CMDGOALS)`**, which can be empty under BSD Make). Install **`devel/gmake`** (`pkg install gmake`), then **`make build`** or **`gmake build`**. Linux, macOS, and CI use **GNU Make**, which reads **`GNUmakefile`** first.
+**FreeBSD:** `/usr/bin/make` is **BSD Make**; the repo ships a small **`Makefile`** stub that forwards to **`gmake`** (uses **`all`** + **`.DEFAULT`** with **`gmake $@`**, not **`$(.MAKE.CMDGOALS)`**, which can be empty under BSD Make). Install **`devel/gmake`** (`pkg install gmake`) and a **Go** toolchain on **`PATH`** (`pkg install go` — binary is usually **`/usr/local/bin/go`**). Then **`make build`** or **`gmake build`**. Linux, macOS, and CI use **GNU Make**, which reads **`GNUmakefile`** first.
 
 **Release (GitHub):** See [Release steps](#release-steps) below for the full workflow. Quick: from `main`, `git tag v0.6.4`, `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
 
@@ -663,7 +663,7 @@ make release
 
 Use a [Personal Access Token](https://github.com/settings/tokens) with `repo` scope. Before releasing, verify each token's **expiration date** and **scopes** at [github.com/settings/tokens](https://github.com/settings/tokens).
 
-**Snapshot (no publish):** `make snapshot` — outputs to `dist/` without pushing.
+**Snapshot (no publish):** `make snapshot` — outputs to `dist/` without pushing (no Docker; install [goreleaser](https://goreleaser.com) on `PATH`).
 
 ## Testing
 

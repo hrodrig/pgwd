@@ -124,8 +124,10 @@ release:
     name: pgwd
 
 # Docker: multi-arch image to ghcr.io (same GITHUB_TOKEN). Requires buildx + qemu for local release.
+# Snapshot builds skip Docker so `make snapshot` works without a daemon (e.g. FreeBSD dev VMs).
 dockers_v2:
-  - dockerfile: Dockerfile.release
+  - disable: "{{ .IsSnapshot }}"
+    dockerfile: Dockerfile.release
     ids:
       - pgwd
     images:

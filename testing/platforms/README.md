@@ -173,7 +173,7 @@ If **`pgwd_local_package` is not set** for a host, the role downloads from `pgwd
 
 Use this to validate VMs against **`make snapshot`** artifacts (no GitHub release required).
 
-1. From the repo root, run **`make snapshot`** (Docker; Goreleaser writes under `dist/`).
+1. From the repo root, run **`make snapshot`** ([goreleaser](https://goreleaser.com) on `PATH`; no Docker required; artifacts under **`dist/`**).
 2. Open **`dist/metadata.json`** and read the **`version`** field (for example `0.6.5-next`). Snapshot naming comes from **`.goreleaser.yaml`** → **`snapshot.version_template`**; it is **not** always the same string as the `VERSION` file in the repo.
 3. Set **`pgwd_version`** in `inventory/hosts.yml` (under `all.vars` or per group) to **that exact `version` string**. The install role runs **`pgwd -version`** and asserts this value appears in the output.
 4. List **`dist/`** and set **`pgwd_local_package`** on each host to the matching artifact using a **full absolute path on the machine where you run `ansible-playbook`** (the control node). `ansible.builtin.copy` reads those files locally before pushing to the VM.

@@ -304,9 +304,8 @@ port-openbsd-sync:
 	@rm -f contrib/openbsd/port/Makefile.bak
 	@echo "Updated contrib/openbsd/port/Makefile to $(PORT_VERSION)"
 
-# Snapshot build (no tag required), outputs to dist/
+# Snapshot build (no tag required), outputs to dist/. No Docker required (dockers_v2 disabled for snapshots in .goreleaser.yaml).
 snapshot:
-	$(check-docker)
 	goreleaser release --snapshot --clean
 
 # Remove built binary and dist/
