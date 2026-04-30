@@ -1,0 +1,11 @@
+---
+# ping.yml — Ansible's ping module (not ICMP). On success each host reports "pong";
+# it verifies SSH, the inventory, and that the remote Python interpreter works.
+- name: pgwd platform connectivity check
+  hosts: all
+  gather_facts: false
+  become: false
+
+  tasks:
+    - name: ansible.builtin.ping (success shows pong)
+      ansible.builtin.ping:

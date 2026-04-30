@@ -53,20 +53,34 @@ Kubernetes and container deployments are **not** in scope here — they are cove
 cp inventory/hosts.yml.example inventory/hosts.yml
 vim inventory/hosts.yml
 
-# 2. Run the full release validation cycle (all platforms)
+# 2. Verify SSH and Ansible can reach each host using Ansible's ping module (not ICMP).
+#    ansible.builtin.ping checks the connection and remote Python; a successful host shows "pong".
+cd testing/platforms
+ansible-playbook playbooks/ping.yml
+# Optional: one host or group
+ansible-playbook playbooks/ping.yml --limit pgwd-ubuntu
+
+# 3. Run the full release validation cycle (all platforms)
 ansible-playbook playbooks/full-cycle.yml
 
-# 3. Or target a single platform
+# 4. Or target a single platform
 ansible-playbook playbooks/full-cycle.yml --limit pgwd-ubuntu
 
-# 4. Or target a group
+# 5. Or target a group
 ansible-playbook playbooks/full-cycle.yml --limit linux_systemd
 ```
 
 From the repo root you can also use:
 
 ```bash
-# All platforms
+# Connectivity only — Ansible ping module (success → "pong"), same as:
+#   cd testing/platforms && ansible-playbook playbooks/ping.yml
+make test-platforms-ping
+
+# Single host
+make test-platforms-ping PLATFORM=pgwd-ubuntu
+
+# All platforms (full cycle)
 make test-platforms
 
 # Single platform
@@ -77,6 +91,7 @@ make test-platforms PLATFORM=pgwd-ubuntu
 
 | Playbook | Description |
 |---|---|
+| `ping.yml` | Runs `ansible.builtin.ping` on each host (not ICMP); success output includes **`pong`**. Validates SSH, inventory, and remote Python before `full-cycle.yml` |
 | `setup.yml` | Install pgwd, deploy config, start daemon |
 | `test.yml` | Dry-run, notification (Loki+Slack) tests, timer tests |
 | `teardown.yml` | Uninstall pgwd, verify full cleanup |
@@ -110,7 +125,7 @@ Edit `inventory/hosts.yml` (not committed). Each host only needs `ansible_host`,
 ```yaml
 all:
   vars:
-    pgwd_version: "0.5.10"
+    pgwd_version: "0.6.4"
     postgres_instances:
       - url: "postgres://pgwd:secret@10.0.0.50:5432/pgwd?sslmode=disable"
         client: "pgwd-main"
@@ -150,11 +165,28 @@ all:
           platform_vars: almalinux
 ```
 
-### Testing a local build
+### Published release vs local packages
 
-To test binaries you built locally instead of a published release, set `pgwd_local_package` **per host** (each platform needs its own format):
+If **`pgwd_local_package` is not set** for a host, the role downloads from `pgwd_release_url` using `pgwd_version`. That only works when **`v{{ pgwd_version }}` exists on GitHub**.
+
+### Local snapshot (before you create a release tag)
+
+Use this to validate VMs against **`make snapshot`** artifacts (no GitHub release required).
+
+1. From the repo root, run **`make snapshot`** (Docker; Goreleaser writes under `dist/`).
+2. Open **`dist/metadata.json`** and read the **`version`** field (for example `0.6.5-next`). Snapshot naming comes from **`.goreleaser.yaml`** → **`snapshot.version_template`**; it is **not** always the same string as the `VERSION` file in the repo.
+3. Set **`pgwd_version`** in `inventory/hosts.yml` (under `all.vars` or per group) to **that exact `version` string**. The install role runs **`pgwd -version`** and asserts this value appears in the output.
+4. List **`dist/`** and set **`pgwd_local_package`** on each host to the matching artifact using a **full absolute path on the machine where you run `ansible-playbook`** (the control node). `ansible.builtin.copy` reads those files locally before pushing to the VM.
+5. Run **`make test-platforms-ping`**, then **`make test-platforms`** (or `--limit` one host).
+
+Example after a snapshot (adjust paths and the `0.6.5-next` placeholder to match **your** `metadata.json` and `ls dist/`):
 
 ```yaml
+all:
+  vars:
+    pgwd_version: "0.6.5-next"   # from dist/metadata.json → "version"
+    pgwd_release_url: "https://github.com/hrodrig/pgwd/releases/download/v{{ pgwd_version }}"
+  children:
     linux_systemd:
       hosts:
         pgwd-ubuntu:
@@ -162,13 +194,13 @@ To test binaries you built locally instead of a published release, set `pgwd_loc
           ansible_port: 2298
           ansible_user: root
           platform_vars: ubuntu
-          pgwd_local_package: "/tmp/dist/pgwd_v0.5.10_linux_amd64.deb"
+          pgwd_local_package: "/full/path/to/pgwd/dist/pgwd_v0.6.5-next_linux_amd64.deb"
         pgwd-almalinux:
           ansible_host: 203.0.113.10
           ansible_port: 2299
           ansible_user: root
           platform_vars: almalinux
-          pgwd_local_package: "/tmp/dist/pgwd_v0.5.10_linux_amd64.rpm"
+          pgwd_local_package: "/full/path/to/pgwd/dist/pgwd_v0.6.5-next_linux_amd64.rpm"
     linux_openrc:
       hosts:
         pgwd-alpine:
@@ -176,10 +208,14 @@ To test binaries you built locally instead of a published release, set `pgwd_loc
           ansible_port: 2297
           ansible_user: root
           platform_vars: alpine
-          pgwd_local_package: "/tmp/dist/pgwd_v0.5.10_linux_amd64.tar.gz"
+          pgwd_local_package: "/full/path/to/pgwd/dist/pgwd_v0.6.5-next_linux_amd64.tar.gz"
 ```
 
-If `pgwd_local_package` is not set for a host, the role downloads the package from `pgwd_release_url` automatically.
+For **BSD** hosts, use the matching `*_freebsd_*`, `*_openbsd_*`, `*_netbsd_*`, or `*_dragonfly_*` tarball from `dist/`.
+
+### Testing a local build (summary)
+
+Set **`pgwd_local_package`** per host (`.deb`, `.rpm`, or `.tar.gz` as required by `platform_vars`). Keep **`pgwd_version`** aligned with whatever **`pgwd -version`** prints for that artifact (release tag or snapshot `version` from `metadata.json`).
 
 ## Notification mock
 
@@ -192,17 +228,20 @@ Both endpoints return `200 {}`. The mock requires no dependencies beyond Python 
 
 ## Pre-release checklist
 
-Before merging to `main` and tagging a release, run the full platform validation:
+Before merging to `main` and tagging a release, validate on real VMs using a **local snapshot** (see **Local snapshot** above): `pgwd_version` from `dist/metadata.json`, `pgwd_local_package` as absolute paths into `dist/`.
 
 ```bash
-# 1. Build snapshot packages
+# 1. Snapshot packages (no tag required)
 make snapshot
 
-# 2. Update hosts.yml with pgwd_local_package paths pointing to dist/
-# 3. Run all platforms
+# 2. Align inventory: pgwd_version = "version" from dist/metadata.json;
+#    per-host pgwd_local_package = absolute path to matching dist/pgwd_v*_...
+
+# 3. Connectivity, then full cycle
+make test-platforms-ping
 make test-platforms
 
-# 4. If all pass, proceed with release-check and merge
+# 4. If all pass, run repo release checks, merge, tag, then release
 make release-check
 ```
 

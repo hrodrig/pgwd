@@ -36,6 +36,7 @@ var (
 	Version   string = "dev"
 	Commit    string = ""
 	BuildDate string = ""
+	Branch    string = ""
 )
 
 func printVersion() {
@@ -47,7 +48,11 @@ func printVersion() {
 	if built == "" {
 		built = "unknown"
 	}
-	fmt.Printf("pgwd %s (commit %s, built %s)\n", Version, commit, built)
+	branch := Branch
+	if branch == "" {
+		branch = "unknown"
+	}
+	fmt.Printf("pgwd %s (branch %s, commit %s, built %s)\n", Version, branch, commit, built)
 }
 
 // handleVersion checks os.Args for "version"/"-version"/"--version"; prints version and exits if matched.
@@ -532,8 +537,12 @@ func logStartupBanner(cfg *config.Config) {
 	if built == "" {
 		built = "unknown"
 	}
-	log.Printf("pgwd: starting %s (commit %s, built %s) %s/%s log_level=%s",
-		Version, commit, built, runtime.GOOS, runtime.GOARCH, cfg.LogLevel)
+	branch := Branch
+	if branch == "" {
+		branch = "unknown"
+	}
+	log.Printf("pgwd: starting %s (branch %s, commit %s, built %s) %s/%s log_level=%s",
+		Version, branch, commit, built, runtime.GOOS, runtime.GOARCH, cfg.LogLevel)
 }
 
 func logConfigTrace(path string, configLoaded bool, hasCLIArgs bool) {

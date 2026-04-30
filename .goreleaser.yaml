@@ -45,6 +45,7 @@ builds:
       - -X main.Version=v{{ .Version }}
       - -X main.Commit={{ .ShortCommit }}
       - -X main.BuildDate={{ .Date }}
+      - -X main.Branch={{ .Branch }}
 
 archives:
   - id: default

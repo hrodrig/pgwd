@@ -13,11 +13,13 @@
 
 all:
   vars:
-    pgwd_version: "0.5.10"
+    pgwd_version: "0.6.4"
     pgwd_release_url: "https://github.com/hrodrig/pgwd/releases/download/v{{ pgwd_version }}"
 
-    # To test local builds instead of a release, set pgwd_local_package per host
-    # (each platform needs its own format: .deb, .rpm, .tar.gz). See README.md.
+    # Local snapshot (before tagging): run `make snapshot`, read `dist/metadata.json`
+    # → use its `version` value here (often not equal to VERSION; see snapshot.version_template
+    # in .goreleaser.yaml). Set pgwd_local_package per host to absolute paths under dist/
+    # on the machine where you run ansible-playbook. See README.md "Local snapshot".
 
     notification_mock_port: 9999
 
@@ -39,13 +41,13 @@ all:
           ansible_port: 2298
           ansible_user: root
           platform_vars: ubuntu
-          # pgwd_local_package: "/tmp/dist/pgwd_v0.5.10_linux_amd64.deb"
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.6.4_linux_amd64.deb"
         pgwd-almalinux:
           ansible_host: 203.0.113.10
           ansible_port: 2299
           ansible_user: root
           platform_vars: almalinux
-          # pgwd_local_package: "/tmp/dist/pgwd_v0.5.10_linux_amd64.rpm"
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.6.4_linux_amd64.rpm"
 
     linux_openrc:
       hosts:
@@ -54,7 +56,7 @@ all:
           ansible_port: 2297
           ansible_user: root
           platform_vars: alpine
-          # pgwd_local_package: "/tmp/dist/pgwd_v0.5.10_linux_amd64.tar.gz"
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.6.4_linux_amd64.tar.gz"
 
     bsd:
       vars:
@@ -65,23 +67,23 @@ all:
           ansible_port: 2295
           ansible_user: root
           platform_vars: freebsd
-          # pgwd_local_package: "/tmp/dist/pgwd_v0.5.10_freebsd_amd64.tar.gz"
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.6.4_freebsd_amd64.tar.gz"
         pgwd-openbsd:
           ansible_host: 203.0.113.10
           ansible_port: 2296
           ansible_user: root
           platform_vars: openbsd
-          # pgwd_local_package: "/tmp/dist/pgwd_v0.5.10_openbsd_amd64.tar.gz"
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.6.4_openbsd_amd64.tar.gz"
         pgwd-netbsd:
           ansible_host: 203.0.113.10
           ansible_port: 2294
           ansible_user: root
           ansible_python_interpreter: /usr/pkg/bin/python3
           platform_vars: netbsd
-          # pgwd_local_package: "/tmp/dist/pgwd_v0.5.10_netbsd_amd64.tar.gz"
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.6.4_netbsd_amd64.tar.gz"
         pgwd-dragonflybsd:
           ansible_host: 203.0.113.10
           ansible_port: 2293
           ansible_user: root
           platform_vars: dragonflybsd
-          # pgwd_local_package: "/tmp/dist/pgwd_v0.5.10_dragonfly_amd64.tar.gz"
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.6.4_dragonfly_amd64.tar.gz"

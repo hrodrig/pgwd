@@ -2,12 +2,13 @@ FROM golang:1.26-alpine AS build
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILDDATE=unknown
+ARG BRANCH=unknown
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
-RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildDate=${BUILDDATE}" -o /pgwd ./cmd/pgwd
+RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildDate=${BUILDDATE} -X main.Branch=${BRANCH}" -o /pgwd ./cmd/pgwd
 
 # Minimal runtime: only ca-certificates for HTTPS (Slack/Loki). wget and nc are BusyBox applets
 # (symlinks), not separate apk packages, so we cannot apk del them; we remove the symlinks with rm.

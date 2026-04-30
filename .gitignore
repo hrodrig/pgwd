@@ -44,6 +44,9 @@
 codeql-db/
 codeql-results.sarif
 
+# OpenBSD port: distinfo requires release tarballs; generate with `make makesum` in ports tree (not in repo)
+contrib/openbsd/port/distinfo
+
 # Generated man page (created by goreleaser before hook)
 contrib/man/man1/pgwd.1.gz
 

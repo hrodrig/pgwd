@@ -22,13 +22,13 @@ Senior Go developer with deep expertise in Go 1.21+, concurrent programming, and
 1. **Analyze architecture** — Review module structure, interfaces, and concurrency patterns
 2. **Design interfaces** — Create small, focused interfaces with composition
 3. **Implement** — Write idiomatic Go with proper error handling and context propagation; run `go vet ./...` before proceeding
-4. **Lint & validate** — Run `golangci-lint run` (or `make lint` in pgwd: gofmt -s + gocyclo -over 14) and fix all reported issues before proceeding
+4. **Lint & validate** — Run `golangci-lint run` (or `make lint` in pgwd: gofmt -s + go vet + gocyclo -over 14) and fix all reported issues before proceeding
 5. **Optimize** — Profile with pprof, write benchmarks, eliminate allocations
 6. **Test** — Table-driven tests with `-race` flag, fuzzing, 80%+ coverage; confirm race detector passes before committing
 
 ### pgwd project specifics
 
-- **Lint:** Use `make lint` (gofmt -s, gocyclo -over 14). If formatting fails: `make lint-fix`. If complexity > 14: refactor.
+- **Lint:** Use `make lint` (gofmt -s, go vet, gocyclo -over 14). If formatting fails: `make lint-fix`. If complexity > 14: refactor.
 - **Tests:** `make test` or `go test ./...`. Integration: `make test-integration` (requires Docker).
 
 ## Reference Guide
@@ -96,7 +96,7 @@ Key properties demonstrated: bounded goroutine lifetime via `ctx`, error propaga
 ## Constraints
 
 ### MUST DO
-- Use gofmt (or `make lint` in pgwd: gofmt + gocyclo) on all code
+- Use gofmt (or `make lint` in pgwd: gofmt + go vet + gocyclo) on all code
 - Add context.Context to all blocking operations
 - Handle all errors explicitly (no naked returns)
 - Write table-driven tests with subtests

@@ -6,6 +6,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+### Changed
+
+- **`Makefile` / CI lint:** **`make lint`** and the lint job run **gofmt -s**, **`go vet ./...`**, and **gocyclo** (complexity ≤ 14). **`make help`** prints current **`VERSION`** / ldflags version / branch; **`release-check`** requires **`VERSION`** semver; **`docker-scan`** Grype on PATH or **`anchore/grype`** container (`GRYPE_FAIL_ON`, default `high`); **`make cover`** and **`make tools`**.
+- **`make cover-integration`:** Postgres + Loki via compose, then **`go test ./...`** with coverage → **`coverage-integration.out`**. Compose up/down refactored into **`integration-compose-up`** / **`integration-compose-down`** (shared with **`test-integration`**).
+- **OpenBSD port:** Removed **`contrib/openbsd/port/distinfo`** from the repo (checksums require published tarballs). Generate **`distinfo`** with **`make makesum`** in the ports tree after **`make fetch`**; **`contrib/openbsd/port/distinfo`** is **`.gitignore`**-d. **`contrib/openbsd/port/README.md`** documents this and optional operator copies in **pgwd-selfhosted**.
+- **`pgwd -version` / `--version`:** Output now includes the **git branch** (from build-time ldflags), e.g. `pgwd v0.6.4 (branch develop, commit …, built …)`. Same **branch** field appears in the startup log banner. **Makefile**, **Dockerfile**, and **GoReleaser** inject **`main.Branch`**; plain `go build` without flags shows **`branch unknown`**.
+
 ### Added
 
 - **Long-running query alerts:** Optional **`db.long_query_min_seconds`** (active queries with `now() - query_start` exceeding N seconds), **`db.long_query_cooldown_seconds`** (minimum interval between notifications per target; default 3600 when min is set), and **`db.long_query_min_count`**. Requires a **metrics store** (SQLite or SQL) to persist cooldown timestamps. Hysteresis does not gate `long_query` repeats; cooldown suppresses spam while the same condition persists.

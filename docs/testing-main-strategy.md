@@ -72,7 +72,7 @@ Add `cmd/pgwd/main_test.go` or `cmd/pgwd/integration_test.go` (or `test/integrat
 
 | Test                       | How                                | Assertion |
 |----------------------------|------------------------------------|-----------|
-| `TestMain_Version`         | `exec.Command(binary, "-version")` | stdout contains "pgwd" |
+| `TestMain_Version`         | `exec.Command(binary, "-version")` | stdout contains "pgwd" (and branch/commit/built when built with ldflags) |
 | `TestMain_VersionLong`     | `exec.Command(binary, "--version")`| same |
 | `TestMain_Help`            | `exec.Command(binary, "-h")`       | stdout contains "pgwd" |
 | `TestMain_MissingClient`   | `exec.Command(binary, "-config", "/dev/null", "-db-url", "postgres://...")` | exit code ≠ 0 |

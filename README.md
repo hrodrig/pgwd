@@ -16,6 +16,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/hrodrig/pgwd)](https://goreportcard.com/report/github.com/hrodrig/pgwd)
 [![deps.dev](https://img.shields.io/badge/deps.dev-go%20module-blue)](https://deps.dev/go/github.com/hrodrig/pgwd)
 [![DEV.to](https://img.shields.io/badge/DEV.to-Article-0A0A0A?logo=dev.to)](https://dev.to/hrodrig/pgwd-a-watchdog-for-your-postgresql-connections-1pjg)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/hrodrig/pgwd)
 
 **Repo:** [github.com/hrodrig/pgwd](https://github.com/hrodrig/pgwd) · **Releases:** [Releases](https://github.com/hrodrig/pgwd/releases)
 
@@ -887,7 +888,7 @@ Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.6.4`), or `pgwd` 
 # Help (no DB needed)
 docker run --rm ghcr.io/hrodrig/pgwd:latest -h
 
-# Version (should show e.g. pgwd v0.6.4 (commit ..., built ...))
+# Version (should show e.g. pgwd v0.6.4 (branch develop, commit ..., built ...))
 docker run --rm ghcr.io/hrodrig/pgwd:latest --version
 
 # Expect "missing database URL" (validates startup path)

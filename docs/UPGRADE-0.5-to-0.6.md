@@ -61,7 +61,7 @@ These are **additive**; enable only if you need them:
 
 ```bash
 pgwd --version
-# Expect: pgwd v0.6.x …
+# Expect: pgwd v0.6.x (branch …, commit …, built …)
 
 pgwd -config /etc/pgwd/pgwd.conf -dry-run -interval 0
 # Or your usual one-shot / daemon smoke test

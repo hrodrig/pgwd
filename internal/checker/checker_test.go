@@ -225,11 +225,11 @@ func TestCollectLevelModeEvent(t *testing.T) {
 		wantNil   bool
 		wantLevel string
 	}{
-		{"below 75%: nil", postgres.ConnectionStats{50, 10, 40}, 100, true, ""},
-		{"75% total: attention", postgres.ConnectionStats{75, 10, 65}, 100, false, "attention"},
-		{"85% total: alert", postgres.ConnectionStats{85, 10, 75}, 100, false, "alert"},
-		{"95% total: danger", postgres.ConnectionStats{95, 10, 85}, 100, false, "danger"},
-		{"active 90% > total 80%: active wins", postgres.ConnectionStats{80, 90, 0}, 100, false, "alert"},
+		{"below 75%: nil", postgres.ConnectionStats{Total: 50, Active: 10, Idle: 40}, 100, true, ""},
+		{"75% total: attention", postgres.ConnectionStats{Total: 75, Active: 10, Idle: 65}, 100, false, "attention"},
+		{"85% total: alert", postgres.ConnectionStats{Total: 85, Active: 10, Idle: 75}, 100, false, "alert"},
+		{"95% total: danger", postgres.ConnectionStats{Total: 95, Active: 10, Idle: 85}, 100, false, "danger"},
+		{"active 90% > total 80%: active wins", postgres.ConnectionStats{Total: 80, Active: 90, Idle: 0}, 100, false, "alert"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -262,10 +262,10 @@ func TestCollectExplicitThresholdEvents(t *testing.T) {
 		wantTotal  bool
 		wantActive bool
 	}{
-		{"below both", postgres.ConnectionStats{50, 30, 20}, 100, 0, false, false},
-		{"total exceeded", postgres.ConnectionStats{90, 30, 60}, 100, 1, true, false},
-		{"active exceeded", postgres.ConnectionStats{50, 60, 0}, 100, 1, false, true},
-		{"both exceeded", postgres.ConnectionStats{90, 60, 30}, 100, 2, true, true},
+		{"below both", postgres.ConnectionStats{Total: 50, Active: 30, Idle: 20}, 100, 0, false, false},
+		{"total exceeded", postgres.ConnectionStats{Total: 90, Active: 30, Idle: 60}, 100, 1, true, false},
+		{"active exceeded", postgres.ConnectionStats{Total: 50, Active: 60, Idle: 0}, 100, 1, false, true},
+		{"both exceeded", postgres.ConnectionStats{Total: 90, Active: 60, Idle: 30}, 100, 2, true, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -1,0 +1,28 @@
+---
+description: Main README must include the Ask DeepWiki badge linking to project docs on DeepWiki
+globs: README.md
+alwaysApply: false
+---
+
+# README — DeepWiki badge
+
+The **root `README.md`** must include the **Ask DeepWiki** badge next to the other top badges (same block under the title / centered intro).
+
+## Required markup
+
+Use this exact link target (repository: `hrodrig/pgwd`). Only change it if the GitHub org/repo or DeepWiki URL changes.
+
+```markdown
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/hrodrig/pgwd)
+```
+
+## When to verify
+
+- After editing the badge row in `README.md`.
+- Before release or when preparing README-only PRs: confirm the line is present and the link opens the correct DeepWiki page.
+
+## Generator
+
+Optional: [DeepWiki Badge Maker](https://deepwiki.com/badge-maker) can regenerate the snippet if the canonical URL changes.
+
+Do not remove this badge without replacing it with an equivalent link to up-to-date, repo-specific documentation (DeepWiki or agreed successor).

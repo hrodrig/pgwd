@@ -17,6 +17,8 @@ The **main project README** (repository root `README.md`) must always include ba
 
 Add or adjust badges when adding new relevant metadata (e.g. CI status, code coverage) or when the project evolves. Do not remove badges without replacing them with equivalent or better information.
 
+The **Ask DeepWiki** badge is required for this repo; see **`readme-deepwiki-badge.mdc`** for the exact Markdown line and when to verify it.
+
 ## Version synchronization
 
 Keep these aligned whenever the project version changes:

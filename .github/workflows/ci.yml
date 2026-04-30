@@ -73,7 +73,7 @@ jobs:
         run: make test-e2e-kube
 
   lint:
-    name: gofmt + gocyclo
+    name: gofmt + go vet + gocyclo
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,6 +87,9 @@ jobs:
         run: |
           unformatted=$(gofmt -s -l .)
           if [ -n "$unformatted" ]; then echo "Files not formatted with gofmt -s:"; echo "$unformatted"; exit 1; fi
+
+      - name: Run go vet
+        run: go vet ./...
 
       - name: Install gocyclo
         run: go install github.com/fzipp/gocyclo/cmd/gocyclo@latest

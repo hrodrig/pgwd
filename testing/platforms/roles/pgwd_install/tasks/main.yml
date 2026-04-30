@@ -2,7 +2,7 @@
 # pgwd_install — install pgwd using the platform-appropriate method.
 #
 # Variables (from inventory or group_vars):
-#   pgwd_version          — e.g. "0.5.10"
+#   pgwd_version          — e.g. "0.6.4" (must match a published GitHub release unless pgwd_local_package is set)
 #   pgwd_release_url      — base URL for release assets
 #   pgwd_local_package    — optional: local file path (skips download)
 #   platform_vars         — platform name to load (ubuntu, almalinux, alpine, freebsd, openbsd)

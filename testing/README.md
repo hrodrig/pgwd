@@ -52,6 +52,16 @@ docker compose -f testing/compose.yaml down
 
 ---
 
+## Coverage
+
+- **`make cover`** (repo root) — runs **`go test ./...`** with **`-coverprofile=coverage.out`**. Unit tests only: **`internal/postgres`** integration tests are skipped without **`PGWD_TEST_DB_URL`**, and **`cmd/pgwd`** stays near **0%** in-package (black-box tests build a separate binary via **`exec`**).
+
+- **`make cover-integration`** — starts the same **Postgres + Loki** stack as **`make test-integration`**, exports **`PGWD_TEST_DB_URL`** and **`PGWD_TEST_LOKI_URL`**, then **`go test ./... -count=1 -coverprofile=coverage-integration.out`**. Use this profile to see coverage **with** DB and Loki paths. HTML report: **`go tool cover -html=coverage-integration.out`**.
+
+- **`make integration-compose-up`** / **`make integration-compose-down`** — shared compose lifecycle used by **`test-integration`** and **`cover-integration`**. If a command fails or you interrupt a run, run **`make integration-compose-down`** to stop containers.
+
+---
+
 ## Local daemon run (local-test.conf)
 
 `local-test.conf` runs pgwd in **daemon mode** with SQLite store and HTTP server — useful to verify the full flow: multi-DB checks, SQLite persistence, `/healthz` and `/metrics` endpoints.

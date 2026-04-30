@@ -1,6 +1,0 @@
-# Generate with: make makesum (on OpenBSD, in this port directory)
-# Checksums from https://github.com/hrodrig/pgwd/releases
-SHA256 (pgwd_v0.5.10_openbsd_amd64.tar.gz) = f501866513ce50824ca36efe3124ee01f959118c06d43da6ed82aebc4cb1445b
-SIZE (pgwd_v0.5.10_openbsd_amd64.tar.gz) = 3953139
-SHA256 (pgwd_v0.5.10_openbsd_arm64.tar.gz) = 19cdeda885c4bac3da0137addf8b1ae350c95b4747ba583e180993b93cc30aa3
-SIZE (pgwd_v0.5.10_openbsd_arm64.tar.gz) = 3586120
