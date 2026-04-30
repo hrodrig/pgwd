@@ -15,6 +15,11 @@ all:
   vars:
     pgwd_version: "0.6.4"
     pgwd_release_url: "https://github.com/hrodrig/pgwd/releases/download/v{{ pgwd_version }}"
+    # Package source mode:
+    # - auto    (default): use pgwd_local_package when set, else download release asset
+    # - release: always download from pgwd_release_url
+    # - local  : always use pgwd_local_package (fails if missing)
+    pgwd_package_source: "auto"
 
     # Local snapshot (before tagging): run `make snapshot`, read `dist/metadata.json`
     # → use its `version` value here (VERSION + "-next", e.g. 0.6.4-next).

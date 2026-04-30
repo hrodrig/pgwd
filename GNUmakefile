@@ -14,6 +14,8 @@ COMMIT   := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 BRANCH   := $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
 BUILDDATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 LDFLAGS   := -ldflags "-s -w -X main.Version=$(VERSION) -X main.Commit=$(COMMIT) -X main.BuildDate=$(BUILDDATE) -X main.Branch=$(BRANCH)"
+# OpenBSD dist helper target default arch. Override: make dist-openbsd OPENBSD_ARCH=arm64
+OPENBSD_ARCH ?= amd64
 
 # Default target: show help
 .DEFAULT_GOAL := help
@@ -63,6 +65,7 @@ help:
 	@echo "  release            Full release (from main only; runs release-check first)"
 	@echo "  snapshot           Goreleaser snapshot build (outputs to dist/)"
 	@echo "  dist-freebsd       Build FreeBSD tar.gz distfile for ports local testing"
+	@echo "  dist-openbsd       Build OpenBSD tar.gz distfile for ports local testing"
 	@echo "  port-freebsd-sync  Sync VERSION to contrib/freebsd/Makefile (run before port update)"
 	@echo "  port-openbsd-sync  Sync VERSION to contrib/openbsd/port/Makefile (run before port update)"
 	@echo ""
@@ -272,7 +275,7 @@ release-check:
 	@echo "All release checks passed."
 
 # Release: only from main. Requires release-check to pass. Merge develop → main, update VERSION, then: git tag v0.1.0 && make release
-.PHONY: help release snapshot dist-freebsd docker-build docker-buildx-amd64 docker-buildx-amd64-push docker-scan lint lint-fix test-integration port-openbsd-sync cover cover-integration integration-compose-up integration-compose-down tools
+.PHONY: help release snapshot dist-freebsd dist-openbsd docker-build docker-buildx-amd64 docker-buildx-amd64-push docker-scan lint lint-fix test-integration port-openbsd-sync cover cover-integration integration-compose-up integration-compose-down tools
 release: release-check
 	$(check-docker)
 	@branch=$$(git branch --show-current 2>/dev/null); \
@@ -332,6 +335,30 @@ dist-freebsd:
 	cp "contrib/man/man1/pgwd.1" "$$stage/share/man/man1/pgwd.1"; \
 	cp "LICENSE" "$$stage/share/doc/pgwd/LICENSE"; \
 	cp "contrib/pgwd.conf.example" "$$stage/etc/pgwd/pgwd.conf.example"; \
+	tar -C "$$stage" -czf "$$out" .; \
+	rm -rf "$$stage"; \
+	echo "Wrote $$out"
+
+# Build only the OpenBSD distfile tarball expected by contrib/openbsd/port/Makefile DISTFILES.
+# Uses VERSION file (v prefix optional). Default arch is amd64; override with OPENBSD_ARCH=arm64.
+dist-openbsd:
+	@ver_raw=$$(cat VERSION 2>/dev/null | tr -d '\n\r'); \
+	[ -n "$$ver_raw" ] || { echo "Error: VERSION file is required"; exit 1; }; \
+	ver=$${ver_raw#v}; \
+	echo "$$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$$' || { echo "Error: VERSION must be semantic MAJOR.MINOR.PATCH (got: $$ver_raw)"; exit 1; }; \
+	echo "$(OPENBSD_ARCH)" | grep -qE '^(amd64|arm64|riscv64)$$' || { echo "Error: OPENBSD_ARCH must be one of: amd64, arm64, riscv64"; exit 1; }; \
+	arch="$(OPENBSD_ARCH)"; \
+	out="$(DIST)/pgwd_v$${ver}_openbsd_$$arch.tar.gz"; \
+	stage="/tmp/pgwd-openbsd-dist-root-$$PPID"; \
+	echo "Building pgwd for OpenBSD $$arch with VERSION=v$$ver..."; \
+	GOOS=openbsd GOARCH="$$arch" go build $(LDFLAGS) -o "$(BINARY)" ./cmd/pgwd; \
+	rm -rf "$$stage"; \
+	mkdir -p "$$stage/share/man/man1" "$$stage/share/doc/pgwd" "$$stage/etc/pgwd" "$$stage/share/openbsd/rc.d" "$(DIST)"; \
+	cp "$(BINARY)" "$$stage/pgwd"; \
+	cp "contrib/man/man1/pgwd.1" "$$stage/share/man/man1/pgwd.1"; \
+	cp "LICENSE" "$$stage/share/doc/pgwd/LICENSE"; \
+	cp "contrib/pgwd.conf.example" "$$stage/etc/pgwd/pgwd.conf.example"; \
+	cp "contrib/openbsd/pgwd" "$$stage/share/openbsd/rc.d/pgwd"; \
 	tar -C "$$stage" -czf "$$out" .; \
 	rm -rf "$$stage"; \
 	echo "Wrote $$out"

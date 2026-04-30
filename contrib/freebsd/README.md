@@ -23,6 +23,22 @@ make install
 
 **Reinstalling after updating port files:** Run `make deinstall`, then `make clean`, then `make install`. Without `make clean`, the port may reuse a cached stage and not pick up changes (e.g. to `rc.d/pgwd`).
 
+### Verify install and handle upgrades
+
+After `make install` (or `make reinstall`), verify the installed binary:
+
+```bash
+pgwd -version
+```
+
+If `make install` reports that an older package is already installed (for example `pgwd-0.5.10`), use:
+
+```bash
+make reinstall
+```
+
+This deinstalls the previous package and registers the new one cleanly.
+
 ## Test with a local distfile (before a GitHub release)
 
 The port normally fetches **DISTFILES** from **MASTER_SITES** (GitHub releases). To build or test **install** / **plist** against a tarball you built locally (no matching release on GitHub yet):
@@ -53,6 +69,7 @@ The port normally fetches **DISTFILES** from **MASTER_SITES** (GitHub releases).
    cd ~/ports/sysutils/pgwd
    mkdir -p /tmp/pgwd-dist
    cp /path/to/pgwd/dist/pgwd_v0.6.4_freebsd_amd64.tar.gz /tmp/pgwd-dist/
+   make makesum MASTER_SITES=file:///tmp/pgwd-dist/
    make fetch MASTER_SITES=file:///tmp/pgwd-dist/
    make install
    ```

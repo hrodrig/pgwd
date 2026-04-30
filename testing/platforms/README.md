@@ -169,6 +169,29 @@ all:
 
 If **`pgwd_local_package` is not set** for a host, the role downloads from `pgwd_release_url` using `pgwd_version`. That only works when **`v{{ pgwd_version }}` exists on GitHub**.
 
+You can explicitly choose package source behavior with **`pgwd_package_source`**:
+
+- `auto` (default): use `pgwd_local_package` when set; otherwise download from `pgwd_release_url`.
+- `release`: always download published assets.
+- `local`: always use `pgwd_local_package` (fails fast if missing for a host).
+
+Examples:
+
+```bash
+# Force published artifacts for this run
+cd testing/platforms
+ansible-playbook playbooks/full-cycle.yml \
+  --limit pgwd-freebsd \
+  -e pgwd_package_source=release \
+  -e pgwd_version=0.6.4
+
+# Force local artifacts for this run (requires pgwd_local_package on targeted hosts)
+ansible-playbook playbooks/full-cycle.yml \
+  --limit pgwd-freebsd \
+  -e pgwd_package_source=local \
+  -e pgwd_version=0.6.4-next
+```
+
 ### Local snapshot (before you create a release tag)
 
 Use this to validate VMs against **`make snapshot`** artifacts (no GitHub release required).
@@ -212,6 +235,32 @@ all:
 ```
 
 For **BSD** hosts, use the matching `*_freebsd_*`, `*_openbsd_*`, `*_netbsd_*`, or `*_dragonfly_*` tarball from `dist/`.
+
+### FreeBSD manual smoke test (CLI + rc.d)
+
+When validating a FreeBSD local package manually (outside Ansible), run this quick sequence after install/reinstall:
+
+```bash
+# 1) CLI sanity
+pgwd -version
+pgwd -help | head -40
+pgwd -config /etc/pgwd/pgwd.conf -dry-run -interval 0
+
+# 2) rc.d in safe mode first
+sysrc pgwd_enable=YES
+sysrc pgwd_flags="-config /etc/pgwd/pgwd.conf -dry-run"
+service pgwd restart
+service pgwd status
+tail -n 80 /var/log/pgwd.log
+
+# 3) rc.d real mode
+sysrc pgwd_flags="-config /etc/pgwd/pgwd.conf"
+service pgwd restart
+service pgwd status
+tail -n 120 /var/log/pgwd.log
+```
+
+If the port install reports an older package already installed, use `make reinstall` in the port directory to replace it cleanly.
 
 ### Testing a local build (summary)
 

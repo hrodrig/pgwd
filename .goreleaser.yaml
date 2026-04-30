@@ -53,7 +53,7 @@ archives:
     format_overrides:
       - goos: windows
         format: zip
-    name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "{{ .ProjectName }}_{{ if .IsSnapshot }}v{{ .Version }}{{ else }}{{ .Tag }}{{ end }}_{{ .Os }}_{{ .Arch }}"
     files:
       - src: contrib/man/man1/pgwd.1
         dst: share/man/man1/pgwd.1
@@ -81,7 +81,7 @@ nfpms:
     scripts:
       preremove: contrib/deb/prerm.sh
       postremove: contrib/deb/postrm.sh
-    file_name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}"
+    file_name_template: "{{ .ProjectName }}_{{ if .IsSnapshot }}v{{ .Version }}{{ else }}{{ .Tag }}{{ end }}_{{ .Os }}_{{ .Arch }}"
     description: Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki
     vendor: "Hermes Rodríguez"
     homepage: https://github.com/hrodrig/pgwd

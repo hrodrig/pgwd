@@ -39,7 +39,17 @@ make install
 
 The port normally downloads **DISTFILES** from **MASTER_SITES** (GitHub releases). To try **install** / **plist** / **rc.d** against a tarball you built locally (no `vX.Y.Z` tag on GitHub yet):
 
-1. **Match the filename** in **DISTFILES** for your architecture (e.g. `pgwd_v0.6.4_openbsd_amd64.tar.gz` after `make port-openbsd-sync` from the pgwd repo). Goreleaser snapshot or release builds put OpenBSD tarballs under **`dist/`** in the pgwd repo.
+1. **Match the filename** in **DISTFILES** for your architecture (e.g. `pgwd_v0.6.4_openbsd_amd64.tar.gz` after `make port-openbsd-sync` from the pgwd repo).
+
+   To generate that exact tarball layout/name locally (without running the full snapshot matrix), run from repo root:
+
+   ```bash
+   make dist-openbsd
+   # Optional arch override:
+   # make dist-openbsd OPENBSD_ARCH=arm64
+   ```
+
+   Output goes to `dist/pgwd_v<version>_openbsd_<arch>.tar.gz` using `VERSION`.
 
 2. **Option A — copy into `DISTDIR`:** From the port directory, run `make show=DISTDIR`, then copy your tarball there with the **exact** name **DISTFILES** expects. Run `make checksum` (or `make makesum` if you are refreshing **distinfo**), then `make install`.
 

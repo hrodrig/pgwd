@@ -5,11 +5,35 @@
 #   pgwd_version          — e.g. "0.6.4" (must match a published GitHub release unless pgwd_local_package is set)
 #   pgwd_release_url      — base URL for release assets
 #   pgwd_local_package    — optional: local file path (skips download)
+#   pgwd_package_source   — optional: auto (default), release, or local
 #   platform_vars         — platform name to load (ubuntu, almalinux, alpine, freebsd, openbsd)
 
 - name: Load platform variables
   ansible.builtin.include_vars:
     file: "{{ playbook_dir }}/../platform_vars/{{ platform_vars }}.yml"
+
+- name: Resolve package source mode
+  ansible.builtin.set_fact:
+    pgwd_package_source: "{{ pgwd_package_source | default('auto') }}"
+    pgwd_use_local_package: >-
+      {{
+        (pgwd_package_source | default('auto')) == 'local'
+        or ((pgwd_package_source | default('auto')) == 'auto' and (pgwd_local_package is defined))
+      }}
+
+- name: Validate package source mode value
+  ansible.builtin.assert:
+    that:
+      - pgwd_package_source in ['auto', 'release', 'local']
+    fail_msg: "Invalid pgwd_package_source='{{ pgwd_package_source }}'. Use: auto, release, or local."
+
+- name: Validate local package path when source is local
+  ansible.builtin.assert:
+    that:
+      - pgwd_local_package is defined
+      - (pgwd_local_package | length) > 0
+    fail_msg: "pgwd_package_source=local requires pgwd_local_package to be set for this host."
+  when: pgwd_package_source == 'local'
 
 # --- .deb (Ubuntu/Debian) ---
 - name: Download deb package
@@ -19,7 +43,7 @@
     mode: "0644"
   when:
     - pgwd_install_method == "deb"
-    - pgwd_local_package is not defined
+    - not pgwd_use_local_package
 
 - name: Copy local deb package
   ansible.builtin.copy:
@@ -28,7 +52,7 @@
     mode: "0644"
   when:
     - pgwd_install_method == "deb"
-    - pgwd_local_package is defined
+    - pgwd_use_local_package
 
 - name: Install deb package
   ansible.builtin.apt:
@@ -44,7 +68,7 @@
     mode: "0644"
   when:
     - pgwd_install_method == "rpm"
-    - pgwd_local_package is not defined
+    - not pgwd_use_local_package
 
 - name: Copy local rpm package
   ansible.builtin.copy:
@@ -53,7 +77,7 @@
     mode: "0644"
   when:
     - pgwd_install_method == "rpm"
-    - pgwd_local_package is defined
+    - pgwd_use_local_package
 
 - name: Install rpm package (dnf)
   ansible.builtin.dnf:
@@ -70,7 +94,7 @@
     mode: "0644"
   when:
     - pgwd_install_method == "rpm_zypper"
-    - pgwd_local_package is not defined
+    - not pgwd_use_local_package
 
 - name: Copy local rpm package (zypper)
   ansible.builtin.copy:
@@ -79,7 +103,7 @@
     mode: "0644"
   when:
     - pgwd_install_method == "rpm_zypper"
-    - pgwd_local_package is defined
+    - pgwd_use_local_package
 
 - name: Install rpm package (zypper)
   ansible.builtin.command: zypper --non-interactive install --allow-unsigned-rpm /tmp/pgwd.rpm
@@ -95,7 +119,7 @@
     mode: "0644"
   when:
     - pgwd_install_method == "tarball"
-    - pgwd_local_package is not defined
+    - not pgwd_use_local_package
 
 - name: Copy local tarball
   ansible.builtin.copy:
@@ -104,7 +128,7 @@
     mode: "0644"
   when:
     - pgwd_install_method == "tarball"
-    - pgwd_local_package is defined
+    - pgwd_use_local_package
 
 - name: Extract tarball
   ansible.builtin.shell: tar xzf /tmp/pgwd.tar.gz -C /tmp
