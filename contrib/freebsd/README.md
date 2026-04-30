@@ -27,7 +27,15 @@ make install
 
 The port normally fetches **DISTFILES** from **MASTER_SITES** (GitHub releases). To build or test **install** / **plist** against a tarball you built locally (no matching release on GitHub yet):
 
-1. **Match the filename** in **DISTFILES** for your architecture (e.g. `pgwd_v0.6.4_freebsd_amd64.tar.gz` when **PORTVERSION** is `0.6.4`). Goreleaser artifacts use the same pattern under **`dist/`** in the pgwd repo. From the pgwd repo root, **`make port-freebsd-sync`** updates **PORTVERSION** in this **Makefile** from the **`VERSION`** file.
+1. **Match the filename** in **DISTFILES** for your architecture (e.g. `pgwd_v0.6.4_freebsd_amd64.tar.gz` when **PORTVERSION** is `0.6.4`). From the pgwd repo root, **`make port-freebsd-sync`** updates **PORTVERSION** in this **Makefile** from the **`VERSION`** file.
+
+   To generate that exact tarball layout/name locally (without running the full snapshot matrix), run from repo root:
+
+   ```bash
+   make dist-freebsd
+   ```
+
+   Output goes to `dist/pgwd_v<version>_freebsd_<arch>.tar.gz` using `VERSION` (for example `dist/pgwd_v0.6.4_freebsd_amd64.tar.gz`).
 
 2. **Option A — copy into DISTDIR:** From the port directory:
 

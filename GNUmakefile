@@ -62,6 +62,7 @@ help:
 	@echo "  release-check      Run all checks (lint, test, test-integration, test-e2e-kube, docker-scan)"
 	@echo "  release            Full release (from main only; runs release-check first)"
 	@echo "  snapshot           Goreleaser snapshot build (outputs to dist/)"
+	@echo "  dist-freebsd       Build FreeBSD tar.gz distfile for ports local testing"
 	@echo "  port-freebsd-sync  Sync VERSION to contrib/freebsd/Makefile (run before port update)"
 	@echo "  port-openbsd-sync  Sync VERSION to contrib/openbsd/port/Makefile (run before port update)"
 	@echo ""
@@ -271,7 +272,7 @@ release-check:
 	@echo "All release checks passed."
 
 # Release: only from main. Requires release-check to pass. Merge develop → main, update VERSION, then: git tag v0.1.0 && make release
-.PHONY: help release snapshot docker-build docker-buildx-amd64 docker-buildx-amd64-push docker-scan lint lint-fix test-integration port-openbsd-sync cover cover-integration integration-compose-up integration-compose-down tools
+.PHONY: help release snapshot dist-freebsd docker-build docker-buildx-amd64 docker-buildx-amd64-push docker-scan lint lint-fix test-integration port-openbsd-sync cover cover-integration integration-compose-up integration-compose-down tools
 release: release-check
 	$(check-docker)
 	@branch=$$(git branch --show-current 2>/dev/null); \
@@ -312,6 +313,28 @@ snapshot:
 	ver=$${ver_raw#v}; \
 	echo "$$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$$' || { echo "Error: VERSION must be semantic MAJOR.MINOR.PATCH (got: $$ver_raw)"; exit 1; }; \
 	PGWD_SNAPSHOT_VERSION="$$ver-next" goreleaser release --snapshot --clean
+
+# Build only the FreeBSD distfile tarball expected by contrib/freebsd/Makefile DISTFILES.
+# Uses VERSION file (v prefix optional) and current machine arch (aarch64 -> arm64).
+dist-freebsd:
+	@ver_raw=$$(cat VERSION 2>/dev/null | tr -d '\n\r'); \
+	[ -n "$$ver_raw" ] || { echo "Error: VERSION file is required"; exit 1; }; \
+	ver=$${ver_raw#v}; \
+	echo "$$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$$' || { echo "Error: VERSION must be semantic MAJOR.MINOR.PATCH (got: $$ver_raw)"; exit 1; }; \
+	arch=$$(uname -m | sed 's/^aarch64$$/arm64/'); \
+	out="$(DIST)/pgwd_v$${ver}_freebsd_$$arch.tar.gz"; \
+	stage="/tmp/pgwd-dist-root-$$PPID"; \
+	echo "Building pgwd for FreeBSD $$arch with VERSION=v$$ver..."; \
+	$(MAKE) build VERSION=v$$ver; \
+	rm -rf "$$stage"; \
+	mkdir -p "$$stage/share/man/man1" "$$stage/share/doc/pgwd" "$$stage/etc/pgwd" "$(DIST)"; \
+	cp "$(BINARY)" "$$stage/pgwd"; \
+	cp "contrib/man/man1/pgwd.1" "$$stage/share/man/man1/pgwd.1"; \
+	cp "LICENSE" "$$stage/share/doc/pgwd/LICENSE"; \
+	cp "contrib/pgwd.conf.example" "$$stage/etc/pgwd/pgwd.conf.example"; \
+	tar -C "$$stage" -czf "$$out" .; \
+	rm -rf "$$stage"; \
+	echo "Wrote $$out"
 
 # Remove built binary and dist/
 clean:
