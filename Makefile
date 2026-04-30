@@ -3,13 +3,19 @@
 # environments never parse this stub.
 #
 # On FreeBSD: pkg install gmake   then either   make <target>   or   gmake <target>
+#
+# BSD Make does not apply a lone "%:" to arbitrary targets (unlike GNU Make).
+# Use an explicit "all" default and .DEFAULT for every other goal.
 
-_CHECK_GMAKE = @command -v gmake >/dev/null 2>&1 || { echo "This project requires GNU make. On FreeBSD: pkg install gmake"; exit 1; }
+_CHECK := command -v gmake >/dev/null 2>&1 || { echo "This project requires GNU make. On FreeBSD: pkg install gmake"; exit 1; }
 
-help:
-	${_CHECK_GMAKE}
+# Plain "make" (no goals) runs the first target.
+all:
+	@${_CHECK}
 	@gmake help
 
-%:
-	${_CHECK_GMAKE}
-	@gmake $@
+.DEFAULT:
+	@${_CHECK}; \
+	goals='$(.MAKE.CMDGOALS)'; \
+	[ -n "$$goals" ] || goals=help; \
+	exec gmake $$goals
