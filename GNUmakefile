@@ -305,8 +305,13 @@ port-openbsd-sync:
 	@echo "Updated contrib/openbsd/port/Makefile to $(PORT_VERSION)"
 
 # Snapshot build (no tag required), outputs to dist/. No Docker required (dockers_v2 disabled for snapshots in .goreleaser.yaml).
+# Snapshot version comes from VERSION (e.g. VERSION=0.6.4 => snapshot 0.6.4-next), independent from reachable git tags.
 snapshot:
-	goreleaser release --snapshot --clean
+	@ver_raw=$$(cat VERSION 2>/dev/null | tr -d '\n\r'); \
+	[ -n "$$ver_raw" ] || { echo "Error: VERSION file is required for snapshot"; exit 1; }; \
+	ver=$${ver_raw#v}; \
+	echo "$$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$$' || { echo "Error: VERSION must be semantic MAJOR.MINOR.PATCH (got: $$ver_raw)"; exit 1; }; \
+	PGWD_SNAPSHOT_VERSION="$$ver-next" goreleaser release --snapshot --clean
 
 # Remove built binary and dist/
 clean:

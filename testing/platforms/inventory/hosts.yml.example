@@ -17,8 +17,8 @@ all:
     pgwd_release_url: "https://github.com/hrodrig/pgwd/releases/download/v{{ pgwd_version }}"
 
     # Local snapshot (before tagging): run `make snapshot`, read `dist/metadata.json`
-    # → use its `version` value here (often not equal to VERSION; see snapshot.version_template
-    # in .goreleaser.yaml). Set pgwd_local_package per host to absolute paths under dist/
+    # → use its `version` value here (VERSION + "-next", e.g. 0.6.4-next).
+    # Set pgwd_local_package per host to absolute paths under dist/
     # on the machine where you run ansible-playbook. See README.md "Local snapshot".
 
     notification_mock_port: 9999

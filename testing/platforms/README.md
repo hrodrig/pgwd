@@ -174,17 +174,17 @@ If **`pgwd_local_package` is not set** for a host, the role downloads from `pgwd
 Use this to validate VMs against **`make snapshot`** artifacts (no GitHub release required).
 
 1. From the repo root, run **`make snapshot`** ([goreleaser](https://goreleaser.com) on `PATH`; no Docker required; artifacts under **`dist/`**).
-2. Open **`dist/metadata.json`** and read the **`version`** field (for example `0.6.5-next`). Snapshot naming comes from **`.goreleaser.yaml`** → **`snapshot.version_template`**; it is **not** always the same string as the `VERSION` file in the repo.
+2. Open **`dist/metadata.json`** and read the **`version`** field (for example `0.6.4-next`). Snapshot naming comes from the repo **`VERSION`** file (`make snapshot` sets `PGWD_SNAPSHOT_VERSION=<VERSION>-next` for GoReleaser).
 3. Set **`pgwd_version`** in `inventory/hosts.yml` (under `all.vars` or per group) to **that exact `version` string**. The install role runs **`pgwd -version`** and asserts this value appears in the output.
 4. List **`dist/`** and set **`pgwd_local_package`** on each host to the matching artifact using a **full absolute path on the machine where you run `ansible-playbook`** (the control node). `ansible.builtin.copy` reads those files locally before pushing to the VM.
 5. Run **`make test-platforms-ping`**, then **`make test-platforms`** (or `--limit` one host).
 
-Example after a snapshot (adjust paths and the `0.6.5-next` placeholder to match **your** `metadata.json` and `ls dist/`):
+Example after a snapshot (adjust paths and the `0.6.4-next` placeholder to match **your** `metadata.json` and `ls dist/`):
 
 ```yaml
 all:
   vars:
-    pgwd_version: "0.6.5-next"   # from dist/metadata.json → "version"
+    pgwd_version: "0.6.4-next"   # from dist/metadata.json → "version"
     pgwd_release_url: "https://github.com/hrodrig/pgwd/releases/download/v{{ pgwd_version }}"
   children:
     linux_systemd:
@@ -194,13 +194,13 @@ all:
           ansible_port: 2298
           ansible_user: root
           platform_vars: ubuntu
-          pgwd_local_package: "/full/path/to/pgwd/dist/pgwd_v0.6.5-next_linux_amd64.deb"
+          pgwd_local_package: "/full/path/to/pgwd/dist/pgwd_v0.6.4-next_linux_amd64.deb"
         pgwd-almalinux:
           ansible_host: 203.0.113.10
           ansible_port: 2299
           ansible_user: root
           platform_vars: almalinux
-          pgwd_local_package: "/full/path/to/pgwd/dist/pgwd_v0.6.5-next_linux_amd64.rpm"
+          pgwd_local_package: "/full/path/to/pgwd/dist/pgwd_v0.6.4-next_linux_amd64.rpm"
     linux_openrc:
       hosts:
         pgwd-alpine:
@@ -208,7 +208,7 @@ all:
           ansible_port: 2297
           ansible_user: root
           platform_vars: alpine
-          pgwd_local_package: "/full/path/to/pgwd/dist/pgwd_v0.6.5-next_linux_amd64.tar.gz"
+          pgwd_local_package: "/full/path/to/pgwd/dist/pgwd_v0.6.4-next_linux_amd64.tar.gz"
 ```
 
 For **BSD** hosts, use the matching `*_freebsd_*`, `*_openbsd_*`, `*_netbsd_*`, or `*_dragonfly_*` tarball from `dist/`.

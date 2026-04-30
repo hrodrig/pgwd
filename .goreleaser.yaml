@@ -108,7 +108,7 @@ nfpms:
         dst: /lib/systemd/system/pgwd.timer
 
 snapshot:
-  version_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ .Env.PGWD_SNAPSHOT_VERSION }}"
 
 changelog:
   sort: asc
