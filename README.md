@@ -592,12 +592,14 @@ Replace `v0.6.4` and `amd64` with your desired version and arch (e.g. `arm64`). 
 
 ```bash
 go build -o pgwd ./cmd/pgwd
-# or use the Makefile:
+# or use GNU Make (repo root GNUmakefile):
 make build
 make install
 # Custom install path: GOBIN=~/bin make install  (default is $HOME/go/bin)
 # Install man page: make install-man  (MANDIR=/usr/share/man for system-wide)
 ```
+
+**FreeBSD:** `/usr/bin/make` is **BSD Make**; the repo ships a small **`Makefile`** stub that forwards to **`gmake`**. Install **`devel/gmake`** (`pkg install gmake`), then **`make build`** or **`gmake build`**. Linux, macOS, and CI use **GNU Make**, which reads **`GNUmakefile`** first.
 
 **Release (GitHub):** See [Release steps](#release-steps) below for the full workflow. Quick: from `main`, `git tag v0.6.4`, `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
 

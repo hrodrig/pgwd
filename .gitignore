@@ -19,6 +19,7 @@
 !VERSION
 !LICENSE
 !Makefile
+!GNUmakefile
 !.goreleaser.yaml
 !Dockerfile
 !Dockerfile.release
