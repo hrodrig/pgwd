@@ -9,6 +9,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 ### Fixed
 
 - **GoReleaser (`dockers_v2`):** Default **`sbom: true`** (GoReleaser v2.12+) makes **`docker buildx`** pass **`--attest=type=sbom`**, which **fails on GitHub Actions** with the default buildx driver (*Attestation is not supported for the docker driver*). Set **`sbom: false`** in **`.goreleaser.yaml`** so the Release workflow can publish multi-arch images to **ghcr.io** again.
+- **GoReleaser (`dockers_v2`):** **`annotations:`** became **`--annotation index:…`**; GitHub-hosted **docker** buildx rejects that with *index annotations not supported for single platform export*. Removed **`annotations:`**; **`labels:`** still set **`org.opencontainers.image.*`** on the image.
 
 ## [0.6.4] - 2026-05-03
 
