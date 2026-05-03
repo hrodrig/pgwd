@@ -1,5 +1,5 @@
 # Release: runs on tag push (v*). Publishes binaries and Docker image to ghcr.io.
-# Trigger: git tag v0.5.10 && git push origin v0.5.10
+# Trigger: git tag v0.6.4 && git push origin v0.6.4  (any v* semver tag)
 # Requires: release-check passed before tagging (make release-check).
 name: Release
 

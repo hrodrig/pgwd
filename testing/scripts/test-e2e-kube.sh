@@ -9,11 +9,32 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 K8S_DIR="$REPO_ROOT/testing/k8s"
 
-cleanup() {
+# Port-forward PIDs (set when multidb section runs; kill_pf is safe if unset).
+PF1_PID=""
+PF2_PID=""
+PF3_PID=""
+
+kill_pf() {
+  [ -n "${PF1_PID:-}" ] && kill "$PF1_PID" 2>/dev/null || true
+  [ -n "${PF2_PID:-}" ] && kill "$PF2_PID" 2>/dev/null || true
+  [ -n "${PF3_PID:-}" ] && kill "$PF3_PID" 2>/dev/null || true
+}
+
+cleanup_kind() {
   echo "Cleaning up: kind delete cluster --name $CLUSTER_NAME"
   kind delete cluster --name "$CLUSTER_NAME" 2>/dev/null || true
 }
-trap cleanup EXIT
+
+# Always tear down the kind cluster on exit, and stop port-forwards if they were started.
+full_cleanup() {
+  kill_pf
+  cleanup_kind
+}
+trap full_cleanup EXIT
+
+# Remove stale cluster from a previous interrupted or successful run (trap used to be cleared mid-script).
+echo "Ensuring no stale kind cluster: $CLUSTER_NAME"
+cleanup_kind
 
 echo "Creating kind cluster: $CLUSTER_NAME"
 kind create cluster --name "$CLUSTER_NAME" --wait 60s
@@ -61,21 +82,12 @@ if [ "$DISCOVER_OK" -ne 1 ]; then
 fi
 
 echo "Running pgwd multi-database (databases: 3 Postgres via port-forward)..."
-PF1_PID=""
-PF2_PID=""
-PF3_PID=""
 kubectl port-forward -n pgwd-e2e svc/postgres 15432:5432 &
 PF1_PID=$!
 kubectl port-forward -n pgwd-e2e svc/postgres2 15433:5432 &
 PF2_PID=$!
 kubectl port-forward -n pgwd-e2e svc/postgres3 15434:5432 &
 PF3_PID=$!
-kill_pf() {
-  [ -n "$PF1_PID" ] && kill $PF1_PID 2>/dev/null || true
-  [ -n "$PF2_PID" ] && kill $PF2_PID 2>/dev/null || true
-  [ -n "$PF3_PID" ] && kill $PF3_PID 2>/dev/null || true
-}
-trap kill_pf EXIT
 sleep 3
 MULTIDB_CONF=$(mktemp)
 cat > "$MULTIDB_CONF" << 'MULTIDBCONF'
@@ -92,8 +104,10 @@ databases:
 MULTIDBCONF
 ./pgwd -config "$MULTIDB_CONF" -dry-run -interval 0 || { rm -f "$MULTIDB_CONF"; exit 1; }
 rm -f "$MULTIDB_CONF"
-trap - EXIT
 kill_pf
+PF1_PID=""
+PF2_PID=""
+PF3_PID=""
 
 echo "Running pgwd -kube-postgres -kube-loki with -force-notification (daemon mode to keep port-forward up)..."
 ./pgwd -client pgwd-e2e-test \

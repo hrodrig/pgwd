@@ -1310,7 +1310,7 @@ Target **v1.0.0** by early July.
 | **0.4.0** | Mar 2026 ✅ | Loki auth (-notifications-loki-org-id, -notifications-loki-bearer-token), kube-loki, Grafana org ID docs, notification sent log. |
 | **0.5.0** | Mar 2026 ✅ | Loki database/cluster labels and log line, Grafana alert docs, security hardening (zlib, compose, k8s). |
 | **0.6.0** | Apr 2026 ✅ | **CSV export** — dump persisted metrics via `-export-metrics-format csv` / `metricsstore` (SQLite). Plus daemon/multi-DB, SQLite store, HTTP `/metrics`, Helm chart moved to pgwd-selfhosted, pgx security updates, Ansible platform tests, and more (see CHANGELOG). |
-| **0.6.4** | Apr 2026 ✅ | **PostgreSQL/MySQL metrics store** (`metrics_store.driver` / `dsn`), shared **`MetricsStorer`** interface, CSV export for SQL backends. See CHANGELOG. |
+| **0.6.4** | May 2026 ✅ | **PostgreSQL/MySQL metrics store** (`metrics_store.driver` / `dsn`), shared **`MetricsStorer`** interface, CSV export for SQL backends. See CHANGELOG. |
 | **0.7.0** | May–Jun | **Extended metrics** — TimescaleDB or additional persistence options. Last 0.x before 1.0. |
 | **1.0.0** | Early Jul | **Breaking:** remove threshold-total and threshold-active. Stable API. Criteria: 100+ tests, logo, deprecations removed. |
 
