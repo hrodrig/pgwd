@@ -19,6 +19,7 @@
 !VERSION
 !LICENSE
 !Makefile
+!GNUmakefile
 !.goreleaser.yaml
 !Dockerfile
 !Dockerfile.release
@@ -44,8 +45,14 @@
 codeql-db/
 codeql-results.sarif
 
+# OpenBSD port: distinfo requires release tarballs; generate with `make makesum` in ports tree (not in repo)
+contrib/openbsd/port/distinfo
+
 # Generated man page (created by goreleaser before hook)
 contrib/man/man1/pgwd.1.gz
+
+# Platform test inventory (developer-specific, not committed)
+testing/platforms/inventory/hosts.yml
 
 # Never track macOS metadata
 .DS_Store

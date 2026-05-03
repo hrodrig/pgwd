@@ -1,97 +1,147 @@
 # /etc/pgwd/pgwd.conf — pgwd config (YAML)
 # Copy to /etc/pgwd/pgwd.conf and adjust.
-# One config file = one Postgres instance. For multiple instances, use one config per
-# instance and run from cron (one cron entry per config) or multiple daemons/timers.
+# Use databases: for one or more Postgres. Legacy db: is deprecated (still works, emits warning).
 # When config file is loaded, env vars (PGWD_*) are ignored. CLI flags override.
+#
+# RECOMMENDED: Use daemon mode (interval > 0) for sqlite, http, resolution notifications,
+# and hysteresis. One-shot/timer mode runs once per tick — no history, no /metrics, no resolution.
 #
 # YAML ↔ CLI mapping (CLI overrides config):
 #   client                    → -client
 #   interval                  → -interval
 #   dry_run                   → -dry-run
 #   notify_on_connect_failure → -notify-on-connect-failure
-#   db.url                    → -db-url
-#   db.stale_age              → -db-stale-age
-#   db.default_threshold_percent → -db-default-threshold-percent
-#   db.threshold.active       → -db-threshold-active
-#   db.threshold.idle         → -db-threshold-idle
-#   db.threshold.levels       → -db-threshold-levels
-#   db.threshold.stale        → -db-threshold-stale
-#   db.threshold.total        → -db-threshold-total
-#   kube.context              → -kube-context
-#   kube.local_port           → -kube-local-port
-#   kube.loki                 → -kube-loki
-#   kube.loki_local_port      → -kube-loki-local-port
-#   kube.loki_remote_port     → -kube-loki-remote-port
-#   kube.password_container   → -kube-password-container
-#   kube.password_var         → -kube-password-var
-#   kube.postgres             → -kube-postgres
-#   notifications.loki.url     → -notifications-loki-url
-#   notifications.loki.bearer_token → -notifications-loki-bearer-token
-#   notifications.loki.labels  → -notifications-loki-labels
-#   notifications.loki.org_id  → -notifications-loki-org-id
-#   notifications.slack.webhook → -notifications-slack-webhook
-# CLI-only (validation, not in YAML): -config, -force-notification, -test-max-connections, -validate-k8s-access
+#   databases[].url           → (config only). Override: -db-url + -interval 0 = one-shot against that URL only.
+#   databases[].stale_age     → -db-stale-age (when single target)
+#   databases[].threshold.*   → -db-threshold-* (when single target)
+#   db                        → DEPRECATED; use databases. Will be removed in v1.0.
+#
+# CLI -db-url override (one-shot): with config that has databases:, passing -db-url and -interval 0
+# runs against that single URL only (ignores databases from config for that run).
+#   kube.*                    → -kube-*
+#   notifications.*           → -notifications-*
+# CLI-only: -config, -force-notification, -test-max-connections, -validate-k8s-access,
+#           -export-metrics-format, -export-metrics-destination
 
 # -----------------------------------------------------------------------------
 # Instance identity (required when multiple pgwd instances run)
 # -----------------------------------------------------------------------------
-# client: Name that identifies this monitor in alerts. Required. Use a unique
-#         name per instance (e.g. prod-db-primary, analytics-replica-01, vm-backup-02).
-#         Cluster name is auto-detected from kubeconfig when kube.postgres is set.
 client: "prod-db-primary"
 
 # -----------------------------------------------------------------------------
 # Behavior
 # -----------------------------------------------------------------------------
-# interval: Seconds between checks. 60 = every minute. 0 = run once (e.g. with cron/timer).
 interval: 60
-# dry_run: If true, only print stats; do not send notifications. Useful for testing.
-# Set true for initial setup or when no notifiers configured yet.
 dry_run: true
-# notify_on_connect_failure: If true, send alert when Postgres connection fails.
-#                            (Default: always notify when a notifier is configured.)
+log_level: info    # info (default) or debug; debug = verbose dry-run stats
 notify_on_connect_failure: false
 
 # -----------------------------------------------------------------------------
-# Database connection and thresholds
+# Database connection and thresholds (databases: canonical; db: deprecated)
 # -----------------------------------------------------------------------------
-db:
-  # url: PostgreSQL connection URL. Example: postgres://user:pass@host:5432/dbname
-  url: postgres://user:pass@localhost:5432/mydb
-  # stale_age: Consider a connection "stale" if open longer than N seconds (for threshold.stale).
-  stale_age: 0
-  # default_threshold_percent: When threshold.total/active are 0, used to compute from max_connections (1-100).
-  default_threshold_percent: 80
-  threshold:
-    # active: Alert when active connections >= N. 0 = use levels mode.
-    active: 0
-    # idle: Alert when idle connections >= N.
-    idle: 0
-    # levels: 3-tier percentages (attention, alert, danger). Use when active and total are 0.
-    #         Example: "75,85,95" = attention at 75%, alert at 85%, danger at 95%.
-    levels: "75,85,95"
-    # stale: Alert when connections open > stale_age seconds >= N.
-    stale: 0
-    # total: Alert when total connections >= N. 0 = use levels mode.
-    total: 0
+# Each entry: url (required), optional client, stale_age, default_threshold_percent, threshold.
+# client: optional; defaults to base client + "-" + db name from URL path (NOT the hostname).
+#   If two URLs use the same path db name on different hosts, set explicit distinct clients
+#   or SQLite history / hysteresis / resolution will collide (key is client+cluster+database).
+# kube.postgres / -kube-postgres is NOT supported with databases: (multi-DB = direct URLs only).
+#
+databases:
+  - url: postgres://user:pass@localhost:5432/mydb
+    # client: "prod-db-primary-mydb"   # optional
+    stale_age: 0
+    default_threshold_percent: 80
+    threshold:
+      active: 0
+      idle: 0
+      levels: "75,85,95"    # 3-tier: attention, alert, danger
+      stale: 0
+      total: 0
+    # Long-running queries (state=active, query age). Requires sqlite.path or metrics_store.
+    # long_query_min_seconds: 300       # 0 = off
+    # long_query_cooldown_seconds: 3600 # min time between long_query alerts per target (default 3600 if min set)
+    # long_query_min_count: 1          # alert when count >= N
+
+# Multi-DB example (uncomment and adjust):
+# databases:
+#   - url: postgres://user:pass@host1:5432/prod
+#     client: "monitor-01-prod"
+#     stale_age: 0
+#     threshold:
+#       active: 0
+#       idle: 0
+#       levels: "75,85,95"
+#       stale: 0
+#       total: 0
+#   - url: postgres://user:pass@host2:5432/analytics
+#     client: "monitor-01-analytics"
+#     threshold:
+#       levels: "80,90,98"   # per-db override
+#   - url: postgres://user:pass@host3:5432/replica
+#     # no client → use base client + "-" + db name from URL
 
 # -----------------------------------------------------------------------------
-# Kubernetes (optional). Use when Postgres and/or Loki run inside a cluster.
+# DEPRECATED: db (use databases: instead). Will be removed in v1.0.
 # -----------------------------------------------------------------------------
+# db:
+#   url: postgres://user:pass@localhost:5432/mydb
+#   stale_age: 0
+#   default_threshold_percent: 80
+#   threshold:
+#     active: 0
+#     idle: 0
+#     levels: "75,85,95"
+#     stale: 0
+#     total: 0
+
+# -----------------------------------------------------------------------------
+# SQLite & state (for resolution notifications and /metrics)
+# -----------------------------------------------------------------------------
+# REQUIRES daemon mode (interval > 0). One-shot/timer: no history, no resolution, no /metrics.
+# sqlite:
+#   path: /var/lib/pgwd/pgwd.db   # state and metrics history
+#   max_metrics: 10000            # FIFO eviction when exceeded
+#   stale_age: 300                # optional; seconds for stale count in store (0 = use db.stale_age)
+#
+# Optional: persist metrics to PostgreSQL or MySQL instead of SQLite (same FIFO semantics; max rows: sqlite.max_metrics).
+# metrics_store:
+#   driver: postgres   # or mysql, postgresql (alias), sqlite (requires sqlite.path)
+#   dsn: "postgres://user:pass@host:5432/pgwd_metrics?sslmode=disable"
+#   # MySQL example: "user:pass@tcp(host:3306)/pgwd_metrics?parseTime=true"
+# CSV export reads the configured backend via internal/metricsstore.
+# One-shot CSV: pgwd -config ... -export-metrics-format csv -export-metrics-destination /path/out.csv
+#
+# -----------------------------------------------------------------------------
+# State stability (hysteresis)
+# -----------------------------------------------------------------------------
+# confirm_alert: 2   # consecutive "bad" checks before sending alert (avoid brief spikes)
+# confirm_ok: 2      # consecutive "ok" checks before "returned to normal" resolution notification
+#
+# -----------------------------------------------------------------------------
+# HTTP server (/metrics, /healthz for Kubernetes probes). REQUIRES daemon mode.
+# -----------------------------------------------------------------------------
+# http:
+#   listen: ":8080"
+#   base_path: "/api/pgwd/v1"     # paths are relative to this
+#   healthz_path: "/healthz"      # → /api/pgwd/v1/healthz
+#   metrics_path: "/metrics"     # → /api/pgwd/v1/metrics
+#
+# -----------------------------------------------------------------------------
+# Kubernetes (optional)
+# -----------------------------------------------------------------------------
+# Two modes:
+# - pgwd INSIDE K8s (Deployment): use databases[].url with in-cluster DNS
+#   (e.g. postgres://...@postgres.default.svc.cluster.local:5432/mydb).
+#   No kubectl. No kube.postgres.
+# - pgwd OUTSIDE K8s (VM, cron): use kube.postgres + port-forward (client-go, no kubectl).
+#
 kube:
-  # context: Kubectl context (e.g. prod, staging). Empty = current context. Override via CLI: -kube-context.
   context: ""
-  # local_port: Local port for Postgres port-forward (default 5432).
   local_port: 5432
-  # loki: Loki service for port-forward when Loki is inside cluster. Format: namespace/type/name (e.g. monitoring/svc/loki).
   loki: ""
   loki_local_port: 3100
   loki_remote_port: 3100
-  # password_container: Container name in pod for password discovery (default: primary container).
   password_container: ""
-  # password_var: Pod env var for password when URL uses DISCOVER_MY_PASSWORD (default: POSTGRES_PASSWORD).
   password_var: POSTGRES_PASSWORD
-  # postgres: Postgres service for port-forward. Format: namespace/type/name (e.g. default/svc/postgres).
   postgres: ""
 
 # -----------------------------------------------------------------------------
@@ -99,14 +149,9 @@ kube:
 # -----------------------------------------------------------------------------
 notifications:
   loki:
-    # url: Loki push API URL (e.g. http://localhost:3100/loki/api/v1/push). Use when Loki is exposed.
     url: ""
-    # bearer_token: Authorization: Bearer token (if Loki requires auth).
     bearer_token: ""
-    # labels: Comma-separated key=value (e.g. app=pgwd,env=prod).
     labels: ""
-    # org_id: X-Scope-OrgID header for multi-tenancy. Must match Grafana Loki data source.
     org_id: ""
   slack:
-    # webhook: Slack Incoming Webhook URL (https://hooks.slack.com/services/...).
     webhook: ""

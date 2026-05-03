@@ -28,6 +28,26 @@ WHERE datname = current_database()
 	return s, err
 }
 
+// LongQueryCount returns backends in state 'active' whose current query has been running longer
+// than minSeconds (based on query_start). Excludes this session (pg_backend_pid).
+func LongQueryCount(ctx context.Context, pool *pgxpool.Pool, minSeconds int) (int, error) {
+	if minSeconds <= 0 {
+		return 0, nil
+	}
+	const q = `
+SELECT count(*)
+FROM pg_stat_activity
+WHERE datname = current_database()
+  AND pid <> pg_backend_pid()
+  AND state = 'active'
+  AND query_start IS NOT NULL
+  AND now() - query_start > make_interval(secs => $1)
+`
+	var n int
+	err := pool.QueryRow(ctx, q, minSeconds).Scan(&n)
+	return n, err
+}
+
 // StaleCount returns the number of connections that have been open longer than maxAgeSeconds
 // (based on backend_start). Use this to detect connections that stay open and never close.
 func StaleCount(ctx context.Context, pool *pgxpool.Pool, maxAgeSeconds int) (int, error) {

@@ -6,20 +6,23 @@
   <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.5.10-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.6.4-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
+[![CI](https://github.com/hrodrig/pgwd/actions/workflows/ci.yml/badge.svg)](https://github.com/hrodrig/pgwd/actions)
+[![codecov](https://codecov.io/gh/hrodrig/pgwd/graph/badge.svg)](https://codecov.io/gh/hrodrig/pgwd)
 [![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![pkg.go.dev](https://pkg.go.dev/badge/github.com/hrodrig/pgwd)](https://pkg.go.dev/github.com/hrodrig/pgwd)
 [![Go Report Card](https://goreportcard.com/badge/github.com/hrodrig/pgwd)](https://goreportcard.com/report/github.com/hrodrig/pgwd)
 [![deps.dev](https://img.shields.io/badge/deps.dev-go%20module-blue)](https://deps.dev/go/github.com/hrodrig/pgwd)
 [![DEV.to](https://img.shields.io/badge/DEV.to-Article-0A0A0A?logo=dev.to)](https://dev.to/hrodrig/pgwd-a-watchdog-for-your-postgresql-connections-1pjg)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/hrodrig/pgwd)
 
 **Repo:** [github.com/hrodrig/pgwd](https://github.com/hrodrig/pgwd) · **Releases:** [Releases](https://github.com/hrodrig/pgwd/releases)
 
 Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via **Slack** and/or **Loki** when configured thresholds are exceeded. It can also alert on **stale connections** (connections that stay open and never close).
 
-**Documentation:** [Sequence diagrams](docs/README.md#sequence-diagrams) (Mermaid) for each use case, [audited against the code](docs/sequence/AUDIT.md), terminal demo (recorded with [VHS](https://github.com/charmbracelet/vhs)), and `man pgwd` (included in .deb/.rpm packages) — see [docs/](docs/README.md). **Scanning** before release (govulncheck, Grype): [tools/README.md](tools/README.md).
+**Documentation:** [Sequence diagrams](docs/README.md#sequence-diagrams) (Mermaid) for each use case, [audited against the code](docs/sequence/AUDIT.md), [terminal demo](docs/README.md#terminal-demo-vhs) (VHS — regenerate with `make install` then `bash -c "vhs docs/demo.tape"`), [upgrading 0.5.x → 0.6.x](docs/UPGRADE-0.5-to-0.6.md) (operator checklist; index under [docs/README — Upgrading](docs/README.md#upgrading)), and `man pgwd` (included in .deb/.rpm packages) — see [docs/](docs/README.md). **Scanning** before release (govulncheck, Grype): [tools/README.md](tools/README.md).
 
 ![Terminal demo](docs/demo.gif)
 
@@ -41,7 +44,9 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 - [FAQ](#faq)
 - [Docker](#docker)
 - [systemd](#systemd)
+- [Debian / Ubuntu](#debian--ubuntu)
 - [AlmaLinux](#almalinux)
+- [OpenSUSE](#opensuse)
 - [Arch Linux](#arch-linux)
 - [Alpine Linux (OpenRC)](#alpine-linux-openrc)
 - [OpenBSD](#openbsd)
@@ -101,6 +106,8 @@ If you use CLI flags or env vars for notifications or DB thresholds, update your
 
 Config file keys unchanged.
 
+**Consolidated upgrade guide (0.5.x → 0.6.x):** [docs/UPGRADE-0.5-to-0.6.md](docs/UPGRADE-0.5-to-0.6.md) — checklist, Helm move, and optional 0.6.x features.
+
 ---
 
 ## Configuration: config file, env, CLI
@@ -113,7 +120,7 @@ pgwd loads settings from (in order): **config file** → **environment variables
 | Environment | `PGWD_*` |
 | CLI | `-flag` |
 
-**Config file** (YAML) — keys match `-flag` and `PGWD_*` env vars. See `contrib/pgwd.conf.example`. One config = one Postgres; for multiple instances, use one config per instance (e.g. cron with `-config /etc/pgwd/prod-db1.conf`).
+**Config file** (YAML) — keys match `-flag` and `PGWD_*` env vars. See `contrib/pgwd.conf.example`. Use `databases:` for one or more Postgres (canonical). Legacy `db:` is deprecated and will be removed in v1.0. For kube.postgres, use `db:` until per-db kube support exists.
 
 ```bash
 # Use default path /etc/pgwd/pgwd.conf
@@ -125,6 +132,13 @@ PGWD_CONFIG=/path/to/pgwd.conf pgwd
 ```
 
 **CLI overrides env, env overrides config file.** Use env for secrets and overrides; use config file for base settings.
+
+**`-db-url` override (one-shot):** When the config file has `databases:` (multi-DB), passing `-db-url` and `-interval 0` runs against that single URL only, ignoring the databases from config for that run. Useful for quick ad-hoc checks without editing the config.
+
+### Multi-database limitations
+
+- **`-kube-postgres` / `kube.postgres` and `databases:` are mutually exclusive.** Validation rejects that combination. Multi-DB mode expects **direct** Postgres URLs (e.g. in-cluster DNS, VPN, or plain TCP). To use port-forward from **outside** the cluster, use **single-DB** config (`db:` or one URL) with `-kube-postgres`, or run **one pgwd process per** forwarded instance.
+- **Persisted history and hysteresis** (SQLite) are keyed by **`(client, cluster, database)`**. The **host from the URL is not part of that key**. If several targets share the same database name and the same **derived** client (`base client` + `-` + name from the URL path), they **collide** in the store and resolution/hysteresis will be wrong. Give each `databases:` entry a **unique `client`** when monitoring the same logical DB name on different hosts.
 
 ### Using only environment variables
 
@@ -219,6 +233,8 @@ pgwd -db-url "postgres://..." \
 | **0** | One-shot — check once, then exit |
 | **> 0** (e.g. 60) | Daemon — check every N seconds until Ctrl+C or SIGTERM |
 
+**Recommendation: use daemon mode** (`interval` > 0) when you need resolution notifications, hysteresis (`confirm_ok`, `confirm_alert`), the HTTP server (`/metrics`, `/healthz`), or SQLite metrics history. In one-shot or timer mode, pgwd runs once per tick and exits — there is no state history, so resolution alerts, Prometheus scraping, and hysteresis do not apply.
+
 ```bash
 # One-shot: run once, then exit (ideal for cron)
 pgwd -db-url "postgres://..." -notifications-slack-webhook "https://..."
@@ -249,29 +265,30 @@ pgwd -db-url "postgres://..." -notifications-loki-url "http://localhost:3100/lok
 
 | Scenario | Suggestion |
 |----------|------------|
-| **Many Postgres instances** | One config per instance; one cron entry per instance. Each instance can have different clusters, thresholds, and environments. No coordination needed; add a new instance = add a cron line. Often more efficient than a daemon when instances are diverse. |
-| **Cron check every 5 min** | One-shot (`interval` 0 or unset), one or more thresholds, Slack or Loki. Run from cron every 5 minutes. |
-| **Long-running watcher** | Daemon with `-interval 60` (or 120). Run under systemd/supervisor; stop with SIGTERM. |
+| **Many Postgres instances** | Use `databases:` in one config (daemon mode) for multiple **direct** URLs. You cannot combine `databases:` with `-kube-postgres`. Use a **distinct `client` per entry** when the same DB name appears on different hosts (see [Multi-database limitations](#multi-database-limitations)). For diverse setups (different clusters, kube contexts), one config per instance with cron may be simpler. |
+| **Cron check every 5 min** | One-shot (`interval` 0 or unset), one or more thresholds, Slack or Loki. Run from cron every 5 minutes. No resolution alerts, /metrics, or hysteresis. |
+| **Long-running watcher** | Daemon with `-interval 60` (or 120). Run under systemd/supervisor; stop with SIGTERM. **Recommended** for resolution notifications, Prometheus /metrics, and hysteresis. |
 | **Detect connection leaks** | Use `stale-age` + `threshold-stale` (e.g. 600 and 1). Alert when any connection stays open longer than 10 min. |
 | **Pre-production test** | `-dry-run` and low thresholds to see current counts without sending alerts. |
 | **Validate notifications** | `-force-notification` with Slack/Loki: sends one test message regardless of thresholds. Use one-shot to confirm delivery, format, and how messages look. (If the connection to Postgres fails, pgwd always sends a connect-failure alert when a notifier is configured.) |
 | **Test alerts without low max_connections** | Use `-test-max-connections N` (e.g. 20) with `-force-notification` or low thresholds: thresholds and messages use N as “max_connections”, while stats stay real. Notifications show “(test override)” so total can exceed N. See [docs/testing-alert-levels.md](docs/testing-alert-levels.md) for a procedure to trigger attention/alert/danger against production without changing Postgres config. |
 | **Zero config (use defaults)** | Only set `-db-url` and a notifier; pgwd uses 3-tier levels (75,85,95%) by default. Use `-db-threshold-levels` to customize or `-db-default-threshold-percent` when using explicit thresholds. |
 | **Multiple environments** | Set `PGWD_*` in env per environment; override `-db-url` or `-notifications-loki-labels` per deploy. |
-| **Postgres in Kubernetes** | Use `-kube-postgres namespace/svc/name` (or `namespace/pod/name`). pgwd runs `kubectl port-forward` and connects to localhost. Optionally put `DISCOVER_MY_PASSWORD` in the URL to read the password from the pod's env (e.g. `POSTGRES_PASSWORD`). Requires `kubectl` in PATH. |
+| **Postgres in Kubernetes** | **pgwd inside K8s:** Use direct URLs (`postgres://...@postgres.namespace.svc.cluster.local:5432/mydb`). **pgwd outside K8s:** Use `-kube-postgres namespace/svc/name`; requires kubeconfig (no kubectl binary). |
 | **Alert when Postgres is unreachable** | If you configure a notifier (Slack/Loki), pgwd **always** sends an alert when the connection fails (e.g. refused, timeout, or "too many clients"). No extra flag needed. |
 
 ### Running from cron
 
-**One config = one Postgres.** When you have many diverse instances (different clusters, thresholds, kube contexts), cron is often the most efficient approach: one cron entry per instance, each with its own config file. No daemon to manage; add or remove instances by editing crontab.
+**Daemon or cron.** For multiple Postgres with direct URLs, use `databases:` in one config with a daemon. When instances are diverse (different clusters, kube contexts), cron with one config per instance is often simpler: one cron entry per config, no daemon to manage. **Note:** Cron (one-shot per tick) does not support resolution notifications, /metrics, or hysteresis — use the daemon (`pgwd.service`) if you need those.
 
 Cron runs with a **minimal environment** (e.g. `PATH=/usr/bin:/bin`). Two things to keep in mind:
 
-1. **`-kube-postgres` and PATH:** If you use `-kube-postgres`, cron must see `kubectl` in PATH. Set `PATH` in the cron line or in a wrapper script so it includes the directory where `kubectl` lives (e.g. `/usr/local/bin`):
+1. **`-kube-postgres` and kubeconfig:** If you use `-kube-postgres`, cron must have access to a valid kubeconfig. Set `KUBECONFIG` in the cron environment or ensure `~/.kube/config` exists:
 
    ```bash
-   # In crontab: set PATH before the command
+   # In crontab: set PATH and KUBECONFIG
    PATH=/usr/local/bin:/usr/bin:/bin
+   KUBECONFIG=/path/to/kubeconfig
    */5 * * * * /usr/local/bin/pgwd -kube-postgres default/svc/postgres -db-url "postgres://..." -notifications-slack-webhook "https://..."
    ```
 
@@ -283,7 +300,7 @@ Cron runs with a **minimal environment** (e.g. `PATH=/usr/bin:/bin`). Two things
    exec /usr/local/bin/pgwd "$@"
    ```
 
-2. **Seeing errors:** If `kubectl` is not found, pgwd exits immediately with a clear message to stderr. Cron often mails stderr to the user; otherwise redirect stdout and stderr to a log file so you can see why the job failed:
+2. **Seeing errors:** If kubeconfig is missing or invalid, pgwd exits with a clear message. Cron often mails stderr to the user; otherwise redirect stdout and stderr to a log file so you can see why the job failed:
 
    ```bash
    */5 * * * * /usr/local/bin/pgwd -db-url "postgres://..." -notifications-slack-webhook "https://..." >> /var/log/pgwd.log 2>&1
@@ -399,19 +416,66 @@ Adjust `KUBECONFIG`, webhook URL, namespace, service names, database names, and 
 
 ## Kubernetes
 
-When Postgres runs inside a Kubernetes cluster, use **`-kube-postgres`** so pgwd connects via `kubectl port-forward` (no separate script or manual port-forward).
+**Two deployment models:** Choose based on where pgwd runs.
+
+| Where pgwd runs | How to connect | kubectl needed? |
+|-----------------|----------------|------------------|
+| **Inside the cluster** (Deployment, daemon) | Direct URLs: `postgres://...@postgres.namespace.svc.cluster.local:5432/mydb`, `http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push` | **No** |
+| **Outside the cluster** (VM, cron) | `-kube-postgres` / `-kube-loki` with port-forward (client-go, no kubectl) | **No** |
+
+### pgwd inside Kubernetes (recommended for daemon mode)
+
+When you run pgwd as a Deployment (Docker image in K8s), use **direct service URLs**. No kubectl in the container.
+
+- **Postgres:** `databases[].url` with in-cluster DNS, e.g. `postgres://user:pass@postgres.default.svc.cluster.local:5432/mydb` (shorter: `postgres-service.namespace:5432`).
+- **Loki:** `notifications.loki.url` with in-cluster DNS, e.g. `http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push`.
+- **Passwords:** From a Secret via env (`PGWD_*` or `-config`). No `DISCOVER_MY_PASSWORD` — that requires cluster access (pgwd outside K8s) to read the Postgres pod env.
+- **HTTP:** Set `http.listen: ":8080"` for `/healthz` and `/metrics` (liveness, Prometheus).
+- **CSV export (metrics store):** Check history is persisted under **`sqlite.path`** (SQLite) or **`metrics_store.driver`** + **`metrics_store.dsn`** (PostgreSQL / MySQL). To dump stored rows: **`pgwd -config /etc/pgwd/pgwd.conf -export-metrics-format csv -export-metrics-destination /path/out.csv`**. SQLite export opens the file **read-only** (safe while the daemon runs). Overwrites the CSV each run; use **cron** for periodic snapshots. See **`internal/metricsstore`** and **`contrib/pgwd.conf.example`**.
+
+Simplest: use env vars from Secrets (no config file). Example Deployment env:
+
+```yaml
+env:
+  - name: PGWD_DB_URL
+    valueFrom:
+      secretKeyRef:
+        name: pgwd-db
+        key: url
+  - name: PGWD_CLIENT
+    value: "pgwd-prod"
+  - name: PGWD_INTERVAL
+    value: "60"
+  - name: PGWD_NOTIFICATIONS_SLACK_WEBHOOK
+    valueFrom:
+      secretKeyRef:
+        name: pgwd-secrets
+        key: slack-webhook
+  - name: PGWD_HTTP_LISTEN
+    value: ":8080"
+  - name: PGWD_SQLITE_PATH
+    value: "/var/lib/pgwd/pgwd.db"
+  - name: PGWD_NOTIFICATIONS_LOKI_URL
+    value: "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push"
+```
+
+When using a config file, template it with Helm/Kustomize so the DB URL (with password) is injected from a Secret.
+
+### pgwd outside Kubernetes (port-forward via client-go)
+
+When pgwd runs on a host (VM, cron) and Postgres/Loki are inside the cluster, use **`-kube-postgres`** and **`-kube-loki`**. pgwd uses **client-go** natively — no kubectl binary required. A valid **kubeconfig** (e.g. `~/.kube/config` or `KUBECONFIG`) is needed.
 
 **Format:** `-kube-postgres <namespace>/<type>/<name>` with `type` = `svc` or `pod`, e.g. `default/svc/postgres` or `default/pod/postgres-0`.
 
 - Set **`PGWD_DB_URL`** with host **`localhost`** and the same port as **`-kube-local-port`** (default 5432). Example: `postgres://user:pass@localhost:5432/mydb`.
-- **Password from the pod:** If the URL password is the literal **`DISCOVER_MY_PASSWORD`**, pgwd reads the password from the Postgres pod's environment (`POSTGRES_PASSWORD` by default, or `PGPASSWORD`). Use **`-kube-password-var`** to choose the env var and **`-kube-password-container`** if the Postgres container is not the default.
-- **Requires:** `kubectl` in PATH and a valid kubeconfig. pgwd checks for `kubectl` before any kube step and exits with a clear error if it is missing. pgwd starts the port-forward, connects, and stops it on exit. **When running from cron**, set PATH so `kubectl` is findable (see [Running from cron](#running-from-cron) above).
-- **Multiple contexts:** If your kubeconfig has several contexts (e.g. dev, staging, prod), use **`-kube-context`** (or `PGWD_KUBE_CONTEXT`) to select which cluster to use. All kubectl operations (port-forward, pod resolution, password discovery, cluster name) use that context.
-- **Validate connectivity:** Use **`-validate-k8s-access`** to check kubectl connectivity and list pods before running with `-kube-postgres`. No DB or notifier required. Useful to confirm context and access before a real run.
-- **Loki inside the cluster:** When pgwd runs on a host outside the cluster (e.g. VM with cron) and Loki is inside the cluster, use **`-kube-loki namespace/svc/loki`** instead of `-notifications-loki-url`. pgwd runs `kubectl port-forward` to Loki and sends notifications to localhost. Use `-kube-loki-local-port` (default 3100) and `-kube-loki-remote-port` (default 3100) if Loki uses a different port. Mutually exclusive with `-notifications-loki-url` (use one or the other).
+- **Password from the pod:** If the URL password is the literal **`DISCOVER_MY_PASSWORD`**, pgwd reads the password from the Postgres pod's environment (`POSTGRES_PASSWORD` by default, or `PGPASSWORD`). Use **`-kube-password-var`** and **`-kube-password-container`** if needed.
+- **Requires:** A valid kubeconfig (file or `KUBECONFIG` env). **When running from cron**, ensure `KUBECONFIG` is set or `~/.kube/config` exists and is readable.
+- **Multiple contexts:** Use **`-kube-context`** (or `PGWD_KUBE_CONTEXT`) to select context.
+- **Validate connectivity:** Use **`-validate-k8s-access`** to check cluster access before a real run.
+- **Loki inside the cluster:** Use **`-kube-loki namespace/svc/loki`** instead of `-notifications-loki-url`. pgwd port-forwards to Loki. Mutually exclusive with `-notifications-loki-url`.
 
 ```bash
-# Validate kubectl connectivity (no DB or notifier needed)
+# Validate cluster connectivity (no DB or notifier needed)
 pgwd -validate-k8s-access
 # With specific context:
 pgwd -kube-context prod -validate-k8s-access
@@ -453,15 +517,15 @@ All parameters can be set via **config file**, **CLI**, or **environment variabl
 |-----|-----|-------------|
 | `-config` | `PGWD_CONFIG` | Config file path (YAML). Default `/etc/pgwd/pgwd.conf`. See `contrib/pgwd.conf.example`. |
 | `-db-url` | `PGWD_DB_URL` | PostgreSQL connection URL (required). With `-kube-postgres`, use host localhost and port matching `-kube-local-port`. |
-| `-kube-postgres` | `PGWD_KUBE_POSTGRES` | Connect via kubectl port-forward: `namespace/type/name` (e.g. `default/svc/postgres`). Requires kubectl in PATH. |
-| `-kube-loki` | `PGWD_KUBE_LOKI` | Connect to Loki via kubectl port-forward when Loki is inside the cluster: `namespace/type/name` (e.g. `monitoring/svc/loki`). Mutually exclusive with `-notifications-loki-url`. |
+| `-kube-postgres` | `PGWD_KUBE_POSTGRES` | Connect via port-forward (client-go): `namespace/type/name` (e.g. `default/svc/postgres`). Requires kubeconfig. |
+| `-kube-loki` | `PGWD_KUBE_LOKI` | Connect to Loki via port-forward when Loki is inside the cluster: `namespace/type/name` (e.g. `monitoring/svc/loki`). Mutually exclusive with `-notifications-loki-url`. |
 | `-kube-loki-local-port` | `PGWD_KUBE_LOKI_LOCAL_PORT` | Local port for Loki port-forward (default 3100). |
 | `-kube-loki-remote-port` | `PGWD_KUBE_LOKI_REMOTE_PORT` | Remote port on the Loki service (default 3100). Use when Loki listens on a different port. |
 | `-kube-context` | `PGWD_KUBE_CONTEXT` | Kubectl context to use (empty = current context). Use when you have multiple contexts in kubeconfig and want to target a specific cluster. |
 | `-kube-local-port` | `PGWD_KUBE_LOCAL_PORT` | Local port for port-forward (default 5432). Use different ports to run multiple pgwd against different Postgres in the cluster. |
 | `-kube-password-var` | `PGWD_KUBE_PASSWORD_VAR` | Pod env var name when URL password is `DISCOVER_MY_PASSWORD` (default `POSTGRES_PASSWORD`). |
 | `-kube-password-container` | `PGWD_KUBE_PASSWORD_CONTAINER` | Container name in pod for password discovery (default: primary container). |
-| `-validate-k8s-access` | `PGWD_VALIDATE_K8S_ACCESS` | Validate kubectl connectivity and list pods, then exit. Use `-kube-context` to select context. No DB or notifier required. |
+| `-validate-k8s-access` | `PGWD_VALIDATE_K8S_ACCESS` | Validate cluster connectivity and list pods, then exit. Use `-kube-context` to select context. No DB or notifier required. |
 | `-client` | `PGWD_CLIENT` | **Required.** Custom name for this monitor instance (e.g. prod-db-primary). Identifies which monitor sent the alert when multiple instances run. Cluster name is computed from kubeconfig when using `-kube-postgres`; not configurable. |
 | `-db-threshold-total` | `PGWD_DB_THRESHOLD_TOTAL` | Alert when total connections ≥ N. **Deprecated:** use `-db-threshold-levels`; will be removed in v1.0.0. |
 | `-db-threshold-active` | `PGWD_DB_THRESHOLD_ACTIVE` | Alert when active connections ≥ N. **Deprecated:** use `-db-threshold-levels`; will be removed in v1.0.0. |
@@ -510,16 +574,17 @@ curl -sSL https://raw.githubusercontent.com/hrodrig/pgwd/main/scripts/install.sh
 | Platform | Command |
 |----------|---------|
 | **Homebrew (macOS)** | `brew install hrodrig/pgwd/pgwd` |
-| **Debian/Ubuntu** | `wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.deb && sudo dpkg -i /tmp/pgwd.deb` |
-| **Fedora / RHEL / AlmaLinux / Rocky / Oracle Linux** | Same `.rpm`: `sudo dnf install https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.rpm` |
-| **Alpine** | `wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.tar.gz \| tar -xzf - -C /usr/local/bin` — see [Alpine (OpenRC)](#alpine-linux-openrc) |
+| **Debian/Ubuntu** | `wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_linux_amd64.deb && sudo dpkg -i /tmp/pgwd.deb` |
+| **Fedora / RHEL / AlmaLinux / Rocky / Oracle Linux** | Same `.rpm`: `sudo dnf install https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_linux_amd64.rpm` |
+| **OpenSUSE** | Same `.rpm` via zypper: see [OpenSUSE](#opensuse) |
+| **Alpine** | `wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_linux_amd64.tar.gz \| tar -xzf - -C /usr/local/bin` — see [Alpine (OpenRC)](#alpine-linux-openrc) |
 | **OpenBSD** | tarball with rc.d: see [OpenBSD](#openbsd) |
 | **FreeBSD** | port or tarball: see [FreeBSD](#freebsd) |
 | **NetBSD** | tarball with rc.d: see [NetBSD](#netbsd) |
 | **DragonFly BSD** | tarball with rc.d: see [DragonFly BSD](#dragonfly-bsd) |
 | **illumos / Solaris** | tarball with SMF: see [Solaris](#solaris) |
 
-Replace `v0.5.10` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets. If a tag is not published yet, build packages locally with `make snapshot` and install the `.rpm` / `.deb` from `dist/`. **AlmaLinux 8/9:** see [AlmaLinux](#almalinux).
+Replace `v0.6.4` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets. If a tag is not published yet, build packages locally with `make snapshot` and install the `.rpm` / `.deb` from `dist/`. **AlmaLinux 8/9:** see [AlmaLinux](#almalinux).
 
 **Pre-built binaries:** [Releases](https://github.com/hrodrig/pgwd/releases) provide binaries (tar.gz, zip), `.deb`, and `.rpm` packages for Linux, macOS, and Windows (amd64 and arm64). The `.deb` and `.rpm` packages include the man page (`man pgwd`) and install `/etc/pgwd/pgwd.conf` (edit before use). The `.rpm` is the same artifact for Fedora, RHEL, AlmaLinux, Rocky Linux, and Oracle Linux (`dnf`); **AlmaLinux** + **systemd** were validated (install, `pgwd -dry-run -interval 0`, `systemctl enable --now pgwd.service`).
 
@@ -527,14 +592,16 @@ Replace `v0.5.10` and `amd64` with your desired version and arch (e.g. `arm64`).
 
 ```bash
 go build -o pgwd ./cmd/pgwd
-# or use the Makefile:
+# or use GNU Make (repo root GNUmakefile):
 make build
 make install
 # Custom install path: GOBIN=~/bin make install  (default is $HOME/go/bin)
 # Install man page: make install-man  (MANDIR=/usr/share/man for system-wide)
 ```
 
-**Release (GitHub):** See [Release steps](#release-steps) below for the full workflow. Quick: from `main`, `git tag v0.5.10`, `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
+**FreeBSD:** `/usr/bin/make` is **BSD Make**; the repo ships a small **`Makefile`** stub that forwards to **`gmake`** (uses **`all`** + **`.DEFAULT`** with **`gmake $@`**, not **`$(.MAKE.CMDGOALS)`**, which can be empty under BSD Make). Install **`devel/gmake`** (`pkg install gmake`) and a **Go** toolchain on **`PATH`** (`pkg install go` — binary is usually **`/usr/local/bin/go`**). Then **`make build`** or **`gmake build`**. Linux, macOS, and CI use **GNU Make**, which reads **`GNUmakefile`** first.
+
+**Release (GitHub):** See [Release steps](#release-steps) below for the full workflow. Quick: from `main`, `git tag v0.6.4`, `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
 
 ### Release steps
 
@@ -563,7 +630,10 @@ make release-check
 ```bash
 echo "1.0.0" > VERSION
 # Edit CHANGELOG.md: move [Unreleased] items into [1.0.0], update compare links
-git add VERSION CHANGELOG.md README.md  # README badge if needed
+# Regenerate docs/demo.gif so embedded version matches (from repo root):
+make install && bash -c "vhs docs/demo.tape"
+# Update contrib/man/man1/pgwd.1 — .TH date and version (see man-page-sync rule)
+git add VERSION CHANGELOG.md README.md docs/demo.gif contrib/man/man1/pgwd.1  # README badge if needed
 git commit -m "Release 1.0.0"
 git push origin develop
 ```
@@ -593,7 +663,7 @@ make release
 
 Use a [Personal Access Token](https://github.com/settings/tokens) with `repo` scope. Before releasing, verify each token's **expiration date** and **scopes** at [github.com/settings/tokens](https://github.com/settings/tokens).
 
-**Snapshot (no publish):** `make snapshot` — outputs to `dist/` without pushing.
+**Snapshot (no publish):** `make snapshot` — outputs to `dist/` without pushing (no Docker; install [goreleaser](https://goreleaser.com) on `PATH`).
 
 ## Testing
 
@@ -716,7 +786,7 @@ Same placeholders as Slack. Timestamp is the time of the push. You can query in 
 | **"no notifier configured"** | Set `PGWD_NOTIFICATIONS_SLACK_WEBHOOK`, `PGWD_NOTIFICATIONS_LOKI_URL`, or `PGWD_KUBE_LOKI` (or use `-dry-run` to skip notifications). |
 | **"force-notification requires at least one notifier"** | Use `-force-notification` together with `-notifications-slack-webhook` and/or `-notifications-loki-url` or `-kube-loki`. |
 | **"notify-on-connect-failure requires at least one notifier"** | You set `-notify-on-connect-failure` but have no notifier. Add `-notifications-slack-webhook` and/or `-notifications-loki-url` or `-kube-loki`. (Connect failure is always notified when a notifier is configured; the flag is optional.) |
-| **"kubectl not found in PATH"** | When using `-kube-postgres` or `-kube-loki`, ensure `kubectl` is installed and on your `PATH` (e.g. `which kubectl`). pgwd exits with this message before attempting port-forward or password discovery. |
+| **"load kubeconfig" / cluster unreachable** | When using `-kube-postgres` or `-kube-loki`, ensure a valid kubeconfig exists (`KUBECONFIG` env or `~/.kube/config`). pgwd uses client-go; no kubectl binary required. |
 | **"when using -db-threshold-stale, -db-stale-age must be > 0"** | Set `-db-stale-age N` (e.g. 600) when using `-db-threshold-stale`. |
 | **Slack/Loki not receiving alerts** | Run once with `-force-notification` to send a test message. Check webhook URL, network/firewall, and that the app can reach Slack/Loki. |
 | **Loki: 401 Unauthorized** | Loki requires auth. Set `-notifications-loki-org-id 1` (multi-tenancy) or `-notifications-loki-bearer-token <token>` (or env `PGWD_NOTIFICATIONS_LOKI_ORG_ID` / `PGWD_NOTIFICATIONS_LOKI_BEARER_TOKEN`). |
@@ -740,13 +810,13 @@ pgwd uses `max_connections` (from Postgres) to compute percentage-based threshol
 <details>
 <summary><strong>Can I run pgwd from cron?</strong></summary>
 
-Yes. Use one-shot mode (`PGWD_INTERVAL=0` or omit it). Run pgwd every 5 minutes (or your preferred interval). Ensure `PATH` includes `kubectl` if you use `-kube-postgres`. See [Running from cron](#running-from-cron) for details and log rotation.
+Yes. Use one-shot mode (`PGWD_INTERVAL=0` or omit it). Run pgwd every 5 minutes (or your preferred interval). Set `KUBECONFIG` if you use `-kube-postgres` (pgwd uses client-go; no kubectl needed). See [Running from cron](#running-from-cron) for details and log rotation. **Resolution notifications, /metrics, and hysteresis require daemon mode** — use `pgwd.service` instead.
 </details>
 
 <details>
 <summary><strong>Can I monitor multiple Postgres instances?</strong></summary>
 
-Yes. One config file = one Postgres. For many diverse instances (different clusters, thresholds, kube contexts), cron is often the most efficient: one cron entry per instance, each with its own config (`-config /etc/pgwd/instance-name.conf`). No coordination needed; add a new instance = add a cron line. See [Example: multiple services](#example-multiple-services-and-heartbeat-via-bash--cron).
+Yes. Use `databases:` in one config for multi-DB in daemon mode (direct URLs only; not with `-kube-postgres`). Use a **unique `client` per entry** when the same database name is used on different hosts. See [Multi-database limitations](#multi-database-limitations), [Example: multiple services](#example-multiple-services-and-heartbeat-via-bash--cron), and `contrib/pgwd.conf.example`.
 </details>
 
 <details>
@@ -758,13 +828,13 @@ Use `-force-notification`: pgwd sends one test message to all configured notifie
 <details>
 <summary><strong>Postgres is in Kubernetes — how do I connect?</strong></summary>
 
-Use `-kube-postgres namespace/svc/name` (e.g. `default/svc/postgres`). pgwd runs `kubectl port-forward` and connects to localhost. Validate first with `-validate-k8s-access`. See [Kubernetes](#kubernetes).
+Use `-kube-postgres namespace/svc/name` (e.g. `default/svc/postgres`). pgwd uses client-go to port-forward and connects to localhost. Validate first with `-validate-k8s-access`. See [Kubernetes](#kubernetes).
 </details>
 
 <details>
 <summary><strong>Loki is inside the cluster — what if pgwd runs outside?</strong></summary>
 
-Use `-kube-loki namespace/svc/loki` (e.g. `monitoring/svc/loki`). pgwd runs `kubectl port-forward` to Loki (port 3100) and sends notifications to localhost. Mutually exclusive with `-notifications-loki-url`; use one or the other. See [Kubernetes](#kubernetes).
+Use `-kube-loki namespace/svc/loki` (e.g. `monitoring/svc/loki`). pgwd port-forwards to Loki (port 3100) and sends notifications to localhost. Mutually exclusive with `-notifications-loki-url`; use one or the other. See [Kubernetes](#kubernetes).
 </details>
 
 <details>
@@ -788,7 +858,7 @@ When you use `-db-threshold-levels 75,85,95` (default), pgwd fires one alert per
 **Published image (each release):** Multi-arch images (linux/amd64, linux/arm64) are published to [GitHub Container Registry](https://github.com/hrodrig/pgwd/pkgs/container/pgwd) as `ghcr.io/hrodrig/pgwd`. Use a version tag or `latest`:
 
 ```bash
-docker pull ghcr.io/hrodrig/pgwd:v0.5.10
+docker pull ghcr.io/hrodrig/pgwd:v0.6.4
 # or
 docker pull ghcr.io/hrodrig/pgwd:latest
 ```
@@ -814,13 +884,13 @@ This runs `docker build` with `--build-arg VERSION=...`, `--build-arg COMMIT=...
 
 **Validate the image**
 
-Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.5.10`), or `pgwd` if you built locally with `make docker-build`:
+Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v0.6.4`), or `pgwd` if you built locally with `make docker-build`:
 
 ```bash
 # Help (no DB needed)
 docker run --rm ghcr.io/hrodrig/pgwd:latest -h
 
-# Version (should show e.g. pgwd v0.5.10 (commit ..., built ...))
+# Version (should show e.g. pgwd v0.6.4 (branch develop, commit ..., built ...))
 docker run --rm ghcr.io/hrodrig/pgwd:latest --version
 
 # Expect "missing database URL" (validates startup path)
@@ -867,11 +937,11 @@ Restrict permissions if the config contains secrets: `sudo chmod 600 /etc/pgwd/p
 
 | Unit | Function | When to use |
 |------|----------|-------------|
-| `pgwd.service` | Daemon — runs continuously, checks every `interval` seconds from config | Continuous monitoring (e.g. every 60 s) |
+| `pgwd.service` | Daemon — runs continuously, checks every `interval` seconds from config | **Recommended.** Use for resolution alerts, /metrics, hysteresis, SQLite. |
 | `pgwd-once.service` | One-shot — runs pgwd once and exits. Used by the timer | Do not enable directly |
-| `pgwd.timer` | Schedule — triggers pgwd-once every 5 minutes (1 min after boot) | Cron-like: one check every 5 min |
+| `pgwd.timer` | Schedule — triggers pgwd-once every 5 minutes (1 min after boot) | Cron-like: one check per tick. No resolution, /metrics, or hysteresis. |
 
-**Two ways to run:** daemon (`pgwd.service`) or timer (`pgwd.timer`). See [contrib/systemd/README.md](contrib/systemd/README.md) for setup details.
+**Two ways to run:** daemon (`pgwd.service`) or timer (`pgwd.timer`). Prefer the daemon when you use sqlite, http, resolution notifications, or hysteresis. See [contrib/systemd/README.md](contrib/systemd/README.md) for setup details.
 
 **Boot ordering:** shipped units start **after `network.target`** (not `network-online.target`) so `systemctl enable --now` does not block on `systemd-networkd-wait-online` — a common issue on minimal or static-IP systems (e.g. Arch). If you need stricter “full Internet up” ordering, add a drop-in; see [contrib/systemd/README.md — Troubleshooting](contrib/systemd/README.md#troubleshooting).
 
@@ -919,6 +989,40 @@ To change the interval, edit the timer: `OnUnitActiveSec=5min` → e.g. `OnUnitA
 
 ---
 
+## Debian / Ubuntu
+
+Debian and Ubuntu use **systemd** and **`.deb`** packages. The same `.deb` works on both. Packages install the binary to `/usr/bin/pgwd`, config to `/etc/pgwd/pgwd.conf`, man page, and systemd units.
+
+**Install from GitHub** (replace version / arch):
+
+```bash
+wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_linux_amd64.deb
+sudo dpkg -i /tmp/pgwd.deb
+```
+
+**Local `.deb`** (e.g. from `make snapshot` → `dist/`):
+
+```bash
+sudo dpkg -i ./pgwd_v0.6.4_linux_amd64.deb
+```
+
+**Configure and test**
+
+```bash
+sudo nano /etc/pgwd/pgwd.conf   # client, db.url, notifications, interval, etc.
+pgwd -config /etc/pgwd/pgwd.conf -dry-run -interval 0
+sudo systemctl enable --now pgwd.service
+sudo systemctl status pgwd.service
+```
+
+**Timer** instead of daemon: `sudo systemctl enable --now pgwd.timer` (set `interval: 0` in config for one-shot per tick). See [systemd](#systemd) and [contrib/systemd/README.md](contrib/systemd/README.md).
+
+**Validated:** Debian 13 (Trixie) and Ubuntu 24.04 — install, `pgwd -dry-run`, daemon (systemd), notifications (Loki + Slack), timer, and clean uninstall.
+
+[↑ Back to top](#top)
+
+---
+
 ## AlmaLinux
 
 [AlmaLinux](https://almalinux.org/) is **RHEL-compatible**: **systemd**, **`dnf`**, and the same **`.rpm`** as Fedora, RHEL, Rocky Linux, and Oracle Linux. Packages install the binary to `/usr/bin/pgwd`, config to `/etc/pgwd/pgwd.conf`, man page, and units under `/usr/lib/systemd/system/` (paths may match your major version).
@@ -926,13 +1030,13 @@ To change the interval, edit the timer: `OnUnitActiveSec=5min` → e.g. `OnUnitA
 **Install from GitHub** (replace version / arch):
 
 ```bash
-sudo dnf install -y "https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.rpm"
+sudo dnf install -y "https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_linux_amd64.rpm"
 ```
 
 **Local `.rpm`** (e.g. from `make snapshot` → `dist/`, when a release is not on GitHub yet):
 
 ```bash
-sudo dnf install -y ./pgwd_v0.5.10_linux_amd64.rpm
+sudo dnf install -y ./pgwd_v0.6.4_linux_amd64.rpm
 ```
 
 **Configure and test**
@@ -950,14 +1054,48 @@ sudo systemctl status pgwd.service
 
 ---
 
+## OpenSUSE
+
+[OpenSUSE](https://www.opensuse.org/) uses **systemd** and **`zypper`**. The same **`.rpm`** release asset works, installed via `zypper` instead of `dnf`.
+
+**Install from GitHub** (replace version / arch):
+
+```bash
+sudo zypper --non-interactive install --allow-unsigned-rpm \
+  "https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_linux_amd64.rpm"
+```
+
+**Local `.rpm`** (e.g. from `make snapshot` → `dist/`):
+
+```bash
+sudo zypper --non-interactive install --allow-unsigned-rpm ./pgwd_v0.6.4_linux_amd64.rpm
+```
+
+**Configure and test**
+
+```bash
+sudo nano /etc/pgwd/pgwd.conf   # client, db.url, notifications, interval, etc.
+pgwd -config /etc/pgwd/pgwd.conf -dry-run -interval 0
+sudo systemctl enable --now pgwd.service
+sudo systemctl status pgwd.service
+```
+
+**Timer** instead of daemon: `sudo systemctl enable --now pgwd.timer` (set `interval: 0` in config for one-shot per tick). See [systemd](#systemd) and [contrib/systemd/README.md](contrib/systemd/README.md).
+
+**Validated:** OpenSUSE Leap / Tumbleweed — install, `pgwd -dry-run`, daemon (systemd), notifications (Loki + Slack), timer, and clean uninstall.
+
+[↑ Back to top](#top)
+
+---
+
 ## Arch Linux
 
 Arch Linux uses **systemd**. There is no official **`pacman`** package in the Arch repos yet; install the **Linux release tarball** from [Releases](https://github.com/hrodrig/pgwd/releases) or a community **[AUR](https://aur.archlinux.org/)** package (e.g. `pgwd-bin`) when one exists — verify the PKGBUILD and checksums.
 
-**Tarball install** — extract the archive, then install the binary and config layout (replace `v0.5.10` / `amd64` as needed):
+**Tarball install** — extract the archive, then install the binary and config layout (replace `v0.6.4` / `amd64` as needed):
 
 ```bash
-wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.tar.gz | tar -xzf -
+wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_linux_amd64.tar.gz | tar -xzf -
 sudo install -Dm755 pgwd /usr/local/bin/pgwd
 sudo ln -sf /usr/local/bin/pgwd /usr/bin/pgwd
 sudo install -Dm644 share/man/man1/pgwd.1 /usr/local/share/man/man1/pgwd.1
@@ -991,7 +1129,7 @@ Alpine uses **OpenRC** (rc.d), not systemd. Config: `/etc/pgwd/pgwd.conf`.
 **Install** — tar.gz (binario estático, musl-compatible):
 
 ```bash
-wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_linux_amd64.tar.gz | tar -xzf - -C /usr/local/bin
+wget -qO- https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_linux_amd64.tar.gz | tar -xzf - -C /usr/local/bin
 # arm64: replace amd64 with arm64
 ```
 
@@ -1027,7 +1165,7 @@ OpenBSD uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-ku
 **Install** — tarball includes binary, rc.d script, and config example:
 
 ```bash
-tar xzf pgwd_v0.5.10_openbsd_amd64.tar.gz
+tar xzf pgwd_v0.6.4_openbsd_amd64.tar.gz
 doas install -m755 pgwd /usr/local/bin/
 doas install -m555 share/openbsd/rc.d/pgwd /etc/rc.d/pgwd
 doas mkdir -p /etc/pgwd
@@ -1065,7 +1203,7 @@ make install
 **Install from tarball** (or use the [one-liner](#install) which works on FreeBSD and installs only the binary):
 
 ```bash
-fetch -o /tmp/pgwd.tgz https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_freebsd_amd64.tar.gz
+fetch -o /tmp/pgwd.tgz https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_freebsd_amd64.tar.gz
 tar -xzf /tmp/pgwd.tgz -C /tmp
 sudo install -m755 /tmp/pgwd /usr/local/bin/
 sudo mkdir -p /usr/local/etc/pgwd
@@ -1094,7 +1232,7 @@ NetBSD uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-kub
 **Install** — tarball includes binary, rc.d script, and config example:
 
 ```bash
-tar xzf pgwd_v0.5.10_netbsd_amd64.tar.gz
+tar xzf pgwd_v0.6.4_netbsd_amd64.tar.gz
 install -m755 pgwd /usr/local/bin/
 install -m555 share/netbsd/rc.d/pgwd /etc/rc.d/pgwd
 mkdir -p /etc/pgwd
@@ -1117,7 +1255,7 @@ See [contrib/netbsd/README.md](contrib/netbsd/README.md) for details.
 **Install** — tarball includes binary, rc.d script, and config example:
 
 ```bash
-tar xzf pgwd_v0.5.10_dragonfly_amd64.tar.gz
+tar xzf pgwd_v0.6.4_dragonfly_amd64.tar.gz
 install -m755 pgwd /usr/local/bin/
 install -m555 share/dragonfly/rc.d/pgwd /etc/rc.d/pgwd
 mkdir -p /etc/pgwd
@@ -1142,7 +1280,7 @@ See [contrib/dragonflybsd/README.md](contrib/dragonflybsd/README.md) for details
 **Install** — tarball includes binary, SMF manifest, method script, and config example:
 
 ```bash
-curl -L -o /tmp/pgwd.tar.gz "https://github.com/hrodrig/pgwd/releases/download/v0.5.10/pgwd_v0.5.10_solaris_amd64.tar.gz"
+curl -L -o /tmp/pgwd.tar.gz "https://github.com/hrodrig/pgwd/releases/download/v0.6.4/pgwd_v0.6.4_solaris_amd64.tar.gz"
 cd /tmp && tar xzf pgwd.tar.gz
 
 pfexec mkdir -p /usr/local/bin /lib/svc/manifest/site /etc/pgwd
@@ -1171,8 +1309,9 @@ Target **v1.0.0** by early July.
 |---------|--------|-------|
 | **0.4.0** | Mar 2026 ✅ | Loki auth (-notifications-loki-org-id, -notifications-loki-bearer-token), kube-loki, Grafana org ID docs, notification sent log. |
 | **0.5.0** | Mar 2026 ✅ | Loki database/cluster labels and log line, Grafana alert docs, security hardening (zlib, compose, k8s). |
-| **0.6.0** | May | **CSV metrics** — save time series to file. |
-| **0.7.0** | May–Jun | **DB metrics** — save to database (PostgreSQL/TimescaleDB). Last 0.x before 1.0. |
+| **0.6.0** | Apr 2026 ✅ | **CSV export** — dump persisted metrics via `-export-metrics-format csv` / `metricsstore` (SQLite). Plus daemon/multi-DB, SQLite store, HTTP `/metrics`, Helm chart moved to pgwd-selfhosted, pgx security updates, Ansible platform tests, and more (see CHANGELOG). |
+| **0.6.4** | May 2026 ✅ | **PostgreSQL/MySQL metrics store** (`metrics_store.driver` / `dsn`), shared **`MetricsStorer`** interface, CSV export for SQL backends. See CHANGELOG. |
+| **0.7.0** | May–Jun | **Extended metrics** — TimescaleDB or additional persistence options. Last 0.x before 1.0. |
 | **1.0.0** | Early Jul | **Breaking:** remove threshold-total and threshold-active. Stable API. Criteria: 100+ tests, logo, deprecations removed. |
 
 [↑ Back to top](#top)

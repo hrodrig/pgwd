@@ -13,29 +13,45 @@ pgwd sends logs to Loki's `/loki/api/v1/push` API. Each notification is one log 
 | `app`       | yes            | Always `pgwd`                                    |
 | `threshold` | yes            | `test`, `total`, `active`, `idle`, `stale`, `connect_failure`, `too_many_clients` |
 | `level`     | yes            | Severity: `attention`, `alert`, or `danger`        |
+| `client`    | when set       | Monitor instance name (`-client` / config) — identifies which pgwd sent the alert |
 | `namespace` | when K8s       | Kubernetes namespace (e.g. `mynamespace`)       |
 | `database`  | when set       | Database name from connection URL                |
 | `cluster`   | when set       | Cluster name (from kubeconfig when using -kube-postgres)     |
 
 Additional labels from `-notifications-loki-labels` (e.g. `env=prod`) are also included.
 
+**Pipeline-added labels:** If pgwd runs in Kubernetes or behind Promtail/Grafana Agent, you may also see `service_name`, `namespace`, or `detected_level` — these come from the collection pipeline, not from pgwd.
+
 ### Log line format
 
 ```bash
-pgwd [cluster=<Cluster>] [database=<Database>]: <Message> | total=<Total> active=<Active> idle=<Idle> max_connections=<Max> [suffix]
+pgwd [cluster=<Cluster>] [database=<Database>] [client=<Client>]: <Message> | total=<Total> active=<Active> idle=<Idle> max_connections=<Max> [suffix]
 ```
 
-Example:
+When neither cluster, database, nor client is set:
 
 ```bash
-pgwd [cluster=prod] [database=myapp]: Test notification — delivery check (force-notification). | total=33 active=1 idle=32 max_connections=2048 (delivery check)
+pgwd: <Message> | total=<Total> active=<Active> idle=<Idle> max_connections=<Max> [suffix]
+```
+
+Example (with context):
+
+```bash
+pgwd [cluster=prod] [database=myapp] [client=pgwd-vps-01]: Test notification — delivery check (force-notification). | total=33 active=1 idle=32 max_connections=2048 (delivery check)
+```
+
+Example (minimal, no context):
+
+```bash
+pgwd: Test notification — delivery check (force-notification). | total=1 active=1 idle=0 max_connections=2048 (delivery check)
 ```
 
 **Suffixes:**
 
-- `(delivery check)` — test notification
+- `(delivery check)` — test notification (`-force-notification`)
 - `(connection failed)` — connect_failure
 - `(too many clients — DB saturated)` — too_many_clients
+- `(test override)` — appended after `max_connections=N` when using `-test-max-connections`
 - `(limit <threshold>=<value>)` — threshold exceeded
 
 ## Level values
@@ -76,6 +92,12 @@ pgwd [cluster=prod] [database=myapp]: Test notification — delivery check (forc
 
 ```logql
 {app="pgwd", cluster="prod"}
+```
+
+### Specific client (monitor instance)
+
+```logql
+{app="pgwd", client="pgwd-vps-01"}
 ```
 
 ### Danger + specific database
@@ -120,12 +142,13 @@ For reference, the payload sent to Loki looks like:
         "app": "pgwd",
         "threshold": "total",
         "level": "danger",
+        "client": "pgwd-vps-01",
         "namespace": "mynamespace",
         "database": "myapp",
         "cluster": "prod"
       },
       "values": [
-        ["1731400000000000000", "pgwd [cluster=prod] [database=myapp]: Total connections 95 >= 95 | total=95 active=10 idle=85 max_connections=100 (limit total=95)"]
+        ["1731400000000000000", "pgwd [cluster=prod] [database=myapp] [client=pgwd-vps-01]: Total connections 95 >= 95 | total=95 active=10 idle=85 max_connections=100 (limit total=95)"]
       ]
     }
   ]

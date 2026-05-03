@@ -154,12 +154,14 @@ func eventLevel(ev Event) string {
 	return thresholdToLevel(ev.Threshold)
 }
 
-// thresholdToLevel maps threshold to severity level for Loki labels (attention, alert, danger).
+// thresholdToLevel maps threshold to severity level for Loki labels (attention, alert, danger, ok).
 func thresholdToLevel(threshold string) string {
 	switch threshold {
 	case "too_many_clients", "connect_failure":
 		return "danger"
-	case "total", "active", "idle", "stale":
+	case "resolution":
+		return "ok"
+	case "total", "active", "idle", "stale", "long_query":
 		return "attention"
 	case "test":
 		return "attention"

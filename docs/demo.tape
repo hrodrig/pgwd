@@ -1,6 +1,7 @@
-# pgwd terminal demo — run from repository root: vhs docs/demo.tape
-# Requires: pgwd on PATH (e.g. make build && export PATH="$PWD:$PATH")
-# Recorded output reflects current binary (version from VERSION file when built with make build).
+# pgwd terminal demo — from repository root, after installing pgwd on PATH:
+#   make install && bash -c "vhs docs/demo.tape"
+# Use bash -c (not bare `vhs` from zsh) so the recorder does not inherit zsh/Oh My Zsh prompts.
+# Recorded output reflects the binary built with VERSION via make install / make build.
 
 Output docs/demo.gif
 

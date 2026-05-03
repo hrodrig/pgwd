@@ -1,5 +1,6 @@
 # Postgres for local testing and integration tests (PGWD_TEST_DB_URL).
 # Optional: override max_connections and number of client containers.
+# Multi-DB E2E: postgres (pgwd), postgres2 (analytics), postgres3 (replica).
 #
 # Usage (from repo root):
 #   docker compose -f testing/compose.yaml up -d
@@ -50,3 +51,38 @@ services:
     command: ["sh", "-c", "while true; do psql -c 'SELECT pg_sleep(3600)'; done"]
     mem_limit: 64m
     cpus: 0.25
+
+  # Second and third Postgres for multi-database E2E (databases: in config).
+  postgres2:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pgwd
+      POSTGRES_PASSWORD: pgwd
+      POSTGRES_DB: analytics
+    ports:
+      - "5433:5432"
+    command: ["postgres", "-c", "max_connections=${MAX_CONNECTIONS:-20}"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pgwd -d analytics"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+    mem_limit: 256m
+    cpus: 0.5
+
+  postgres3:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: pgwd
+      POSTGRES_PASSWORD: pgwd
+      POSTGRES_DB: replica
+    ports:
+      - "5434:5432"
+    command: ["postgres", "-c", "max_connections=${MAX_CONNECTIONS:-20}"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pgwd -d replica"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+    mem_limit: 256m
+    cpus: 0.5

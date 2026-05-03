@@ -7,16 +7,21 @@ sequenceDiagram
     participant User
     participant pgwd
     participant Postgres
-    participant Slack as Slack/Loki
+    participant Slack
+    participant Loki
 
     User->>pgwd: pgwd -db-url ... -notifications-slack-webhook ... (or -notifications-loki-url)
     Note over pgwd: validations, build senders (before Pool)
     pgwd->>Postgres: Pool(ctx, dbURL)
     Postgres-->>pgwd: error (e.g. connection refused, timeout)
-    pgwd->>pgwd: build connect_failure event (message + run context (cluster, client, namespace, database when available))
-    loop for each sender (Slack, Loki)
+    pgwd->>pgwd: build connect_failure event (message + run context)
+    alt Slack configured
         pgwd->>Slack: Send(ctx, connect_failure event)
-        Slack-->>pgwd: (ok or error log)
+        Slack-->>pgwd: ok or error log
+    end
+    alt Loki configured
+        pgwd->>Loki: Send(ctx, connect_failure event)
+        Loki-->>pgwd: ok or error log
     end
     opt at least one Send ok
         pgwd->>pgwd: log Notification sent

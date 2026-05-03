@@ -6,6 +6,68 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+## [0.6.4] - 2026-05-03
+
+### Added
+
+- **Metrics store (PostgreSQL / MySQL):** Optional **`metrics_store.driver`** + **`metrics_store.dsn`** persist check history like SQLite (FIFO cap **`sqlite.max_metrics`** applies to all backends). Implementation in **`internal/store/sqlstore.go`** (pgx stdlib + **`github.com/go-sql-driver/mysql`**). Daemon, **`/metrics`**, hysteresis, and CSV export use **`internal/metricsstore`** and the **`store.MetricsStorer`** interface.
+- **Long-running query alerts:** Optional **`db.long_query_min_seconds`** (active queries with `now() - query_start` exceeding N seconds), **`db.long_query_cooldown_seconds`** (minimum interval between notifications per target; default 3600 when min is set), and **`db.long_query_min_count`**. Requires a **metrics store** (SQLite or SQL) to persist cooldown timestamps. Hysteresis does not gate `long_query` repeats; cooldown suppresses spam while the same condition persists.
+
+### Changed
+
+- **`Makefile` / CI lint:** **`make lint`** and the lint job run **gofmt -s**, **`go vet ./...`**, and **gocyclo** (complexity ≤ 14). **`make help`** prints current **`VERSION`** / ldflags version / branch; **`release-check`** requires **`VERSION`** semver; **`docker-scan`** Grype on PATH or **`anchore/grype`** container (`GRYPE_FAIL_ON`, default `high`); **`make cover`** and **`make tools`**.
+- **`make cover-integration`:** Postgres + Loki via compose, then **`go test ./...`** with coverage → **`coverage-integration.out`**. Compose up/down refactored into **`integration-compose-up`** / **`integration-compose-down`** (shared with **`test-integration`**).
+- **OpenBSD port:** Removed **`contrib/openbsd/port/distinfo`** from the repo (checksums require published tarballs). Generate **`distinfo`** with **`make makesum`** in the ports tree after **`make fetch`**; **`contrib/openbsd/port/distinfo`** is **`.gitignore`**-d. **`contrib/openbsd/port/README.md`** documents this and optional operator copies in **pgwd-selfhosted**.
+- **`make snapshot`:** Does not require Docker. GoReleaser **`--snapshot`** skips **`dockers_v2`** (see **`.goreleaser.yaml`**). **`make release`** / **`release-check`** still use Docker where applicable.
+- **`make snapshot` versioning:** Snapshot version now comes from **`VERSION`** (`<VERSION>-next`) instead of reachable git tags, so `develop` snapshots remain predictable without merging `main`.
+- **Snapshot artifact names:** GoReleaser archive/package filenames now use snapshot version (`v<version>-next`) during **`--snapshot`** instead of the last reachable git tag, keeping `dist/` names aligned with `metadata.json`.
+- **`make dist-freebsd`:** New helper target builds the FreeBSD port distfile tarball only (name/layout expected by `contrib/freebsd/Makefile`) using `VERSION`, avoiding the full multi-platform snapshot build when validating the port locally.
+- **`make dist-openbsd`:** New helper target builds the OpenBSD port distfile tarball only (name/layout expected by `contrib/openbsd/port/Makefile`) using `VERSION` and `OPENBSD_ARCH` (default `amd64`).
+- **Platform tests package source selection:** `testing/platforms` now supports explicit `pgwd_package_source` mode (`auto`, `release`, `local`) so runs can force published artifacts or local files without editing role logic.
+- **Root build on FreeBSD:** Real rules live in **`GNUmakefile`** (GNU Make). Root **`Makefile`** is a **BSD Make** stub that forwards to **`gmake`** (`pkg install gmake`); uses **`all`** + **`.DEFAULT`** with **`gmake $@`** (not **`$(.MAKE.CMDGOALS)`**, often empty when **`.DEFAULT`** runs). **`.gitignore`** whitelists **`GNUmakefile`**.
+- **`pgwd -version` / `--version`:** Output now includes the **git branch** (from build-time ldflags), e.g. `pgwd v0.6.4 (branch develop, commit …, built …)`. Same **branch** field appears in the startup log banner. **Makefile**, **Dockerfile**, and **GoReleaser** inject **`main.Branch`**; plain `go build` without flags shows **`branch unknown`**.
+
+### Documentation
+
+- **Multi-database:** Document limitations — **`databases:`** cannot be combined with **`-kube-postgres`**; SQLite hysteresis/history is keyed by **`(client, cluster, database)`** (not URL host), so use a **unique `client` per entry** when the same DB name appears on different hosts (README, `AGENTS.md`, `contrib/pgwd.conf.example`).
+- **Upgrade guide:** **`docs/UPGRADE-0.5-to-0.6.md`** — operator checklist from **0.5.10** (or earlier **0.5.x**) to **0.6.x**, with links to README breaking-changes table, CHANGELOG, Helm move, and optional metrics/HTTP features. Linked from **`docs/README.md`** and the README breaking-changes section.
+- **FreeBSD (build from source):** **`README.md`** and **`AGENTS.md`** — install **`gmake`** and **`go`** on **`PATH`** (`pkg install gmake`, `pkg install go`; **`go`** usually under **`/usr/local/bin`**).
+
+### Security
+
+- **Dependencies (indirect):** `github.com/moby/spdystream` **v0.5.0 → v0.5.1** (GHSA-pc3f-x583-g7j2); `filippo.io/edwards25519` **v1.1.0 → v1.1.1** (GHSA-fw7p-63qq-7hpr). Unblocks **`make docker-scan`** at default **`GRYPE_FAIL_ON=high`** (Alpine **busybox** CVE-2025-60876 may still report **Medium** until upstream **apk** packages catch up).
+
+### Fixed
+
+- **`testing/scripts/test-e2e-kube.sh`:** **`kind` cluster leak** — `trap` was replaced by **`trap kill_pf EXIT`** and later **`trap - EXIT`**, so **`kind delete cluster`** never ran on success and the next **`make test-e2e-kube` / `release-check`** failed with “node(s) already exist”. Single **`EXIT`** trap now stops port-forwards and always deletes the cluster; **`cleanup_kind`** also runs once before **`kind create cluster`** for idempotent runs.
+
+## [0.6.0] - 2026-04-26
+
+### Added
+
+- **CSV export (metrics store):** **`-export-metrics-format csv`** + **`-export-metrics-destination`** / **`PGWD_EXPORT_METRICS_*`** (env when no config file) reads persisted metrics through **`internal/metricsstore`** (SQLite file via **`sqlite.path`**; **PostgreSQL/MySQL** metrics persistence is **not implemented** — **`metrics_store.driver`** / **`metrics_store.dsn`** reserved, **`ErrSQLMetricsStoreNotImplemented`**). Writes an **RFC4180** CSV (`id`, `ts_ms`, `ts_utc`, labels, counts, state, threshold), then **exits**. SQLite uses a **read-only** open (safe alongside the daemon). **`internal/metricsexport`** formats the sink (CSV now).
+
+### Security
+
+- **Dependencies:** `github.com/jackc/pgx/v5` updated to **v5.9.2** (memory-safety advisory, Dependabot #4 — fixed from **v5.9.0**; GHSA-j88v-2chj-qfwx / CVE-2026-41889 placeholder confusion with dollar-quoted literals, Dependabot #5 — requires **v5.9.2**).
+
+### Removed
+
+- **Helm:** In-repo chart under `contrib/helm/pgwd/` and OCI chart push from this repository’s release workflow / `make release-helm`. The maintained chart is **[pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted)** (`run/kubernetes/helm/pgwd/`). See **`contrib/HELM.md`**.
+
+### Added (highlights since 0.5.10)
+
+- **Makefile:** **`docker-buildx-amd64`** / **`docker-buildx-amd64-push`** — **linux/amd64** image build and push (e.g. from macOS ARM).
+- **Daemon mode** with **resolution notifications**, **SQLite** metrics store, **HTTP** `/healthz` and Prometheus **`/metrics`**, **hysteresis** (`confirm_alert` / `confirm_ok`), **`log_level`** (info/debug).
+- **Multi-database** config (`databases:`), **`-db-url`** one-shot override, **client-go** kube port-forward (optional **`-kube-postgres`** / **`-kube-loki`** without shelling to kubectl for the data path).
+- **Packages / layout:** `internal/checker`, `internal/validator`, `internal/httpsrv`, `internal/store`; expanded tests and **e2e kube** (multi-Postgres compose).
+- **Ansible** **`testing/platforms/`** — automated install/daemon/notify/timer/uninstall across Linux and BSD (Phase 1); **NetBSD** and **DragonFly** vars; **OpenBSD** port scaffolding and **FreeBSD** port release docs.
+
+### Changed
+
+- **Config file** layout and **CLI/env** names for DB thresholds and notifications (see README breaking-changes table). **`client`** required.
+- **CI / release:** workflow and image metadata updates; Helm chart publishing removed from app repo (see Removed).
+
 ## [0.5.10] - 2026-03-24
 
 ### Added
@@ -272,7 +334,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.5.8...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.6.4...HEAD
+[0.6.4]: https://github.com/hrodrig/pgwd/compare/v0.6.0...v0.6.4
+[0.6.0]: https://github.com/hrodrig/pgwd/compare/v0.5.10...v0.6.0
+[0.5.10]: https://github.com/hrodrig/pgwd/compare/v0.5.8...v0.5.10
 [0.5.8]: https://github.com/hrodrig/pgwd/compare/v0.5.7...v0.5.8
 [0.5.7]: https://github.com/hrodrig/pgwd/compare/v0.5.4...v0.5.7
 [0.5.4]: https://github.com/hrodrig/pgwd/compare/v0.5.0...v0.5.4

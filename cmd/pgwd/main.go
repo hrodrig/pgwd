@@ -12,15 +12,22 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/hrodrig/pgwd/internal/checker"
 	"github.com/hrodrig/pgwd/internal/config"
+	"github.com/hrodrig/pgwd/internal/httpsrv"
 	"github.com/hrodrig/pgwd/internal/kube"
+	"github.com/hrodrig/pgwd/internal/metricsexport"
+	"github.com/hrodrig/pgwd/internal/metricsstore"
 	"github.com/hrodrig/pgwd/internal/notify"
 	"github.com/hrodrig/pgwd/internal/openbsd"
 	"github.com/hrodrig/pgwd/internal/postgres"
+	"github.com/hrodrig/pgwd/internal/store"
+	"github.com/hrodrig/pgwd/internal/validator"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -29,6 +36,7 @@ var (
 	Version   string = "dev"
 	Commit    string = ""
 	BuildDate string = ""
+	Branch    string = ""
 )
 
 func printVersion() {
@@ -40,7 +48,11 @@ func printVersion() {
 	if built == "" {
 		built = "unknown"
 	}
-	fmt.Printf("pgwd %s (commit %s, built %s)\n", Version, commit, built)
+	branch := Branch
+	if branch == "" {
+		branch = "unknown"
+	}
+	fmt.Printf("pgwd %s (branch %s, commit %s, built %s)\n", Version, branch, commit, built)
 }
 
 // handleVersion checks os.Args for "version"/"-version"/"--version"; prints version and exits if matched.
@@ -61,6 +73,9 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.IntVar(&cfg.ThresholdIdle, "db-threshold-idle", cfg.ThresholdIdle, "Alert when idle connections >= N (PGWD_DB_THRESHOLD_IDLE)")
 	flag.IntVar(&cfg.StaleAge, "db-stale-age", cfg.StaleAge, "Consider connection stale if open longer than N seconds (PGWD_DB_STALE_AGE)")
 	flag.IntVar(&cfg.ThresholdStale, "db-threshold-stale", cfg.ThresholdStale, "Alert when stale connections (open > stale-age) >= N (PGWD_DB_THRESHOLD_STALE)")
+	flag.IntVar(&cfg.LongQueryMinSeconds, "db-long-query-min-seconds", cfg.LongQueryMinSeconds, "Alert on active queries running longer than N seconds; 0=off. Requires metrics store; uses cooldown (PGWD_DB_LONG_QUERY_MIN_SECONDS)")
+	flag.IntVar(&cfg.LongQueryCooldownSeconds, "db-long-query-cooldown-seconds", cfg.LongQueryCooldownSeconds, "Min seconds between long_query notifications per target; default 3600 when min-seconds set (PGWD_DB_LONG_QUERY_COOLDOWN_SECONDS)")
+	flag.IntVar(&cfg.LongQueryMinCount, "db-long-query-min-count", cfg.LongQueryMinCount, "Alert when count of long-running queries >= N; default 1 (PGWD_DB_LONG_QUERY_MIN_COUNT)")
 	flag.StringVar(&cfg.SlackWebhook, "notifications-slack-webhook", cfg.SlackWebhook, "Slack Incoming Webhook URL (PGWD_NOTIFICATIONS_SLACK_WEBHOOK)")
 	flag.StringVar(&cfg.LokiURL, "notifications-loki-url", cfg.LokiURL, "Loki push API URL, e.g. http://localhost:3100/loki/api/v1/push (PGWD_NOTIFICATIONS_LOKI_URL)")
 	flag.StringVar(&cfg.LokiLabels, "notifications-loki-labels", cfg.LokiLabels, "Loki labels, e.g. app=pgwd,env=prod (PGWD_NOTIFICATIONS_LOKI_LABELS)")
@@ -71,8 +86,8 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.BoolVar(&cfg.ForceNotification, "force-notification", cfg.ForceNotification, "Always send a test notification to validate delivery/format (PGWD_FORCE_NOTIFICATION)")
 	flag.IntVar(&cfg.DefaultThresholdPercent, "db-default-threshold-percent", cfg.DefaultThresholdPercent, "When one of total/active is 0, set it to this % of max_connections (1-100, default 80) (PGWD_DB_DEFAULT_THRESHOLD_PERCENT)")
 	flag.StringVar(&cfg.ThresholdLevels, "db-threshold-levels", cfg.ThresholdLevels, "When both total and active are 0: comma-separated percentages for 3-tier alerts, e.g. 75,85,95 (attention/alert/danger). Only highest level fires. (PGWD_DB_THRESHOLD_LEVELS)")
-	flag.StringVar(&cfg.KubePostgres, "kube-postgres", cfg.KubePostgres, "Connect via kubectl port-forward: namespace/type/name (e.g. default/svc/postgres) (PGWD_KUBE_POSTGRES)")
-	flag.StringVar(&cfg.KubeLoki, "kube-loki", cfg.KubeLoki, "Connect to Loki via kubectl port-forward when Loki is inside the cluster: namespace/type/name (e.g. monitoring/svc/loki) (PGWD_KUBE_LOKI)")
+	flag.StringVar(&cfg.KubePostgres, "kube-postgres", cfg.KubePostgres, "Connect via port-forward (client-go): namespace/type/name (e.g. default/svc/postgres) (PGWD_KUBE_POSTGRES)")
+	flag.StringVar(&cfg.KubeLoki, "kube-loki", cfg.KubeLoki, "Connect to Loki via port-forward when Loki is inside the cluster: namespace/type/name (e.g. monitoring/svc/loki) (PGWD_KUBE_LOKI)")
 	flag.StringVar(&cfg.KubeContext, "kube-context", cfg.KubeContext, "Kubectl context to use (empty = current context) (PGWD_KUBE_CONTEXT)")
 	flag.IntVar(&cfg.KubeLocalPort, "kube-local-port", cfg.KubeLocalPort, "Local port for kube port-forward (default 5432) (PGWD_KUBE_LOCAL_PORT)")
 	flag.IntVar(&cfg.KubeLokiLocalPort, "kube-loki-local-port", cfg.KubeLokiLocalPort, "Local port for Loki port-forward (default 3100) (PGWD_KUBE_LOKI_LOCAL_PORT)")
@@ -82,73 +97,33 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.StringVar(&cfg.Client, "client", cfg.Client, "Client name for this monitor instance — REQUIRED (PGWD_CLIENT); identifies which monitor sent the alert")
 	flag.BoolVar(&cfg.NotifyOnConnectFailure, "notify-on-connect-failure", cfg.NotifyOnConnectFailure, "Send an alert to notifiers when Postgres connection fails (infrastructure alert) (PGWD_NOTIFY_ON_CONNECT_FAILURE)")
 	flag.IntVar(&cfg.TestMaxConnections, "test-max-connections", cfg.TestMaxConnections, "Override server max_connections for defaults and display (for testing alerts; 0 = use server) (PGWD_TEST_MAX_CONNECTIONS)")
-	flag.BoolVar(&cfg.ValidateK8sAccess, "validate-k8s-access", cfg.ValidateK8sAccess, "Validate kubectl connectivity and list pods, then exit. Use -kube-context to select context. (PGWD_VALIDATE_K8S_ACCESS)")
+	flag.BoolVar(&cfg.ValidateK8sAccess, "validate-k8s-access", cfg.ValidateK8sAccess, "Validate cluster connectivity and list pods, then exit. Use -kube-context to select context. (PGWD_VALIDATE_K8S_ACCESS)")
+	flag.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "Log level: info (default) or debug. Debug = verbose dry-run stats every interval (PGWD_LOG_LEVEL)")
+	flag.StringVar(&cfg.ExportMetricsFormat, "export-metrics-format", cfg.ExportMetricsFormat, "Export persisted metrics from the configured metrics store; format: csv (file). Then exit (PGWD_EXPORT_METRICS_FORMAT)")
+	flag.StringVar(&cfg.ExportMetricsDestination, "export-metrics-destination", cfg.ExportMetricsDestination, "Output path for -export-metrics-format csv (PGWD_EXPORT_METRICS_DESTINATION)")
 	flag.Parse()
 	return *showVersionFlag
 }
 
-func warnDeprecatedThresholds(cfg *config.Config) {
-	if cfg.ThresholdTotal > 0 || cfg.ThresholdActive > 0 {
-		fmt.Fprintln(os.Stderr, "pgwd: -db-threshold-total and -db-threshold-active are deprecated and will be removed in v1.0.0; use -db-threshold-levels instead (e.g. -db-threshold-levels 75,85,95)")
-	}
-}
-
 func validateConfig(cfg *config.Config) {
-	validateDBURL(cfg)
-	validateClient(cfg)
-	warnDeprecatedThresholds(cfg)
-	validateStale(cfg)
-	validateNotifiers(cfg)
-	validateKubePostgres(cfg)
-	validateKubeLoki(cfg)
-}
-
-func validateClient(cfg *config.Config) {
-	if cfg.Client == "" {
-		log.Fatal("pgwd: client is required: set client in config or -client (identifies this monitor instance)")
+	if err := validator.Validate(cfg); err != nil {
+		log.Fatal(err)
 	}
 }
 
-func validateDBURL(cfg *config.Config) {
-	if cfg.DBURL == "" {
-		log.Fatal("pgwd: missing database URL: set PGWD_DB_URL or -db-url")
+func exportMetricsAndExit(cfg *config.Config) {
+	format := strings.TrimSpace(cfg.ExportMetricsFormat)
+	dest := strings.TrimSpace(cfg.ExportMetricsDestination)
+	if format == "" || dest == "" {
+		log.Fatal("pgwd: -export-metrics-format and -export-metrics-destination must both be set (e.g. -export-metrics-format csv -export-metrics-destination /path/out.csv)")
 	}
-}
-
-func validateStale(cfg *config.Config) {
-	if cfg.ThresholdStale > 0 && cfg.StaleAge <= 0 {
-		log.Fatal("pgwd: when using -db-threshold-stale, -db-stale-age must be > 0 (PGWD_DB_STALE_AGE)")
+	ctx := context.Background()
+	n, err := metricsexport.Export(ctx, format, dest, cfg)
+	if err != nil {
+		log.Fatalf("pgwd: metrics export: %v", err)
 	}
-}
-
-func validateNotifiers(cfg *config.Config) {
-	if !cfg.HasAnyNotifier() && !cfg.DryRun {
-		log.Fatal("pgwd: no notifier configured: set PGWD_NOTIFICATIONS_SLACK_WEBHOOK and/or PGWD_NOTIFICATIONS_LOKI_URL (or -notifications-slack-webhook / -notifications-loki-url), or use -dry-run")
-	}
-	if cfg.ForceNotification && !cfg.HasAnyNotifier() {
-		log.Fatal("pgwd: force-notification requires at least one notifier (-notifications-slack-webhook or -notifications-loki-url)")
-	}
-	if cfg.NotifyOnConnectFailure && !cfg.HasAnyNotifier() {
-		log.Fatal("pgwd: notify-on-connect-failure requires at least one notifier (-notifications-slack-webhook or -notifications-loki-url)")
-	}
-}
-
-func validateKubePostgres(cfg *config.Config) {
-	if cfg.KubePostgres != "" && cfg.DBURL == "" {
-		log.Fatal("pgwd: kube-postgres requires PGWD_DB_URL or -db-url (use host localhost and the same port as -kube-local-port)")
-	}
-}
-
-func validateKubeLoki(cfg *config.Config) {
-	if cfg.KubeLoki != "" && cfg.LokiURL != "" {
-		log.Fatal("pgwd: use -kube-loki OR -notifications-loki-url, not both (-notifications-loki-url for exposed Loki, -kube-loki when Loki is inside the cluster)")
-	}
-	if cfg.KubeLoki != "" && (cfg.KubeLokiLocalPort < 1 || cfg.KubeLokiLocalPort > 65535) {
-		log.Fatal("pgwd: kube-loki-local-port must be between 1 and 65535")
-	}
-	if cfg.KubeLoki != "" && (cfg.KubeLokiRemotePort < 1 || cfg.KubeLokiRemotePort > 65535) {
-		log.Fatal("pgwd: kube-loki-remote-port must be between 1 and 65535")
-	}
+	log.Printf("pgwd: exported %d metrics row(s) via format=%q to %s", n, format, dest)
+	os.Exit(0)
 }
 
 // setupKube starts port-forward and updates cfg.DBURL when -kube-postgres is set.
@@ -211,7 +186,7 @@ func setupKubeLoki(ctx context.Context, cfg *config.Config) (cleanup func()) {
 	return cleanup
 }
 
-func runContextStrings(ctx context.Context, cfg *config.Config) (cluster, client, namespace, database string) {
+func runContextStrings(ctx context.Context, cfg *config.Config, dbURL string) (cluster, client, namespace, database string) {
 	if cfg.KubePostgres != "" {
 		cluster = kube.ClusterName(ctx, cfg.KubeContext)
 	}
@@ -221,7 +196,7 @@ func runContextStrings(ctx context.Context, cfg *config.Config) (cluster, client
 			namespace = ns
 		}
 	}
-	if u, err := url.Parse(cfg.DBURL); err == nil && u.Path != "" {
+	if u, err := url.Parse(dbURL); err == nil && u.Path != "" {
 		database = strings.TrimPrefix(strings.TrimSpace(u.Path), "/")
 	}
 	return cluster, client, namespace, database
@@ -283,171 +258,34 @@ func applyThresholdDefaults(ctx context.Context, pool *pgxpool.Pool, cfg *config
 		maxConn = cfg.TestMaxConnections
 	}
 	if !cfg.UsesLevelMode() && maxConn > 0 {
-		applySingleThresholdDefaults(cfg, maxConn)
+		checker.ApplySingleThresholdDefaults(cfg, maxConn)
 	}
-	if err := validateThresholdConfig(cfg, maxConn, maxConnErr); err != nil {
+	if err := checker.ValidateThresholdConfig(cfg, maxConn, maxConnErr); err != nil {
 		return err
 	}
 	return nil
 }
 
-func applySingleThresholdDefaults(cfg *config.Config, maxConn int) {
-	percent := cfg.DefaultThresholdPercent
-	if percent < 1 {
-		percent = 1
-	}
-	if percent > 100 {
-		percent = 100
-	}
-	threshold := (maxConn * percent) / 100
-	if threshold < 1 {
-		threshold = 1
-	}
-	if cfg.ThresholdTotal == 0 {
-		cfg.ThresholdTotal = threshold
-	}
-	if cfg.ThresholdActive == 0 {
-		cfg.ThresholdActive = threshold
-	}
-}
-
-func validateThresholdConfig(cfg *config.Config, maxConn int, maxConnErr error) error {
-	if cfg.UsesLevelMode() && maxConn == 0 {
-		if maxConnErr != nil {
-			return fmt.Errorf("threshold-levels mode requires max_connections; could not read from server: %w", maxConnErr)
-		}
-		return fmt.Errorf("threshold-levels mode requires max_connections; server returned 0")
-	}
-	if cfg.HasAnyThreshold() || cfg.DryRun || cfg.ForceNotification {
-		return nil
-	}
-	if maxConnErr != nil {
-		return fmt.Errorf("no thresholds set and could not default from server (total/active default to default-threshold-percent of max_connections). Set -threshold-total and/or -threshold-active, or use -dry-run or -force-notification: %w", maxConnErr)
-	}
-	if maxConn == 0 {
-		return fmt.Errorf("no thresholds set and could not default from server (server returned max_connections=0). Set -threshold-total and/or -threshold-active, or use -dry-run or -force-notification")
-	}
-	return fmt.Errorf("no thresholds set. Set -threshold-total and/or -threshold-active, or use -dry-run or -force-notification")
-}
-
-// levelFromPercent returns 1, 2, or 3 when percent >= levels[0], levels[1], levels[2]; 0 otherwise.
-func levelFromPercent(percent int, levels []int) int {
-	for i := len(levels) - 1; i >= 0; i-- {
-		if percent >= levels[i] {
-			return i + 1
-		}
-	}
-	return 0
-}
-
-func levelToLabel(level int) string {
-	switch level {
-	case 1:
-		return "attention"
-	case 2:
-		return "alert"
-	case 3, 4, 5:
-		return "danger"
-	default:
-		return "attention"
-	}
-}
-
-func title(s string) string {
-	if s == "" {
-		return s
-	}
-	return strings.ToUpper(s[:1]) + s[1:]
-}
-
-func baseEvent(stats postgres.ConnectionStats, maxConn int, override bool, cluster, client, ns, db string) notify.Event {
-	return notify.Event{
-		Stats:                    stats,
-		MaxConnections:           maxConn,
-		MaxConnectionsIsOverride: override,
-		Cluster:                  cluster,
-		Client:                   client,
-		Namespace:                ns,
-		Database:                 db,
-	}
-}
-
-func collectLevelModeEvent(ev notify.Event, cfg *config.Config, stats postgres.ConnectionStats, maxConn int) *notify.Event {
-	levels := config.ParseThresholdLevels(cfg.ThresholdLevels)
-	if len(levels) < 3 {
-		return nil
-	}
-	totalPercent := stats.Total * 100 / maxConn
-	activePercent := stats.Active * 100 / maxConn
-	totalLevel := levelFromPercent(totalPercent, levels)
-	activeLevel := levelFromPercent(activePercent, levels)
-	highestLevel := totalLevel
-	threshold := "total"
-	thresholdValue := 0
-	if activeLevel > totalLevel {
-		highestLevel = activeLevel
-		threshold = "active"
-		thresholdValue = (maxConn * levels[activeLevel-1]) / 100
-	} else if totalLevel > 0 {
-		thresholdValue = (maxConn * levels[totalLevel-1]) / 100
-	}
-	if highestLevel == 0 {
-		return nil
-	}
-	val := stats.Total
-	if threshold == "active" {
-		val = stats.Active
-	}
-	e := ev
-	e.Threshold = threshold
-	e.ThresholdValue = thresholdValue
-	e.Level = levelToLabel(highestLevel)
-	e.Message = fmt.Sprintf("%s connections %d >= %d (%d%% of max) — %s", title(threshold), val, thresholdValue, levels[highestLevel-1], e.Level)
-	return &e
-}
-
-func collectExplicitThresholdEvents(ev notify.Event, cfg *config.Config, stats postgres.ConnectionStats, maxConn int) []notify.Event {
-	var events []notify.Event
-	levels := config.ParseThresholdLevels(config.DefaultThresholdLevels)
-	addLevel := maxConn > 0 && len(levels) >= 3
-	if cfg.ThresholdTotal > 0 && stats.Total >= cfg.ThresholdTotal {
-		e := ev
-		e.Threshold = "total"
-		e.ThresholdValue = cfg.ThresholdTotal
-		e.Message = fmt.Sprintf("Total connections %d >= %d", stats.Total, cfg.ThresholdTotal)
-		if addLevel {
-			e.Level = levelToLabel(levelFromPercent(stats.Total*100/maxConn, levels))
-		}
-		events = append(events, e)
-	}
-	if cfg.ThresholdActive > 0 && stats.Active >= cfg.ThresholdActive {
-		e := ev
-		e.Threshold = "active"
-		e.ThresholdValue = cfg.ThresholdActive
-		e.Message = fmt.Sprintf("Active connections %d >= %d", stats.Active, cfg.ThresholdActive)
-		if addLevel {
-			e.Level = levelToLabel(levelFromPercent(stats.Active*100/maxConn, levels))
-		}
-		events = append(events, e)
-	}
-	return events
-}
-
 func collectEvents(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, stats postgres.ConnectionStats, maxConn int, cluster, client, ns, db string) []notify.Event {
 	var events []notify.Event
-	ev := baseEvent(stats, maxConn, cfg.TestMaxConnections > 0, cluster, client, ns, db)
+	ev := checker.BaseEvent(stats, maxConn, cfg.TestMaxConnections > 0, cluster, client, ns, db)
 
 	if cfg.ThresholdStale > 0 && cfg.StaleAge > 0 {
 		if e := collectStaleEvent(ctx, pool, cfg, ev); e != nil {
 			events = append(events, *e)
 		}
 	}
+	if cfg.LongQueryMinSeconds > 0 {
+		if e := collectLongQueryEvent(ctx, pool, cfg, ev); e != nil {
+			events = append(events, *e)
+		}
+	}
 	if cfg.UsesLevelMode() && maxConn > 0 {
-		if e := collectLevelModeEvent(ev, cfg, stats, maxConn); e != nil {
+		if e := checker.CollectLevelModeEvent(ev, cfg, stats, maxConn); e != nil {
 			events = append(events, *e)
 		}
 	} else {
-		events = append(events, collectExplicitThresholdEvents(ev, cfg, stats, maxConn)...)
+		events = append(events, checker.CollectExplicitThresholdEvents(ev, cfg, stats, maxConn)...)
 	}
 	if cfg.ThresholdIdle > 0 && stats.Idle >= cfg.ThresholdIdle {
 		e := ev
@@ -482,47 +320,229 @@ func collectStaleEvent(ctx context.Context, pool *pgxpool.Pool, cfg *config.Conf
 	return &e
 }
 
-func sendEvents(ctx context.Context, senders []notify.Sender, cfg *config.Config, events []notify.Event) {
+func collectLongQueryEvent(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, ev notify.Event) *notify.Event {
+	n, err := postgres.LongQueryCount(ctx, pool, cfg.LongQueryMinSeconds)
+	if err != nil {
+		log.Printf("long query count: %v", err)
+		return nil
+	}
+	if n < cfg.LongQueryMinCount {
+		return nil
+	}
+	e := ev
+	e.Threshold = "long_query"
+	e.ThresholdValue = cfg.LongQueryMinCount
+	e.Level = "attention"
+	e.Message = fmt.Sprintf("Long-running queries (active, runtime > %ds): %d >= %d", cfg.LongQueryMinSeconds, n, cfg.LongQueryMinCount)
+	return &e
+}
+
+// sendEvents delivers each event to all senders. Returns thresholds for which at least one send succeeded (dry-run: empty).
+func sendEvents(ctx context.Context, senders []notify.Sender, cfg *config.Config, events []notify.Event) map[string]bool {
+	sent := make(map[string]bool)
 	for _, ev := range events {
 		if cfg.DryRun {
 			log.Printf("[dry-run] would send: %s", ev.Message)
 			continue
 		}
-		sent := 0
+		n := 0
 		for _, s := range senders {
 			if err := s.Send(ctx, ev); err != nil {
 				log.Printf("notify: %v", err)
 			} else {
-				sent++
+				n++
 			}
 		}
-		if sent > 0 {
+		if n > 0 {
+			sent[ev.Threshold] = true
 			log.Printf("Notification sent: %s", ev.Message)
 		}
 	}
+	return sent
 }
 
-func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, senders []notify.Sender, cluster, client, ns, db string) func() {
+// runCheckResult is returned by doRunCheck for store integration.
+type runCheckResult struct {
+	Stats              postgres.ConnectionStats
+	MaxConn            int
+	Events             []notify.Event
+	StaleCount         int // from target StaleAge (for alerts)
+	StaleCountForStore int // from SqliteStaleAge if >0, else StaleCount (for store)
+}
+
+func doRunCheck(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, cluster, client, ns, db string) (runCheckResult, error) {
+	var res runCheckResult
+	stats, err := postgres.Stats(ctx, pool)
+	if err != nil {
+		return res, err
+	}
+	res.Stats = stats
+	res.MaxConn, _ = postgres.MaxConnections(ctx, pool)
+	if cfg.TestMaxConnections > 0 {
+		res.MaxConn = cfg.TestMaxConnections
+	}
+	if cfg.StaleAge > 0 {
+		res.StaleCount, _ = postgres.StaleCount(ctx, pool, cfg.StaleAge)
+	}
+	// Stale count for store: use sqlite.stale_age if set, else same as alerts
+	staleAgeForStore := cfg.SqliteStaleAge
+	if staleAgeForStore <= 0 {
+		staleAgeForStore = cfg.StaleAge
+	}
+	if staleAgeForStore > 0 {
+		res.StaleCountForStore, _ = postgres.StaleCount(ctx, pool, staleAgeForStore)
+	} else {
+		res.StaleCountForStore = res.StaleCount
+	}
+	res.Events = collectEvents(ctx, pool, cfg, stats, res.MaxConn, cluster, client, ns, db)
+	return res, nil
+}
+
+func applyHysteresisFilter(ctx context.Context, st store.MetricsStorer, cfg *config.Config, client, cluster, db, state string, events []notify.Event) []notify.Event {
+	if st == nil || cfg.ConfirmAlert <= 1 || state == "ok" {
+		return events
+	}
+	last, _ := st.LastStates(ctx, client, cluster, db, cfg.ConfirmAlert-1)
+	if len(last) >= cfg.ConfirmAlert-1 && checker.AllStringsEqual(last, state) {
+		return events
+	}
+	var filtered []notify.Event
+	for _, e := range events {
+		if e.Threshold == "connect_failure" || e.Threshold == "too_many_clients" || e.Threshold == "long_query" {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered
+}
+
+func applyLongQueryCooldownFilter(ctx context.Context, st store.MetricsStorer, cfg *config.Config, client, cluster, db string, events []notify.Event) []notify.Event {
+	if cfg.LongQueryMinSeconds <= 0 || st == nil {
+		return events
+	}
+	cd, ok := st.(store.AlertCooldownRecorder)
+	if !ok {
+		return events
+	}
+	var out []notify.Event
+	for _, e := range events {
+		if e.Threshold != "long_query" {
+			out = append(out, e)
+			continue
+		}
+		last, has, err := cd.LastLongQueryAlert(ctx, client, cluster, db)
+		if err != nil {
+			log.Printf("long_query cooldown read: %v", err)
+			out = append(out, e)
+			continue
+		}
+		if has && time.Since(last) < time.Duration(cfg.LongQueryCooldownSeconds)*time.Second {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+func trySendResolutionNotification(ctx context.Context, st store.MetricsStorer, cfg *config.Config, senders []notify.Sender, res runCheckResult, cluster, client, ns, db string) {
+	if st == nil || cfg.ConfirmOk < 1 {
+		return
+	}
+	last, _ := st.LastStates(ctx, client, cluster, db, cfg.ConfirmOk+1)
+	if len(last) < cfg.ConfirmOk+1 {
+		return
+	}
+	for i := 0; i < cfg.ConfirmOk && i < len(last); i++ {
+		if last[i] != "ok" {
+			return
+		}
+	}
+	if last[cfg.ConfirmOk] == "ok" || last[cfg.ConfirmOk] == "" {
+		return
+	}
+	ev := notify.Event{
+		Stats:          res.Stats,
+		Threshold:      "resolution",
+		ThresholdValue: 0,
+		Message:        fmt.Sprintf("PostgreSQL connections returned to normal. total=%d active=%d idle=%d", res.Stats.Total, res.Stats.Active, res.Stats.Idle),
+		Level:          "ok",
+		MaxConnections: res.MaxConn,
+		Cluster:        cluster,
+		Client:         client,
+		Namespace:      ns,
+		Database:       db,
+	}
+	sendEvents(ctx, senders, cfg, []notify.Event{ev})
+}
+
+func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, cluster, client, ns, db string) func() {
 	return func() {
-		stats, err := postgres.Stats(ctx, pool)
+		res, err := doRunCheck(ctx, pool, cfg, cluster, client, ns, db)
 		if err != nil {
 			log.Printf("stats: %v", err)
 			return
 		}
-		maxConn, _ := postgres.MaxConnections(ctx, pool)
-		if cfg.TestMaxConnections > 0 {
-			maxConn = cfg.TestMaxConnections
+		if cfg.DryRun && cfg.LogLevel == "debug" {
+			logDryRunStats(cluster, client, db, res)
 		}
-		if cfg.DryRun {
-			if maxConn > 0 {
-				log.Printf("total=%d active=%d idle=%d max_connections=%d", stats.Total, stats.Active, stats.Idle, maxConn)
-			} else {
-				log.Printf("total=%d active=%d idle=%d", stats.Total, stats.Active, stats.Idle)
+		statePre, _ := checker.StateAndThresholdFromEvents(res.Events)
+		res.Events = applyHysteresisFilter(ctx, st, cfg, client, cluster, db, statePre, res.Events)
+		res.Events = applyLongQueryCooldownFilter(ctx, st, cfg, client, cluster, db, res.Events)
+		state, thr := checker.StateAndThresholdFromEvents(res.Events)
+		sent := sendEvents(ctx, senders, cfg, res.Events)
+		if sent["long_query"] && st != nil {
+			if cd, ok := st.(store.AlertCooldownRecorder); ok {
+				if err := cd.SetLongQueryAlert(ctx, client, cluster, db, time.Now()); err != nil {
+					log.Printf("long_query cooldown write: %v", err)
+				}
 			}
 		}
-		events := collectEvents(ctx, pool, cfg, stats, maxConn, cluster, client, ns, db)
-		sendEvents(ctx, senders, cfg, events)
+		if st != nil {
+			rec := store.Record{
+				Client: client, Cluster: cluster, Namespace: ns, Database: db,
+				Total: res.Stats.Total, Active: res.Stats.Active, Idle: res.Stats.Idle, Stale: res.StaleCountForStore,
+				MaxConnections: res.MaxConn, State: state, Threshold: thr,
+			}
+			if err := st.Insert(ctx, rec); err != nil {
+				log.Printf("store insert: %v", err)
+			} else if state == "ok" {
+				trySendResolutionNotification(ctx, st, cfg, senders, res, cluster, client, ns, db)
+			}
+		}
 	}
+}
+
+func logDryRunStats(cluster, client, database string, res runCheckResult) {
+	// target = cluster (if k8s) / client (monitor id) / database (Postgres DB name)
+	parts := []string{client}
+	if database != "" {
+		parts = append(parts, database)
+	}
+	target := strings.Join(parts, "/")
+	if cluster != "" {
+		target = cluster + "/" + target
+	}
+	if res.MaxConn > 0 {
+		log.Printf("[%s] total=%d active=%d idle=%d max_connections=%d", target, res.Stats.Total, res.Stats.Active, res.Stats.Idle, res.MaxConn)
+	} else {
+		log.Printf("[%s] total=%d active=%d idle=%d", target, res.Stats.Total, res.Stats.Active, res.Stats.Idle)
+	}
+}
+
+func logStartupBanner(cfg *config.Config) {
+	commit := Commit
+	if commit == "" {
+		commit = "unknown"
+	}
+	built := BuildDate
+	if built == "" {
+		built = "unknown"
+	}
+	branch := Branch
+	if branch == "" {
+		branch = "unknown"
+	}
+	log.Printf("pgwd: starting %s (branch %s, commit %s, built %s) %s/%s log_level=%s",
+		Version, branch, commit, built, runtime.GOOS, runtime.GOARCH, cfg.LogLevel)
 }
 
 func logConfigTrace(path string, configLoaded bool, hasCLIArgs bool) {
@@ -562,8 +582,51 @@ func logConfigTrace(path string, configLoaded bool, hasCLIArgs bool) {
 func main() {
 	handleVersion()
 
+	cfg, loaded, configPath := loadAndParseConfig()
+	applyDBURLOverride(&cfg)
+	if strings.TrimSpace(cfg.ExportMetricsFormat) != "" {
+		exportMetricsAndExit(&cfg)
+	}
+	if cfg.ValidateK8sAccess {
+		if err := kube.ValidateKubernetesAccess(context.Background(), cfg.KubeContext); err != nil {
+			log.Fatalf("validate-k8s-access: %v", err)
+		}
+		os.Exit(0)
+	}
+	validateConfig(&cfg)
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	if !cfg.UsesDatabases() {
+		defer setupKube(ctx, &cfg)()
+		defer setupKubeLoki(ctx, &cfg)()
+	}
+	if cfg.KubePostgres == "" && cfg.KubeLoki == "" {
+		openbsd.ApplyPledge()
+	}
+
+	senders := buildSenders(&cfg)
+	targets := cfg.Targets()
+	st := openStoreIfConfigured(&cfg)
+	if st != nil {
+		defer st.Close()
+	}
+	httpCleanup := setupHTTPIfConfigured(&cfg, st)
+	defer httpCleanup()
+	maybeLogConfigTrace(&cfg, configPath, loaded, len(os.Args) > 1)
+
+	for _, t := range targets {
+		runOneTarget(ctx, t, &cfg, senders, st, targets)
+	}
+	if cfg.Interval <= 0 {
+		return
+	}
+	runTickerLoop(ctx, &cfg, senders, st, targets)
+}
+
+func loadAndParseConfig() (config.Config, bool, string) {
 	path := config.ConfigPath()
-	hasCLIArgs := len(os.Args) > 1
 	cfg, loaded, err := config.FromFile(path)
 	if err != nil {
 		log.Fatalf("pgwd: config file %s: %v", path, err)
@@ -578,50 +641,88 @@ func main() {
 		printVersion()
 		os.Exit(0)
 	}
-	logConfigTrace(path, loaded, hasCLIArgs)
-	if cfg.ValidateK8sAccess {
-		ctx := context.Background()
-		if err := kube.ValidateKubernetesAccess(ctx, cfg.KubeContext); err != nil {
-			log.Fatalf("validate-k8s-access: %v", err)
+	config.FinalizeAfterFlags(&cfg)
+	logStartupBanner(&cfg)
+	return cfg, loaded, path
+}
+
+func maybeLogConfigTrace(cfg *config.Config, path string, loaded bool, hasCLIArgs bool) {
+	if cfg.LogLevel == "debug" {
+		logConfigTrace(path, loaded, hasCLIArgs)
+	}
+}
+
+func applyDBURLOverride(cfg *config.Config) {
+	if cfg.DBURL != "" && cfg.Interval <= 0 && cfg.UsesDatabases() {
+		cfg.Databases = nil
+	}
+}
+
+func openStoreIfConfigured(cfg *config.Config) store.MetricsStorer {
+	switch metricsstore.Driver(cfg) {
+	case metricsstore.DriverSQLite:
+		if cfg.SqlitePath == "" {
+			return nil
 		}
-		os.Exit(0)
+		st, err := store.Open(cfg.SqlitePath, cfg.SqliteMaxMetrics)
+		if err != nil {
+			log.Fatalf("sqlite metrics store: %v", err)
+		}
+		return st
+	case metricsstore.DriverPostgres, metricsstore.DriverMySQL:
+		st, err := store.OpenSQLMetrics(metricsstore.Driver(cfg), cfg.MetricsStoreDSN, cfg.SqliteMaxMetrics)
+		if err != nil {
+			log.Fatalf("metrics SQL store: %v", err)
+		}
+		return st
+	default:
+		return nil
 	}
-	validateConfig(&cfg)
+}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	kubeCleanup := setupKube(ctx, &cfg)
-	defer kubeCleanup()
-
-	kubeLokiCleanup := setupKubeLoki(ctx, &cfg)
-	defer kubeLokiCleanup()
-
-	// On OpenBSD: skip pledge when using kube. pgwd spawns kubectl; if pgwd has pledged,
-	// kubectl inherits it and fails (pledge "rpath", syscall 59). Without pledge, kubectl works.
-	if cfg.KubePostgres == "" && cfg.KubeLoki == "" {
-		openbsd.ApplyPledge()
+func setupHTTPIfConfigured(cfg *config.Config, st store.MetricsStorer) func() {
+	if cfg.HTTPListen == "" {
+		return func() {}
 	}
+	httpSrv := httpsrv.New(cfg, st)
+	if err := httpSrv.Start(); err != nil {
+		log.Fatalf("http: %v", err)
+	}
+	log.Printf("pgwd: HTTP listening on %s (%s%s)", cfg.HTTPListen, cfg.HTTPBasePath, cfg.HTTPHealthPath)
+	return func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := httpSrv.Stop(shutdownCtx); err != nil {
+			log.Printf("http shutdown: %v", err)
+		}
+	}
+}
 
-	runCluster, runClient, runNamespace, runDatabase := runContextStrings(ctx, &cfg)
-	senders := buildSenders(&cfg)
+func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, targets []config.DatabaseTarget) {
+	targetCfg := cfg.ConfigForTarget(t)
+	runCluster, runClient, runNamespace, runDatabase := runContextStrings(ctx, targetCfg, t.URL)
 
-	pool, err := postgres.Pool(ctx, cfg.DBURL)
+	pool, err := postgres.Pool(ctx, t.URL)
 	if err != nil {
-		notifyConnectFailure(ctx, senders, &cfg, runCluster, runClient, runNamespace, runDatabase, err)
-		log.Fatal("postgres connect failed (check database URL, connectivity, and credentials)")
+		notifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err)
+		if len(targets) == 1 {
+			log.Fatal("postgres connect failed (check database URL, connectivity, and credentials)")
+		}
+		log.Printf("postgres connect failed [%s]: %v", t.Client, err)
+		return
 	}
 	defer pool.Close()
 
-	if err := applyThresholdDefaults(ctx, pool, &cfg); err != nil {
-		notifyConnectFailure(ctx, senders, &cfg, runCluster, runClient, runNamespace, runDatabase, err)
-		log.Fatal(err)
-	}
-	run := makeRunFunc(ctx, pool, &cfg, senders, runCluster, runClient, runNamespace, runDatabase)
-	run()
-	if cfg.Interval <= 0 {
+	if err := applyThresholdDefaults(ctx, pool, targetCfg); err != nil {
+		notifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err)
+		log.Printf("threshold config error [%s]: %v", t.Client, err)
 		return
 	}
+	run := makeRunFunc(ctx, pool, targetCfg, senders, st, runCluster, runClient, runNamespace, runDatabase)
+	run()
+}
+
+func runTickerLoop(ctx context.Context, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, targets []config.DatabaseTarget) {
 	ticker := time.NewTicker(time.Duration(cfg.Interval) * time.Second)
 	defer ticker.Stop()
 	for {
@@ -629,7 +730,9 @@ func main() {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			run()
+			for _, t := range targets {
+				runOneTarget(ctx, t, cfg, senders, st, targets)
+			}
 		}
 	}
 }

@@ -1,0 +1,83 @@
+---
+# pgwd_test_notifications — start mock, run -force-notification, verify Loki+Slack captures.
+
+- name: Load platform variables
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../platform_vars/{{ platform_vars }}.yml"
+
+- name: Start notification mock
+  ansible.builtin.include_role:
+    name: notification_mock
+  vars:
+    notification_mock_state: started
+
+- name: Run pgwd with force-notification
+  ansible.builtin.command: >
+    {{ pgwd_binary_path }} -force-notification -interval 0
+    -client "test-{{ inventory_hostname }}"
+    -db-url "{{ postgres_instances[0].url }}"
+    -notifications-loki-url "http://127.0.0.1:{{ notification_mock_port | default(9999) }}/loki/api/v1/push"
+    -notifications-slack-webhook "http://127.0.0.1:{{ notification_mock_port | default(9999) }}/slack"
+  register: pgwd_notify
+  changed_when: false
+  failed_when: pgwd_notify.rc != 0
+
+- name: Wait for captures to flush
+  ansible.builtin.pause:
+    seconds: 3
+
+- name: Check Loki capture file exists
+  ansible.builtin.stat:
+    path: /tmp/pgwd-mock-loki-api-v1-push.json
+  register: loki_capture
+
+- name: Assert Loki capture received
+  ansible.builtin.assert:
+    that:
+      - loki_capture.stat.exists
+    fail_msg: "No Loki capture found at /tmp/pgwd-mock-loki-api-v1-push.json"
+
+- name: Read Loki capture content
+  ansible.builtin.slurp:
+    src: /tmp/pgwd-mock-loki-api-v1-push.json
+  register: loki_content
+  when: loki_capture.stat.exists
+
+- name: Assert Loki capture contains pgwd data
+  ansible.builtin.assert:
+    that:
+      - "'pgwd' in (loki_content.content | b64decode)"
+    fail_msg: "Loki capture does not contain 'pgwd': {{ loki_content.content | b64decode }}"
+    success_msg: "Loki notification verified"
+  when: loki_capture.stat.exists
+
+- name: Check Slack capture file exists
+  ansible.builtin.stat:
+    path: /tmp/pgwd-mock-slack.json
+  register: slack_capture
+
+- name: Assert Slack capture received
+  ansible.builtin.assert:
+    that:
+      - slack_capture.stat.exists
+    fail_msg: "No Slack capture found at /tmp/pgwd-mock-slack.json"
+
+- name: Read Slack capture content
+  ansible.builtin.slurp:
+    src: /tmp/pgwd-mock-slack.json
+  register: slack_content
+  when: slack_capture.stat.exists
+
+- name: Assert Slack capture contains pgwd data
+  ansible.builtin.assert:
+    that:
+      - "'pgwd' in (slack_content.content | b64decode)"
+    fail_msg: "Slack capture does not contain 'pgwd': {{ slack_content.content | b64decode }}"
+    success_msg: "Slack notification verified"
+  when: slack_capture.stat.exists
+
+- name: Stop notification mock
+  ansible.builtin.include_role:
+    name: notification_mock
+  vars:
+    notification_mock_state: stopped

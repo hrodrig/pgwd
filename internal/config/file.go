@@ -1,7 +1,10 @@
 package config
 
 import (
+	"log"
+	"net/url"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -9,24 +12,50 @@ import (
 // DefaultConfigPath is the standard config file location.
 const DefaultConfigPath = "/etc/pgwd/pgwd.conf"
 
-// fileConfig mirrors the YAML structure: db, kube, notifications, and top-level keys.
+// fileConfigDB is one entry in the databases array.
+type fileConfigDB struct {
+	URL                     string `yaml:"url"`
+	Client                  string `yaml:"client"`
+	StaleAge                int    `yaml:"stale_age"`
+	DefaultThresholdPercent int    `yaml:"default_threshold_percent"`
+	Threshold               struct {
+		Active int    `yaml:"active"`
+		Idle   int    `yaml:"idle"`
+		Levels string `yaml:"levels"`
+		Stale  int    `yaml:"stale"`
+		Total  int    `yaml:"total"`
+	} `yaml:"threshold"`
+	LongQueryMinSeconds      int `yaml:"long_query_min_seconds"`
+	LongQueryCooldownSeconds int `yaml:"long_query_cooldown_seconds"`
+	LongQueryMinCount        int `yaml:"long_query_min_count"`
+}
+
+// fileConfig mirrors the YAML structure: db, databases, kube, notifications, and top-level keys.
 type fileConfig struct {
-	Client                 string `yaml:"client"`
-	DryRun                 bool   `yaml:"dry_run"`
-	Interval               int    `yaml:"interval"`
-	NotifyOnConnectFailure bool   `yaml:"notify_on_connect_failure"`
-	DB                     struct {
-		URL                     string `yaml:"url"`
-		StaleAge                int    `yaml:"stale_age"`
-		DefaultThresholdPercent int    `yaml:"default_threshold_percent"`
-		Threshold               struct {
-			Active int    `yaml:"active"`
-			Idle   int    `yaml:"idle"`
-			Levels string `yaml:"levels"`
-			Stale  int    `yaml:"stale"`
-			Total  int    `yaml:"total"`
-		} `yaml:"threshold"`
-	} `yaml:"db"`
+	Client                 string         `yaml:"client"`
+	DryRun                 bool           `yaml:"dry_run"`
+	LogLevel               string         `yaml:"log_level"`
+	Interval               int            `yaml:"interval"`
+	NotifyOnConnectFailure bool           `yaml:"notify_on_connect_failure"`
+	Databases              []fileConfigDB `yaml:"databases"`
+	DB                     fileConfigDB   `yaml:"db"`
+	Sqlite                 struct {
+		Path       string `yaml:"path"`
+		MaxMetrics int    `yaml:"max_metrics"`
+		StaleAge   int    `yaml:"stale_age"`
+	} `yaml:"sqlite"`
+	MetricsStore struct {
+		Driver string `yaml:"driver"`
+		DSN    string `yaml:"dsn"`
+	} `yaml:"metrics_store"`
+	ConfirmAlert int `yaml:"confirm_alert"`
+	ConfirmOk    int `yaml:"confirm_ok"`
+	HTTP         struct {
+		Listen      string `yaml:"listen"`
+		BasePath    string `yaml:"base_path"`
+		HealthPath  string `yaml:"healthz_path"`
+		MetricsPath string `yaml:"metrics_path"`
+	} `yaml:"http"`
 	Kube struct {
 		Context           string `yaml:"context"`
 		LocalPort         int    `yaml:"local_port"`
@@ -75,38 +104,132 @@ func FromFile(path string) (Config, bool, error) {
 
 func fileConfigToConfig(fc fileConfig) Config {
 	c := Config{
-		DBURL:                   fc.DB.URL,
-		Client:                  fc.Client,
-		DefaultThresholdPercent: fc.DB.DefaultThresholdPercent,
-		DryRun:                  fc.DryRun,
-		Interval:                fc.Interval,
-		KubePostgres:            fc.Kube.Postgres,
-		KubeContext:             fc.Kube.Context,
-		KubeLocalPort:           fc.Kube.LocalPort,
-		KubeLoki:                fc.Kube.Loki,
-		KubeLokiLocalPort:       fc.Kube.LokiLocalPort,
-		KubeLokiRemotePort:      fc.Kube.LokiRemotePort,
-		KubePasswordContainer:   fc.Kube.PasswordContainer,
-		KubePasswordVar:         fc.Kube.PasswordVar,
-		LokiURL:                 fc.Notifications.Loki.URL,
-		LokiLabels:              fc.Notifications.Loki.Labels,
-		LokiOrgID:               fc.Notifications.Loki.OrgID,
-		LokiBearerToken:         fc.Notifications.Loki.BearerToken,
-		NotifyOnConnectFailure:  fc.NotifyOnConnectFailure,
-		SlackWebhook:            fc.Notifications.Slack.Webhook,
-		StaleAge:                fc.DB.StaleAge,
-		ThresholdTotal:          fc.DB.Threshold.Total,
-		ThresholdActive:         fc.DB.Threshold.Active,
-		ThresholdIdle:           fc.DB.Threshold.Idle,
-		ThresholdStale:          fc.DB.Threshold.Stale,
-		ThresholdLevels:         fc.DB.Threshold.Levels,
+		DBURL:                    fc.DB.URL,
+		Client:                   fc.Client,
+		DefaultThresholdPercent:  fc.DB.DefaultThresholdPercent,
+		DryRun:                   fc.DryRun,
+		LogLevel:                 fc.LogLevel,
+		Interval:                 fc.Interval,
+		KubePostgres:             fc.Kube.Postgres,
+		KubeContext:              fc.Kube.Context,
+		KubeLocalPort:            fc.Kube.LocalPort,
+		KubeLoki:                 fc.Kube.Loki,
+		KubeLokiLocalPort:        fc.Kube.LokiLocalPort,
+		KubeLokiRemotePort:       fc.Kube.LokiRemotePort,
+		KubePasswordContainer:    fc.Kube.PasswordContainer,
+		KubePasswordVar:          fc.Kube.PasswordVar,
+		LokiURL:                  fc.Notifications.Loki.URL,
+		LokiLabels:               fc.Notifications.Loki.Labels,
+		LokiOrgID:                fc.Notifications.Loki.OrgID,
+		LokiBearerToken:          fc.Notifications.Loki.BearerToken,
+		NotifyOnConnectFailure:   fc.NotifyOnConnectFailure,
+		SqlitePath:               fc.Sqlite.Path,
+		SqliteMaxMetrics:         fc.Sqlite.MaxMetrics,
+		SqliteStaleAge:           fc.Sqlite.StaleAge,
+		MetricsStoreDriver:       fc.MetricsStore.Driver,
+		MetricsStoreDSN:          fc.MetricsStore.DSN,
+		ConfirmAlert:             fc.ConfirmAlert,
+		ConfirmOk:                fc.ConfirmOk,
+		HTTPListen:               fc.HTTP.Listen,
+		HTTPBasePath:             fc.HTTP.BasePath,
+		HTTPHealthPath:           fc.HTTP.HealthPath,
+		HTTPMetricsPath:          fc.HTTP.MetricsPath,
+		SlackWebhook:             fc.Notifications.Slack.Webhook,
+		StaleAge:                 fc.DB.StaleAge,
+		ThresholdTotal:           fc.DB.Threshold.Total,
+		ThresholdActive:          fc.DB.Threshold.Active,
+		ThresholdIdle:            fc.DB.Threshold.Idle,
+		ThresholdStale:           fc.DB.Threshold.Stale,
+		ThresholdLevels:          fc.DB.Threshold.Levels,
+		LongQueryMinSeconds:      fc.DB.LongQueryMinSeconds,
+		LongQueryCooldownSeconds: fc.DB.LongQueryCooldownSeconds,
+		LongQueryMinCount:        fc.DB.LongQueryMinCount,
 	}
+
+	// Normalize to Databases: use databases if present, else wrap db as single target.
+	if len(fc.Databases) > 0 {
+		c.Databases = make([]DatabaseTarget, 0, len(fc.Databases))
+		for _, d := range fc.Databases {
+			t := mergeDBTarget(fc.Client, fc.DB, d)
+			c.Databases = append(c.Databases, t)
+		}
+	} else if fc.DB.URL != "" {
+		log.Printf("pgwd: config key 'db' is deprecated; use 'databases: [{ url: ... }]' instead. Support will be removed in v1.0.")
+		t := mergeDBTarget(fc.Client, fc.DB, fc.DB)
+		c.Databases = []DatabaseTarget{t}
+	}
+
 	ApplyDefaults(&c)
+	FinalizeAfterFlags(&c)
 	return c
+}
+
+// mergeDBTarget builds a DatabaseTarget from base db config and per-entry overrides.
+func mergeDBTarget(baseClient string, base, over fileConfigDB) DatabaseTarget {
+	t := DatabaseTarget{
+		URL:                      over.URL,
+		Client:                   over.Client,
+		StaleAge:                 orZero(over.StaleAge, base.StaleAge),
+		DefaultThresholdPercent:  orZero(over.DefaultThresholdPercent, base.DefaultThresholdPercent),
+		ThresholdTotal:           orZero(over.Threshold.Total, base.Threshold.Total),
+		ThresholdActive:          orZero(over.Threshold.Active, base.Threshold.Active),
+		ThresholdIdle:            orZero(over.Threshold.Idle, base.Threshold.Idle),
+		ThresholdStale:           orZero(over.Threshold.Stale, base.Threshold.Stale),
+		ThresholdLevels:          orEmpty(over.Threshold.Levels, base.Threshold.Levels),
+		LongQueryMinSeconds:      orZero(over.LongQueryMinSeconds, base.LongQueryMinSeconds),
+		LongQueryCooldownSeconds: orZero(over.LongQueryCooldownSeconds, base.LongQueryCooldownSeconds),
+		LongQueryMinCount:        orZero(over.LongQueryMinCount, base.LongQueryMinCount),
+	}
+	if t.Client == "" && baseClient != "" {
+		t.Client = baseClient + "-" + databaseNameFromURL(t.URL)
+	} else if t.Client == "" {
+		t.Client = databaseNameFromURL(t.URL)
+	}
+	// Apply global defaults when base and override both leave zero/empty.
+	if t.DefaultThresholdPercent == 0 {
+		t.DefaultThresholdPercent = 80
+	}
+	if t.ThresholdLevels == "" {
+		t.ThresholdLevels = DefaultThresholdLevels
+	}
+	return t
+}
+
+func orZero(a, b int) int {
+	if a != 0 {
+		return a
+	}
+	return b
+}
+
+func orEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
+}
+
+func databaseNameFromURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "unknown"
+	}
+	db := strings.TrimPrefix(strings.TrimSpace(u.Path), "/")
+	if db == "" {
+		return "postgres"
+	}
+	return db
 }
 
 // ApplyDefaults sets default values for fields that are zero. Call after FromFile when no file exists.
 func ApplyDefaults(c *Config) {
+	applyKubeDefaults(c)
+	applyGeneralDefaults(c)
+	applySqliteAndConfirmDefaults(c)
+	applyHTTPDefaults(c)
+}
+
+func applyKubeDefaults(c *Config) {
 	if c.KubePasswordVar == "" {
 		c.KubePasswordVar = "POSTGRES_PASSWORD"
 	}
@@ -119,10 +242,59 @@ func ApplyDefaults(c *Config) {
 	if c.KubeLokiRemotePort == 0 {
 		c.KubeLokiRemotePort = 3100
 	}
+}
+
+func applyGeneralDefaults(c *Config) {
 	if c.DefaultThresholdPercent == 0 {
 		c.DefaultThresholdPercent = 80
 	}
 	if c.ThresholdLevels == "" {
 		c.ThresholdLevels = DefaultThresholdLevels
+	}
+	if c.LogLevel == "" {
+		c.LogLevel = "info"
+	}
+	// Normalize log_level: only info and debug supported
+	if c.LogLevel != "debug" && c.LogLevel != "info" {
+		c.LogLevel = "info"
+	}
+}
+
+// FinalizeAfterFlags applies derived defaults that depend on CLI flags (call after flag.Parse).
+func FinalizeAfterFlags(c *Config) {
+	if c.LongQueryMinSeconds > 0 {
+		if c.LongQueryMinCount <= 0 {
+			c.LongQueryMinCount = 1
+		}
+		if c.LongQueryCooldownSeconds <= 0 {
+			c.LongQueryCooldownSeconds = 3600
+		}
+	}
+}
+
+func applySqliteAndConfirmDefaults(c *Config) {
+	if c.SqlitePath != "" && c.SqliteMaxMetrics <= 0 {
+		c.SqliteMaxMetrics = 10000
+	}
+	if c.ConfirmAlert <= 0 {
+		c.ConfirmAlert = 1
+	}
+	if c.ConfirmOk <= 0 {
+		c.ConfirmOk = 1
+	}
+}
+
+func applyHTTPDefaults(c *Config) {
+	if c.HTTPListen == "" {
+		return
+	}
+	if c.HTTPBasePath == "" {
+		c.HTTPBasePath = "/api/pgwd/v1"
+	}
+	if c.HTTPHealthPath == "" {
+		c.HTTPHealthPath = "/healthz"
+	}
+	if c.HTTPMetricsPath == "" {
+		c.HTTPMetricsPath = "/metrics"
 	}
 }

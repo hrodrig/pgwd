@@ -9,18 +9,36 @@ import (
 // DefaultThresholdLevels is the default comma-separated percentages for 3-tier alerts (MySQL-style).
 const DefaultThresholdLevels = "75,85,95"
 
+// DatabaseTarget is one Postgres instance to monitor. Used when config has multiple databases.
+type DatabaseTarget struct {
+	URL                      string
+	Client                   string // empty = derive from base client + "-" + db name from URL
+	StaleAge                 int
+	DefaultThresholdPercent  int
+	ThresholdTotal           int
+	ThresholdActive          int
+	ThresholdIdle            int
+	ThresholdStale           int
+	ThresholdLevels          string
+	LongQueryMinSeconds      int
+	LongQueryCooldownSeconds int
+	LongQueryMinCount        int
+}
+
 // Config holds all pgwd settings from CLI and env (PGWD_*).
 type Config struct {
-	// Database
+	// Database (single-DB mode; used when Databases is empty)
 	DBURL string
+	// Databases (multi-DB mode); when non-empty, DBURL is ignored. From file only.
+	Databases []DatabaseTarget
 
-	// Kubernetes: connect to Postgres via kubectl port-forward (optional)
+	// Kubernetes: connect to Postgres via port-forward (client-go, optional)
 	KubePostgres          string // e.g. "default/svc/postgres" or "default/pod/postgres-0"
-	KubeContext           string // kubectl context to use (empty = current context)
+	KubeContext           string // kubeconfig context to use (empty = current context)
 	KubeLocalPort         int    // local port for port-forward (default 5432)
 	KubePasswordVar       string // pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD)
 	KubePasswordContainer string // container name in pod if not default
-	// Kubernetes: connect to Loki via kubectl port-forward when Loki is inside the cluster (optional)
+	// Kubernetes: connect to Loki via port-forward when Loki is inside the cluster (optional)
 	KubeLoki           string // e.g. "monitoring/svc/loki" — same format as kube-postgres
 	KubeLokiLocalPort  int    // local port for Loki port-forward (default 3100)
 	KubeLokiRemotePort int    // remote port on the Loki service (default 3100)
@@ -35,6 +53,10 @@ type Config struct {
 	ThresholdIdle   int
 	StaleAge        int // seconds; connections open longer than this are "stale"
 	ThresholdStale  int // alert when count of stale connections >= this
+	// Long-running query alerts (state=active, query_start age). Requires a metrics store for cooldown timestamps.
+	LongQueryMinSeconds      int // 0 = disabled; min query runtime in seconds to count as "long"
+	LongQueryCooldownSeconds int // min time between long_query notifications per target (default when min set: 3600)
+	LongQueryMinCount        int // alert when count of long-running queries >= this (default 1)
 
 	// Notifications
 	SlackWebhook    string
@@ -44,7 +66,8 @@ type Config struct {
 	LokiBearerToken string // Authorization: Bearer <token>; empty = not set
 
 	// Behavior
-	Interval                int // seconds; 0 = run once
+	Interval                int    // seconds; 0 = run once
+	LogLevel                string // "info" (default) or "debug"; debug = verbose dry-run stats
 	DryRun                  bool
 	ForceNotification       bool   // send a test notification regardless of thresholds (to validate delivery/format)
 	NotifyOnConnectFailure  bool   // when Postgres connection fails, send an alert to notifiers (infrastructure alert)
@@ -52,8 +75,31 @@ type Config struct {
 	ThresholdLevels         string // comma-separated percentages for 3-tier alerts, e.g. "75,85,95" (attention/alert/danger). Used when both total and active are 0.
 	// TestMaxConnections: if > 0, use instead of server max_connections for defaults and display (for testing alerts).
 	TestMaxConnections int
-	// ValidateK8sAccess: if true, validate kubectl connectivity and list pods, then exit. Uses KubeContext if set.
+	// ValidateK8sAccess: if true, validate cluster connectivity and list pods, then exit. Uses KubeContext if set.
 	ValidateK8sAccess bool
+
+	// SQLite: persistent store for metrics (resolution notifications, /metrics). Optional.
+	SqlitePath       string // e.g. /var/lib/pgwd/pgwd.db
+	SqliteMaxMetrics int    // max rows; FIFO eviction when exceeded (default 10000)
+	SqliteStaleAge   int    // seconds for stale count in store; 0 = use db.stale_age or 0 (independent of alert stale)
+	// MetricsStoreDriver / MetricsStoreDSN: PostgreSQL or MySQL metrics backend (optional; see internal/store/sqlstore.go).
+	// Empty driver + sqlite.path implies sqlite. FIFO cap uses sqlite.max_metrics for all backends.
+	MetricsStoreDriver string
+	MetricsStoreDSN    string
+	// ExportMetricsFormat + ExportMetricsDestination: one-shot export via internal/metricsstore + internal/metricsexport.
+	// Format "csv" writes destination as a file path.
+	ExportMetricsFormat      string
+	ExportMetricsDestination string
+
+	// Hysteresis: require N consecutive checks before alert/resolution (avoids brief spikes/false recoveries).
+	ConfirmAlert int // consecutive "bad" checks before sending alert (default 1)
+	ConfirmOk    int // consecutive "ok" checks before resolution notification (default 1)
+
+	// HTTP: metrics and health endpoint for Kubernetes probes. Optional.
+	HTTPListen      string // e.g. ":8080"; empty = disabled
+	HTTPBasePath    string // e.g. "/api/pgwd/v1"; paths relative to this
+	HTTPHealthPath  string // e.g. "/healthz" → base_path + health_path
+	HTTPMetricsPath string // e.g. "/metrics" → base_path + metrics_path
 }
 
 // ConfigPath returns the config file path: -config flag, PGWD_CONFIG, or DefaultConfigPath.
@@ -101,7 +147,64 @@ func ApplyEnv(cfg *Config) {
 	applyEnvKube(cfg)
 	applyEnvThresholds(cfg)
 	applyEnvNotifiers(cfg)
+	applyEnvSqliteAndHTTP(cfg)
+	applyEnvMetricsStoreAndExport(cfg)
 	applyEnvBehaviour(cfg)
+}
+
+func applyEnvSqliteAndHTTP(cfg *Config) {
+	if v := env("SQLITE_PATH", ""); v != "" {
+		cfg.SqlitePath = v
+	}
+	if v := envInt("SQLITE_MAX_METRICS", -1); v >= 0 {
+		cfg.SqliteMaxMetrics = v
+	}
+	if v := envInt("SQLITE_STALE_AGE", -1); v >= 0 {
+		cfg.SqliteStaleAge = v
+	}
+	if v := envInt("CONFIRM_ALERT", -1); v >= 0 {
+		cfg.ConfirmAlert = v
+	}
+	if v := envInt("CONFIRM_OK", -1); v >= 0 {
+		cfg.ConfirmOk = v
+	}
+	if v := env("HTTP_LISTEN", ""); v != "" {
+		cfg.HTTPListen = v
+		// Apply defaults for paths when only HTTP_LISTEN is set
+		if cfg.HTTPBasePath == "" {
+			cfg.HTTPBasePath = "/api/pgwd/v1"
+		}
+		if cfg.HTTPHealthPath == "" {
+			cfg.HTTPHealthPath = "/healthz"
+		}
+		if cfg.HTTPMetricsPath == "" {
+			cfg.HTTPMetricsPath = "/metrics"
+		}
+	}
+	if v := env("HTTP_BASE_PATH", ""); v != "" {
+		cfg.HTTPBasePath = v
+	}
+	if v := env("HTTP_HEALTHZ_PATH", ""); v != "" {
+		cfg.HTTPHealthPath = v
+	}
+	if v := env("HTTP_METRICS_PATH", ""); v != "" {
+		cfg.HTTPMetricsPath = v
+	}
+}
+
+func applyEnvMetricsStoreAndExport(cfg *Config) {
+	if v := env("METRICS_STORE_DRIVER", ""); v != "" {
+		cfg.MetricsStoreDriver = v
+	}
+	if v := env("METRICS_STORE_DSN", ""); v != "" {
+		cfg.MetricsStoreDSN = v
+	}
+	if v := env("EXPORT_METRICS_FORMAT", ""); v != "" {
+		cfg.ExportMetricsFormat = v
+	}
+	if v := env("EXPORT_METRICS_DESTINATION", ""); v != "" {
+		cfg.ExportMetricsDestination = v
+	}
 }
 
 func applyEnvDBAndContext(cfg *Config) {
@@ -162,6 +265,15 @@ func applyEnvThresholds(cfg *Config) {
 	if v := envInt("DB_DEFAULT_THRESHOLD_PERCENT", -1); v >= 0 {
 		cfg.DefaultThresholdPercent = v
 	}
+	if v := envInt("DB_LONG_QUERY_MIN_SECONDS", -1); v >= 0 {
+		cfg.LongQueryMinSeconds = v
+	}
+	if v := envInt("DB_LONG_QUERY_COOLDOWN_SECONDS", -1); v >= 0 {
+		cfg.LongQueryCooldownSeconds = v
+	}
+	if v := envInt("DB_LONG_QUERY_MIN_COUNT", -1); v >= 0 {
+		cfg.LongQueryMinCount = v
+	}
 }
 
 func applyEnvNotifiers(cfg *Config) {
@@ -203,39 +315,59 @@ func applyEnvBehaviour(cfg *Config) {
 	if _, ok := os.LookupEnv("PGWD_VALIDATE_K8S_ACCESS"); ok {
 		cfg.ValidateK8sAccess = envBool("VALIDATE_K8S_ACCESS", false)
 	}
+	if v := env("LOG_LEVEL", ""); v != "" {
+		cfg.LogLevel = v
+		if cfg.LogLevel != "debug" && cfg.LogLevel != "info" {
+			cfg.LogLevel = "info"
+		}
+	}
 }
 
 // FromEnv builds config from environment variables (PGWD_*).
 func FromEnv() Config {
 	return Config{
-		DBURL:                   env("DB_URL", ""),
-		KubePostgres:            env("KUBE_POSTGRES", ""),
-		KubeContext:             env("KUBE_CONTEXT", ""),
-		KubeLocalPort:           envInt("KUBE_LOCAL_PORT", 5432),
-		KubePasswordVar:         env("KUBE_PASSWORD_VAR", "POSTGRES_PASSWORD"),
-		KubePasswordContainer:   env("KUBE_PASSWORD_CONTAINER", ""),
-		KubeLoki:                env("KUBE_LOKI", ""),
-		KubeLokiLocalPort:       envInt("KUBE_LOKI_LOCAL_PORT", 3100),
-		KubeLokiRemotePort:      envInt("KUBE_LOKI_REMOTE_PORT", 3100),
-		Client:                  env("CLIENT", ""),
-		ThresholdTotal:          envInt("DB_THRESHOLD_TOTAL", 0),
-		ThresholdActive:         envInt("DB_THRESHOLD_ACTIVE", 0),
-		ThresholdIdle:           envInt("DB_THRESHOLD_IDLE", 0),
-		StaleAge:                envInt("DB_STALE_AGE", 0),
-		ThresholdStale:          envInt("DB_THRESHOLD_STALE", 0),
-		SlackWebhook:            env("NOTIFICATIONS_SLACK_WEBHOOK", ""),
-		LokiURL:                 env("NOTIFICATIONS_LOKI_URL", ""),
-		LokiLabels:              env("NOTIFICATIONS_LOKI_LABELS", ""),
-		LokiOrgID:               env("NOTIFICATIONS_LOKI_ORG_ID", ""),
-		LokiBearerToken:         env("NOTIFICATIONS_LOKI_BEARER_TOKEN", ""),
-		Interval:                envInt("INTERVAL", 0),
-		DryRun:                  envBool("DRY_RUN", false),
-		ForceNotification:       envBool("FORCE_NOTIFICATION", false),
-		NotifyOnConnectFailure:  envBool("NOTIFY_ON_CONNECT_FAILURE", false),
-		DefaultThresholdPercent: envInt("DB_DEFAULT_THRESHOLD_PERCENT", 80),
-		ThresholdLevels:         env("DB_THRESHOLD_LEVELS", DefaultThresholdLevels),
-		TestMaxConnections:      envInt("TEST_MAX_CONNECTIONS", 0),
-		ValidateK8sAccess:       envBool("VALIDATE_K8S_ACCESS", false),
+		DBURL:                    env("DB_URL", ""),
+		KubePostgres:             env("KUBE_POSTGRES", ""),
+		KubeContext:              env("KUBE_CONTEXT", ""),
+		KubeLocalPort:            envInt("KUBE_LOCAL_PORT", 5432),
+		KubePasswordVar:          env("KUBE_PASSWORD_VAR", "POSTGRES_PASSWORD"),
+		KubePasswordContainer:    env("KUBE_PASSWORD_CONTAINER", ""),
+		KubeLoki:                 env("KUBE_LOKI", ""),
+		KubeLokiLocalPort:        envInt("KUBE_LOKI_LOCAL_PORT", 3100),
+		KubeLokiRemotePort:       envInt("KUBE_LOKI_REMOTE_PORT", 3100),
+		Client:                   env("CLIENT", ""),
+		ThresholdTotal:           envInt("DB_THRESHOLD_TOTAL", 0),
+		ThresholdActive:          envInt("DB_THRESHOLD_ACTIVE", 0),
+		ThresholdIdle:            envInt("DB_THRESHOLD_IDLE", 0),
+		StaleAge:                 envInt("DB_STALE_AGE", 0),
+		ThresholdStale:           envInt("DB_THRESHOLD_STALE", 0),
+		SlackWebhook:             env("NOTIFICATIONS_SLACK_WEBHOOK", ""),
+		LokiURL:                  env("NOTIFICATIONS_LOKI_URL", ""),
+		LokiLabels:               env("NOTIFICATIONS_LOKI_LABELS", ""),
+		LokiOrgID:                env("NOTIFICATIONS_LOKI_ORG_ID", ""),
+		LokiBearerToken:          env("NOTIFICATIONS_LOKI_BEARER_TOKEN", ""),
+		Interval:                 envInt("INTERVAL", 0),
+		LogLevel:                 env("LOG_LEVEL", "info"),
+		DryRun:                   envBool("DRY_RUN", false),
+		ForceNotification:        envBool("FORCE_NOTIFICATION", false),
+		NotifyOnConnectFailure:   envBool("NOTIFY_ON_CONNECT_FAILURE", false),
+		DefaultThresholdPercent:  envInt("DB_DEFAULT_THRESHOLD_PERCENT", 80),
+		ThresholdLevels:          env("DB_THRESHOLD_LEVELS", DefaultThresholdLevels),
+		TestMaxConnections:       envInt("TEST_MAX_CONNECTIONS", 0),
+		ValidateK8sAccess:        envBool("VALIDATE_K8S_ACCESS", false),
+		SqlitePath:               env("SQLITE_PATH", ""),
+		SqliteMaxMetrics:         envInt("SQLITE_MAX_METRICS", 0),
+		SqliteStaleAge:           envInt("SQLITE_STALE_AGE", 0),
+		ConfirmAlert:             envInt("CONFIRM_ALERT", 1),
+		ConfirmOk:                envInt("CONFIRM_OK", 1),
+		HTTPListen:               env("HTTP_LISTEN", ""),
+		HTTPBasePath:             env("HTTP_BASE_PATH", ""),
+		HTTPHealthPath:           env("HTTP_HEALTHZ_PATH", ""),
+		HTTPMetricsPath:          env("HTTP_METRICS_PATH", ""),
+		MetricsStoreDriver:       env("METRICS_STORE_DRIVER", ""),
+		MetricsStoreDSN:          env("METRICS_STORE_DSN", ""),
+		ExportMetricsFormat:      env("EXPORT_METRICS_FORMAT", ""),
+		ExportMetricsDestination: env("EXPORT_METRICS_DESTINATION", ""),
 	}
 }
 
@@ -345,10 +477,56 @@ func (c *Config) UsesLevelMode() bool {
 // HasAnyThreshold returns true if at least one threshold is set or level mode is active.
 func (c *Config) HasAnyThreshold() bool {
 	return c.ThresholdTotal > 0 || c.ThresholdActive > 0 || c.ThresholdIdle > 0 ||
-		c.ThresholdStale > 0 || c.UsesLevelMode()
+		c.ThresholdStale > 0 || c.UsesLevelMode() || c.LongQueryMinSeconds > 0
 }
 
 // HasAnyNotifier returns true if Slack or Loki is configured.
 func (c *Config) HasAnyNotifier() bool {
 	return c.SlackWebhook != "" || c.LokiURL != "" || c.KubeLoki != ""
+}
+
+// Targets returns the database targets to monitor. When Databases is non-empty, returns those.
+// Otherwise returns a single target built from DBURL and base config (single-DB mode).
+func (c *Config) Targets() []DatabaseTarget {
+	if len(c.Databases) > 0 {
+		return c.Databases
+	}
+	return []DatabaseTarget{{
+		URL:                      c.DBURL,
+		Client:                   c.Client,
+		StaleAge:                 c.StaleAge,
+		DefaultThresholdPercent:  c.DefaultThresholdPercent,
+		ThresholdTotal:           c.ThresholdTotal,
+		ThresholdActive:          c.ThresholdActive,
+		ThresholdIdle:            c.ThresholdIdle,
+		ThresholdStale:           c.ThresholdStale,
+		ThresholdLevels:          c.ThresholdLevels,
+		LongQueryMinSeconds:      c.LongQueryMinSeconds,
+		LongQueryCooldownSeconds: c.LongQueryCooldownSeconds,
+		LongQueryMinCount:        c.LongQueryMinCount,
+	}}
+}
+
+// UsesDatabases returns true when config has multiple database targets (from databases: in YAML).
+func (c *Config) UsesDatabases() bool {
+	return len(c.Databases) > 0
+}
+
+// ConfigForTarget returns a Config with base values and target-specific overrides for one check.
+// Callers must not modify the returned config's non-target fields (notifications, etc.).
+func (c *Config) ConfigForTarget(t DatabaseTarget) *Config {
+	out := *c
+	out.DBURL = t.URL
+	out.Client = t.Client
+	out.StaleAge = t.StaleAge
+	out.DefaultThresholdPercent = t.DefaultThresholdPercent
+	out.ThresholdTotal = t.ThresholdTotal
+	out.ThresholdActive = t.ThresholdActive
+	out.ThresholdIdle = t.ThresholdIdle
+	out.ThresholdStale = t.ThresholdStale
+	out.ThresholdLevels = t.ThresholdLevels
+	out.LongQueryMinSeconds = t.LongQueryMinSeconds
+	out.LongQueryCooldownSeconds = t.LongQueryCooldownSeconds
+	out.LongQueryMinCount = t.LongQueryMinCount
+	return &out
 }

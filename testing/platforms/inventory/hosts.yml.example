@@ -1,0 +1,94 @@
+---
+# testing/platforms/inventory/hosts.yml.example
+#
+# Copy this file to hosts.yml and edit with your own infrastructure:
+#   cp hosts.yml.example hosts.yml
+#
+# hosts.yml is .gitignore-ed — your IPs, ports, and credentials stay local.
+#
+# Topology: any layout works. The example below shows VMs behind a single
+# firewall IP with SSH port-forwarded to different ports. You can also use
+# direct IPs, cloud instances, or local VMs — the playbooks only need
+# ansible_host, ansible_port, and ansible_user.
+
+all:
+  vars:
+    pgwd_version: "0.6.4"
+    pgwd_release_url: "https://github.com/hrodrig/pgwd/releases/download/v{{ pgwd_version }}"
+    # Package source mode:
+    # - auto    (default): use pgwd_local_package when set, else download release asset
+    # - release: always download from pgwd_release_url
+    # - local  : always use pgwd_local_package (fails if missing)
+    pgwd_package_source: "auto"
+
+    # Local snapshot (before tagging): run `make snapshot`, read `dist/metadata.json`
+    # → use its `version` value here (VERSION + "-next", e.g. 0.6.4-next).
+    # Set pgwd_local_package per host to absolute paths under dist/
+    # on the machine where you run ansible-playbook. See README.md "Local snapshot".
+
+    notification_mock_port: 9999
+
+    # At least 3 Postgres instances reachable from the VMs (for multi-DB testing).
+    # Can be 3 separate hosts, 3 containers, or 3 databases on one server.
+    postgres_instances:
+      - url: "postgres://pgwd:secret@10.0.0.50:5432/pgwd?sslmode=disable"
+        client: "pgwd-main"
+      - url: "postgres://pgwd:secret@10.0.0.51:5432/analytics?sslmode=disable"
+        client: "pgwd-analytics"
+      - url: "postgres://pgwd:secret@10.0.0.52:5432/replica?sslmode=disable"
+        client: "pgwd-replica"
+
+  children:
+    linux_systemd:
+      hosts:
+        pgwd-ubuntu:
+          ansible_host: 203.0.113.10
+          ansible_port: 2298
+          ansible_user: root
+          platform_vars: ubuntu
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.6.4_linux_amd64.deb"
+        pgwd-almalinux:
+          ansible_host: 203.0.113.10
+          ansible_port: 2299
+          ansible_user: root
+          platform_vars: almalinux
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.6.4_linux_amd64.rpm"
+
+    linux_openrc:
+      hosts:
+        pgwd-alpine:
+          ansible_host: 203.0.113.10
+          ansible_port: 2297
+          ansible_user: root
+          platform_vars: alpine
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.6.4_linux_amd64.tar.gz"
+
+    bsd:
+      vars:
+        ansible_python_interpreter: /usr/local/bin/python3
+      hosts:
+        pgwd-freebsd:
+          ansible_host: 203.0.113.10
+          ansible_port: 2295
+          ansible_user: root
+          platform_vars: freebsd
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.6.4_freebsd_amd64.tar.gz"
+        pgwd-openbsd:
+          ansible_host: 203.0.113.10
+          ansible_port: 2296
+          ansible_user: root
+          platform_vars: openbsd
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.6.4_openbsd_amd64.tar.gz"
+        pgwd-netbsd:
+          ansible_host: 203.0.113.10
+          ansible_port: 2294
+          ansible_user: root
+          ansible_python_interpreter: /usr/pkg/bin/python3
+          platform_vars: netbsd
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.6.4_netbsd_amd64.tar.gz"
+        pgwd-dragonflybsd:
+          ansible_host: 203.0.113.10
+          ansible_port: 2293
+          ansible_user: root
+          platform_vars: dragonflybsd
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.6.4_dragonfly_amd64.tar.gz"

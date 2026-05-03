@@ -10,6 +10,7 @@ Thank you for your interest in contributing.
 ## Code style
 
 - Format Go code with `gofmt -s` (the `-s` simplify flag is used in our CI and by Go Report Card).
+- Run **`make lint`** before submitting (gofmt -s, **`go vet ./...`**, gocyclo complexity ≤ 14); CI runs the same checks.
 - Run tests before submitting: `go test ./...`
 - Keep commits focused and messages clear.
 

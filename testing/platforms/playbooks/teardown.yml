@@ -1,0 +1,9 @@
+---
+# teardown.yml — uninstall pgwd and verify cleanup.
+- name: pgwd platform teardown
+  hosts: all
+  gather_facts: false
+  become: true
+
+  roles:
+    - pgwd_uninstall

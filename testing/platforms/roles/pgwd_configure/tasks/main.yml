@@ -1,0 +1,41 @@
+---
+# pgwd_configure — deploy /etc/pgwd/pgwd.conf from Jinja2 template.
+#
+# Variables (from inventory):
+#   postgres_instances    — list of {url, client}
+#   notification_mock_port — default 9999
+
+- name: Create config directory
+  ansible.builtin.file:
+    path: /etc/pgwd
+    state: directory
+    mode: "0755"
+
+- name: Deploy pgwd.conf from template
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/../templates/pgwd.conf.j2"
+    dest: /etc/pgwd/pgwd.conf
+    mode: "0644"
+
+- name: Verify config file exists
+  ansible.builtin.stat:
+    path: /etc/pgwd/pgwd.conf
+  register: pgwd_conf_stat
+
+- name: Assert config deployed
+  ansible.builtin.assert:
+    that:
+      - pgwd_conf_stat.stat.exists
+    fail_msg: "/etc/pgwd/pgwd.conf was not deployed"
+
+- name: Read config content
+  ansible.builtin.slurp:
+    src: /etc/pgwd/pgwd.conf
+  register: pgwd_conf_content
+
+- name: Assert config has databases section
+  ansible.builtin.assert:
+    that:
+      - "'databases:' in (pgwd_conf_content.content | b64decode)"
+    fail_msg: "pgwd.conf does not contain databases: section"
+    success_msg: "pgwd.conf validated"

@@ -1,0 +1,6 @@
+---
+# Alpine Linux — tarball, OpenRC
+pgwd_install_method: tarball
+pgwd_init_system: openrc
+pgwd_binary_path: /usr/local/bin/pgwd
+pgwd_tarball_os: linux

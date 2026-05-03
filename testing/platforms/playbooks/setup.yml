@@ -1,0 +1,13 @@
+---
+# setup.yml — install pgwd, deploy config, start daemon.
+- name: pgwd platform setup
+  hosts: all
+  gather_facts: false
+  become: true
+
+  roles:
+    - pgwd_install
+    - pgwd_configure
+    - role: pgwd_daemon
+      vars:
+        pgwd_daemon_state: started

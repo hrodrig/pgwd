@@ -1,6 +1,6 @@
 .\" pgwd(1) - Postgres Watch Dog
 .\" Manual page for pgwd
-.TH PGWD 1 "2026-03-24" "pgwd v0.5.10" "User Commands"
+.TH PGWD 1 "2026-05-03" "pgwd v0.6.4" "User Commands"
 .SH NAME
 pgwd \- monitor PostgreSQL connections and notify via Slack/Loki
 .SH SYNOPSIS
@@ -81,6 +81,15 @@ Consider connection stale if open longer than N seconds. Env: PGWD_DB_STALE_AGE.
 .BR \-db\-threshold\-stale " \fIN\fR"
 Alert when stale connections >= N. Env: PGWD_DB_THRESHOLD_STALE.
 .TP
+.BR \-db\-long\-query\-min\-seconds " \fIN\fR"
+Alert when active queries have run longer than N seconds (0 = disabled). Requires sqlite.path or metrics_store for cooldown timestamps between alerts. Env: PGWD_DB_LONG_QUERY_MIN_SECONDS.
+.TP
+.BR \-db\-long\-query\-cooldown\-seconds " \fIN\fR"
+Minimum seconds between long_query notifications per target; default 3600 when min-seconds is set. Env: PGWD_DB_LONG_QUERY_COOLDOWN_SECONDS.
+.TP
+.BR \-db\-long\-query\-min\-count " \fIN\fR"
+Alert when count of long-running queries >= N; default 1. Env: PGWD_DB_LONG_QUERY_MIN_COUNT.
+.TP
 .BR \-notifications\-slack\-webhook " \fIurl\fR"
 Slack Incoming Webhook URL. Env: PGWD_NOTIFICATIONS_SLACK_WEBHOOK.
 .TP
@@ -116,6 +125,12 @@ Override server max_connections for testing alerts. Env: PGWD_TEST_MAX_CONNECTIO
 .TP
 .BR \-version
 Print version and exit.
+.TP
+.BR \-export\-metrics\-format " \fIformat\fR"
+Export persisted metrics from the configured store, then exit. \fIformat\fR: \fBcsv\fR (writes \-export-metrics-destination). Reading uses \fBinternal/metricsstore\fR (SQLite only; PostgreSQL/MySQL metrics drivers are not implemented yet). Env: PGWD_EXPORT_METRICS_FORMAT.
+.TP
+.BR \-export\-metrics\-destination " \fIpath\fR"
+Output file for \fBcsv\fR export. Env: PGWD_EXPORT_METRICS_DESTINATION.
 .SH EXAMPLES
 .TP
 Minimal one-shot with Slack:

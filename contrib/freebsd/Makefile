@@ -1,7 +1,11 @@
 PORTNAME=	pgwd
-PORTVERSION=	0.5.8
+PORTVERSION=	0.6.4
 DISTVERSIONPREFIX=	v
 CATEGORIES=	sysutils
+# Local test before release: copy the tarball into DISTDIR (see `make -V DISTDIR`
+# from this port directory) using the same name as DISTFILES, or run e.g.
+#   make fetch MASTER_SITES=file:///absolute/path/to/dir/
+# See README.md "Test with a local distfile".
 MASTER_SITES=	https://github.com/hrodrig/pgwd/releases/download/v${PORTVERSION}/
 DISTFILES=	pgwd_v${PORTVERSION}_freebsd_${ARCH:S/aarch64/arm64/}.tar.gz
 EXTRACT_SUFX=	.tar.gz

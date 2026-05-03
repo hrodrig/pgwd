@@ -1,0 +1,50 @@
+---
+# pgwd_test_run — execute pgwd -dry-run and verify output.
+#
+# Creates a minimal temp config with interval=0 to avoid interference from the
+# deployed /etc/pgwd/pgwd.conf (which has interval=60 for daemon mode).
+
+- name: Load platform variables
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/../platform_vars/{{ platform_vars }}.yml"
+
+- name: Create dry-run test config
+  ansible.builtin.copy:
+    content: |
+      client: "test-{{ inventory_hostname }}"
+      interval: 0
+      dry_run: true
+      log_level: debug
+      databases:
+      {% for db in postgres_instances %}
+        - url: "{{ db.url }}"
+          client: "{{ db.client | default('') }}"
+      {% endfor %}
+    dest: /tmp/pgwd-test-dryrun.conf
+    mode: "0644"
+
+- name: Run pgwd dry-run
+  ansible.builtin.command: >
+    {{ pgwd_binary_path }} -config /tmp/pgwd-test-dryrun.conf
+  register: pgwd_dryrun
+  changed_when: false
+  failed_when: pgwd_dryrun.rc != 0
+
+- name: Show dry-run output
+  ansible.builtin.debug:
+    msg: "{{ pgwd_dryrun.stderr_lines | default([]) + pgwd_dryrun.stdout_lines | default([]) }}"
+
+- name: Assert dry-run output contains connection stats
+  ansible.builtin.assert:
+    that:
+      - "'total=' in pgwd_dryrun.stdout or 'total=' in pgwd_dryrun.stderr"
+    fail_msg: >
+      pgwd -dry-run output missing connection stats.
+      stdout: {{ pgwd_dryrun.stdout }}
+      stderr: {{ pgwd_dryrun.stderr }}
+    success_msg: "pgwd -dry-run successful: connection stats present"
+
+- name: Clean up test config
+  ansible.builtin.file:
+    path: /tmp/pgwd-test-dryrun.conf
+    state: absent

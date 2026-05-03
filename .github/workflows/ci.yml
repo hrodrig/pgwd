@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -21,7 +23,14 @@ jobs:
           go-version-file: go.mod
 
       - name: Run unit tests
-        run: go test -v ./...
+        run: go test -race -coverprofile=coverage.out -covermode=atomic -v ./...
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.out
+          fail_ci_if_error: false
 
   test-integration:
     name: Integration (Postgres + Loki)
@@ -64,7 +73,7 @@ jobs:
         run: make test-e2e-kube
 
   lint:
-    name: gofmt + gocyclo
+    name: gofmt + go vet + gocyclo
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -78,6 +87,9 @@ jobs:
         run: |
           unformatted=$(gofmt -s -l .)
           if [ -n "$unformatted" ]; then echo "Files not formatted with gofmt -s:"; echo "$unformatted"; exit 1; fi
+
+      - name: Run go vet
+        run: go vet ./...
 
       - name: Install gocyclo
         run: go install github.com/fzipp/gocyclo/cmd/gocyclo@latest

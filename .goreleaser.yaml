@@ -45,6 +45,7 @@ builds:
       - -X main.Version=v{{ .Version }}
       - -X main.Commit={{ .ShortCommit }}
       - -X main.BuildDate={{ .Date }}
+      - -X main.Branch={{ .Branch }}
 
 archives:
   - id: default
@@ -52,7 +53,7 @@ archives:
     format_overrides:
       - goos: windows
         format: zip
-    name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "{{ .ProjectName }}_{{ if .IsSnapshot }}v{{ .Version }}{{ else }}{{ .Tag }}{{ end }}_{{ .Os }}_{{ .Arch }}"
     files:
       - src: contrib/man/man1/pgwd.1
         dst: share/man/man1/pgwd.1
@@ -80,7 +81,7 @@ nfpms:
     scripts:
       preremove: contrib/deb/prerm.sh
       postremove: contrib/deb/postrm.sh
-    file_name_template: "{{ .ProjectName }}_{{ .Tag }}_{{ .Os }}_{{ .Arch }}"
+    file_name_template: "{{ .ProjectName }}_{{ if .IsSnapshot }}v{{ .Version }}{{ else }}{{ .Tag }}{{ end }}_{{ .Os }}_{{ .Arch }}"
     description: Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki
     vendor: "Hermes Rodríguez"
     homepage: https://github.com/hrodrig/pgwd
@@ -107,7 +108,7 @@ nfpms:
         dst: /lib/systemd/system/pgwd.timer
 
 snapshot:
-  version_template: "{{ incpatch .Version }}-next"
+  version_template: "{{ .Env.PGWD_SNAPSHOT_VERSION }}"
 
 changelog:
   sort: asc
@@ -123,8 +124,10 @@ release:
     name: pgwd
 
 # Docker: multi-arch image to ghcr.io (same GITHUB_TOKEN). Requires buildx + qemu for local release.
+# Snapshot builds skip Docker so `make snapshot` works without a daemon (e.g. FreeBSD dev VMs).
 dockers_v2:
-  - dockerfile: Dockerfile.release
+  - disable: "{{ .IsSnapshot }}"
+    dockerfile: Dockerfile.release
     ids:
       - pgwd
     images:
@@ -137,6 +140,8 @@ dockers_v2:
       org.opencontainers.image.description: "Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki"
       org.opencontainers.image.source: "https://github.com/hrodrig/pgwd"
       org.opencontainers.image.version: "{{ .Version }}"
+    annotations:
+      org.opencontainers.image.description: "Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki"
 
 # Homebrew: publish cask to tap so users can "brew install hrodrig/pgwd/pgwd"
 # Create repo https://github.com/hrodrig/homebrew-pgwd first. For CI, set HOMEBREW_TAP_TOKEN (PAT with repo scope).

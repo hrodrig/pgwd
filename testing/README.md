@@ -6,7 +6,7 @@ Local test helpers for pgwd.
 
 ## Postgres (compose)
 
-`compose.yaml` runs PostgreSQL 16 (default **max_connections=20**) and an optional **client** service that holds one connection open. Use one or several clients to consume connections and test pgwd thresholds.
+`compose.yaml` runs PostgreSQL 16 (default **max_connections=20**), an optional **client** service that holds one connection open, and **postgres2** / **postgres3** for multi-database E2E (databases `pgwd`, `analytics`, `replica` on ports 5432, 5433, 5434).
 
 **Users:** The **pgwd** user (superuser) is used for the monitor and for `PGWD_TEST_DB_URL`. Client containers use **pgwd_app** (non-superuser), so they only consume the "normal" connection slots; the 3 reserved by `superuser_reserved_connections` stay free. That way you can always open an admin session from inside the Postgres container (`psql -U pgwd -d pgwd`) even when clients have filled the rest. In production, use a non-superuser for application connections so reserved slots remain available for DBA access; see [PostgreSQL runtime config — Connection and Authentication](https://www.postgresql.org/docs/current/runtime-config-connection.html) (`superuser_reserved_connections`).
 
@@ -49,6 +49,54 @@ Stop:
 ```bash
 docker compose -f testing/compose.yaml down
 ```
+
+---
+
+## Coverage
+
+- **`make cover`** (repo root) — runs **`go test ./...`** with **`-coverprofile=coverage.out`**. Unit tests only: **`internal/postgres`** integration tests are skipped without **`PGWD_TEST_DB_URL`**, and **`cmd/pgwd`** stays near **0%** in-package (black-box tests build a separate binary via **`exec`**).
+
+- **`make cover-integration`** — starts the same **Postgres + Loki** stack as **`make test-integration`**, exports **`PGWD_TEST_DB_URL`** and **`PGWD_TEST_LOKI_URL`**, then **`go test ./... -count=1 -coverprofile=coverage-integration.out`**. Use this profile to see coverage **with** DB and Loki paths. HTML report: **`go tool cover -html=coverage-integration.out`**.
+
+- **`make integration-compose-up`** / **`make integration-compose-down`** — shared compose lifecycle used by **`test-integration`** and **`cover-integration`**. If a command fails or you interrupt a run, run **`make integration-compose-down`** to stop containers.
+
+---
+
+## Local daemon run (local-test.conf)
+
+`local-test.conf` runs pgwd in **daemon mode** with SQLite store and HTTP server — useful to verify the full flow: multi-DB checks, SQLite persistence, `/healthz` and `/metrics` endpoints.
+
+**Prerequisites:** Postgres stack running (all 3 databases: pgwd, analytics, replica).
+
+```bash
+docker compose -f testing/compose.yaml up -d --scale client=0
+```
+
+**Run pgwd** (from repo root):
+
+```bash
+./pgwd -config testing/local-test.conf
+```
+
+**What it does:**
+- Monitors 3 databases (ports 5432, 5433, 5434)
+- Stores metrics in `/tmp/pgwd-test.db` (SQLite, ncruces driver)
+- Exposes HTTP on `:8080`; health and metrics at `/api/pgwd/v1/healthz` and `/api/pgwd/v1/metrics`
+- `log_level: info` (default) — minimal logs; set `log_level: debug` to print `[client/database] total=X active=Y ...` every 5 seconds
+
+**Verify endpoints:**
+
+```bash
+curl http://localhost:8080/api/pgwd/v1/healthz
+# → ok
+
+curl http://localhost:8080/api/pgwd/v1/metrics
+# → Prometheus metrics (pgwd_connections_total, etc.)
+```
+
+**Port conflict:** If `:8080` is in use, edit `http.listen` in `local-test.conf` (e.g. `:8081`).
+
+**Verbose stats:** Set `log_level: debug` in the config to print connection stats every interval.
 
 ---
 
@@ -157,7 +205,7 @@ curl -s "http://localhost:3100/loki/api/v1/query_range?query={app=\"pgwd\",names
 
 ## E2E Kubernetes (kind)
 
-Validates pgwd with `-kube-postgres` and `-kube-loki` against a real cluster. Creates a kind cluster, deploys Postgres and Loki, runs `pgwd -dry-run` and `pgwd -kube-loki -force-notification`, then destroys the cluster.
+Validates pgwd with `-kube-postgres` and `-kube-loki` against a real cluster. Creates a kind cluster, deploys 3 Postgres (pgwd, analytics, replica) and Loki, runs `pgwd -dry-run` (single DB via kube), `pgwd -config` with `databases:` (multi-DB via port-forward), and `pgwd -kube-loki -force-notification`, then destroys the cluster.
 
 **Requires:** kind, kubectl, docker.
 

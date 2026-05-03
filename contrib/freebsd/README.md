@@ -23,6 +23,59 @@ make install
 
 **Reinstalling after updating port files:** Run `make deinstall`, then `make clean`, then `make install`. Without `make clean`, the port may reuse a cached stage and not pick up changes (e.g. to `rc.d/pgwd`).
 
+### Verify install and handle upgrades
+
+After `make install` (or `make reinstall`), verify the installed binary:
+
+```bash
+pgwd -version
+```
+
+If `make install` reports that an older package is already installed (for example `pgwd-0.5.10`), use:
+
+```bash
+make reinstall
+```
+
+This deinstalls the previous package and registers the new one cleanly.
+
+## Test with a local distfile (before a GitHub release)
+
+The port normally fetches **DISTFILES** from **MASTER_SITES** (GitHub releases). To build or test **install** / **plist** against a tarball you built locally (no matching release on GitHub yet):
+
+1. **Match the filename** in **DISTFILES** for your architecture (e.g. `pgwd_v0.6.4_freebsd_amd64.tar.gz` when **PORTVERSION** is `0.6.4`). From the pgwd repo root, **`make port-freebsd-sync`** updates **PORTVERSION** in this **Makefile** from the **`VERSION`** file.
+
+   To generate that exact tarball layout/name locally (without running the full snapshot matrix), run from repo root:
+
+   ```bash
+   make dist-freebsd
+   ```
+
+   Output goes to `dist/pgwd_v<version>_freebsd_<arch>.tar.gz` using `VERSION` (for example `dist/pgwd_v0.6.4_freebsd_amd64.tar.gz`).
+
+2. **Option A — copy into DISTDIR:** From the port directory:
+
+   ```bash
+   cd ~/ports/sysutils/pgwd
+   distfile=$(make -V DISTFILES)   # expands PORTVERSION and ARCH
+   cp /path/to/pgwd/dist/"$distfile" "$(make -V DISTDIR)/"
+   make makesum    # refresh distinfo if checksums change
+   make install
+   ```
+
+3. **Option B — override MASTER_SITES for fetch:** Put the tarball in a directory and point **MASTER_SITES** at a **`file:`** URL (absolute path, trailing slash):
+
+   ```bash
+   cd ~/ports/sysutils/pgwd
+   mkdir -p /tmp/pgwd-dist
+   cp /path/to/pgwd/dist/pgwd_v0.6.4_freebsd_amd64.tar.gz /tmp/pgwd-dist/
+   make makesum MASTER_SITES=file:///tmp/pgwd-dist/
+   make fetch MASTER_SITES=file:///tmp/pgwd-dist/
+   make install
+   ```
+
+   Use three slashes after **`file:`** for an absolute path (`file:///tmp/...`). Do not commit **`MASTER_SITES=file:...`** to the official ports tree; it is only for local validation.
+
 The port installs:
 
 - Binary: `/usr/local/bin/pgwd`
@@ -176,3 +229,5 @@ notifications:
 ## Submitting to official ports
 
 When the port is ready, submit via [Bugzilla](https://bugs.freebsd.org) (preferred) or see [Porter's Handbook](https://docs.freebsd.org/en/books/porters-handbook/). The maintainer email in the Makefile must be valid and responsive.
+
+**Release and update procedure:** See [PORT-RELEASE.md](PORT-RELEASE.md) for step-by-step instructions (version bump, makesum, gshar, Bugzilla). Run `make port-freebsd-sync` from the repo root to sync VERSION to the port before updating.

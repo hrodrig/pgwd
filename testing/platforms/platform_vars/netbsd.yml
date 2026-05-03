@@ -1,0 +1,14 @@
+---
+# NetBSD — tarball only, rc.d (no sysrc, no rcctl)
+pgwd_install_method: tarball
+pgwd_init_system: rcd
+pgwd_binary_path: /usr/local/bin/pgwd
+pgwd_tarball_os: netbsd
+
+pgwd_rcd_script_src: contrib/netbsd/rc.d/pgwd
+pgwd_rcd_script_dest: /etc/rc.d/pgwd
+pgwd_rcd_enable_cmd: "echo 'pgwd=YES' >> /etc/rc.conf"
+pgwd_rcd_disable_cmd: "sed '/^pgwd=/d' /etc/rc.conf > /etc/rc.conf.tmp && mv /etc/rc.conf.tmp /etc/rc.conf"
+pgwd_rcd_start_cmd: "/etc/rc.d/pgwd start"
+pgwd_rcd_stop_cmd: "/etc/rc.d/pgwd stop"
+pgwd_rcd_status_cmd: "/etc/rc.d/pgwd status"

@@ -7,11 +7,11 @@ alwaysApply: true
 
 Before merging to `main` or creating a release (tag and `make release`), run **`make release-check`**. It runs (in order):
 
-1. **`make lint`** — gofmt -s and gocyclo -over 14. If formatting fails: `make lint-fix` then retry. If complexity fails: refactor so functions stay ≤ 14.
+1. **`make lint`** — gofmt -s, **go vet ./...**, and gocyclo -over 14. If formatting fails: `make lint-fix` then retry. If **go vet** or complexity fails: fix or refactor (functions stay ≤ 14).
 2. **`make test`** — unit tests.
 3. **`make test-integration`** — Postgres + Loki via Docker compose. Requires Docker.
 4. **`make test-e2e-kube`** — kind cluster + Postgres + Loki + pgwd -kube-postgres -dry-run and pgwd -kube-loki -force-notification. Requires kind, kubectl, Docker.
-5. **`make docker-scan`** — builds image, runs Grype with `--fail-on high`. Requires Docker and Grype on PATH.
+5. **`make docker-scan`** — builds image, runs Grype with `--fail-on high` (override with **`GRYPE_FAIL_ON`**). Requires Docker; uses **Grype on PATH** if installed, otherwise the **anchore/grype** container via the Docker socket.
 
 **These are NOT optional.** `make release` depends on `release-check`; if any step fails, the release is blocked.
 
