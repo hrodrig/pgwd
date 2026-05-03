@@ -6,6 +6,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+### Fixed
+
+- **GoReleaser (`dockers_v2`):** Default **`sbom: true`** (GoReleaser v2.12+) makes **`docker buildx`** pass **`--attest=type=sbom`**, which **fails on GitHub Actions** with the default buildx driver (*Attestation is not supported for the docker driver*). Set **`sbom: false`** in **`.goreleaser.yaml`** so the Release workflow can publish multi-arch images to **ghcr.io** again.
+
 ## [0.6.4] - 2026-05-03
 
 ### Added
