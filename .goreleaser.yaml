@@ -125,8 +125,11 @@ release:
 
 # Docker: multi-arch image to ghcr.io (same GITHUB_TOKEN). Requires buildx + qemu for local release.
 # Snapshot builds skip Docker so `make snapshot` works without a daemon (e.g. FreeBSD dev VMs).
+# sbom: false — GitHub Actions uses the default docker buildx driver, which does not support
+# --attest=type=sbom (see https://goreleaser.com/customization/dockers_v2/ "Docker manifests vs Docker images").
 dockers_v2:
   - disable: "{{ .IsSnapshot }}"
+    sbom: false
     dockerfile: Dockerfile.release
     ids:
       - pgwd
