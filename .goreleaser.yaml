@@ -147,9 +147,11 @@ dockers_v2:
     # GitHub Actions docker buildx driver fails with "index annotations not supported for single platform export".
 
 # Homebrew: publish cask to tap so users can "brew install hrodrig/pgwd/pgwd"
-# Create repo https://github.com/hrodrig/homebrew-pgwd first. For CI, set HOMEBREW_TAP_TOKEN (PAT with repo scope).
+# Create repo https://github.com/hrodrig/homebrew-pgwd first. For CI, add repo secret HOMEBREW_TAP_TOKEN
+# (PAT with contents:write on the tap repo). Without it, cask publish is skipped so the release still succeeds.
 homebrew_casks:
   - name: pgwd
+    skip_upload: '{{ empty (index .Env "HOMEBREW_TAP_TOKEN") }}'
     directory: Casks
     homepage: "https://github.com/hrodrig/pgwd"
     description: "Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki"
@@ -157,7 +159,7 @@ homebrew_casks:
       owner: hrodrig
       name: homebrew-pgwd
       branch: main
-      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+      token: '{{ index .Env "HOMEBREW_TAP_TOKEN" }}'
     url:
       verified: "github.com/hrodrig/pgwd/"
     manpages:
