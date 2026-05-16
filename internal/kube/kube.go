@@ -14,6 +14,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -119,13 +120,33 @@ func ParseKubePostgres(s string) (namespace, resource string, err error) {
 	return namespace, resType + "/" + name, nil
 }
 
-func resolvePodFromService(ctx context.Context, clientset *kubernetes.Clientset, namespace, svcName string) (string, error) {
-	// Try endpoints first: get first address targetRef name
-	ep, err := clientset.CoreV1().Endpoints(namespace).Get(ctx, svcName, metav1.GetOptions{})
-	if err == nil && len(ep.Subsets) > 0 && len(ep.Subsets[0].Addresses) > 0 {
-		if ref := ep.Subsets[0].Addresses[0].TargetRef; ref != nil && ref.Kind == "Pod" {
-			return ref.Name, nil
+// podNameFromEndpointSlices returns a pod name from discovery.k8s.io/v1 EndpointSlices
+// labeled for the given Service. False if none found (caller may fall back).
+func podNameFromEndpointSlices(ctx context.Context, clientset *kubernetes.Clientset, namespace, svcName string) (string, bool) {
+	list, err := clientset.DiscoveryV1().EndpointSlices(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: metav1.FormatLabelSelector(&metav1.LabelSelector{
+			MatchLabels: map[string]string{discoveryv1.LabelServiceName: svcName},
+		}),
+	})
+	if err != nil || len(list.Items) == 0 {
+		return "", false
+	}
+	for i := range list.Items {
+		slice := &list.Items[i]
+		for j := range slice.Endpoints {
+			ep := &slice.Endpoints[j]
+			if ep.TargetRef != nil && ep.TargetRef.Kind == "Pod" && ep.TargetRef.Name != "" {
+				return ep.TargetRef.Name, true
+			}
 		}
+	}
+	return "", false
+}
+
+func resolvePodFromService(ctx context.Context, clientset *kubernetes.Clientset, namespace, svcName string) (string, error) {
+	// Prefer EndpointSlice (avoids deprecated core/v1 Endpoints on Kubernetes 1.33+).
+	if podName, ok := podNameFromEndpointSlices(ctx, clientset, namespace, svcName); ok {
+		return podName, nil
 	}
 	// Fallback: get service selector, then list pods
 	svc, err := clientset.CoreV1().Services(namespace).Get(ctx, svcName, metav1.GetOptions{})

@@ -8,6 +8,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ### Fixed
 
+- **Kubernetes (`-kube-postgres` with `svc/`):** Resolve the backend pod using **`discovery.k8s.io/v1` EndpointSlice** (label **`kubernetes.io/service-name`**) instead of **`core/v1` Endpoints**, which is deprecated in Kubernetes 1.33+ and triggered API warnings in logs. Falls back to the Service selector + pod list when EndpointSlices are unavailable or empty.
 - **GoReleaser (`dockers_v2`):** Default **`sbom: true`** (GoReleaser v2.12+) makes **`docker buildx`** pass **`--attest=type=sbom`**, which **fails on GitHub Actions** with the default buildx driver (*Attestation is not supported for the docker driver*). Set **`sbom: false`** in **`.goreleaser.yaml`** so the Release workflow can publish multi-arch images to **ghcr.io** again.
 - **GoReleaser (`dockers_v2`):** **`annotations:`** became **`--annotation index:…`**; GitHub-hosted **docker** buildx rejects that with *index annotations not supported for single platform export*. Removed **`annotations:`**; **`labels:`** still set **`org.opencontainers.image.*`** on the image.
 - **GitHub Actions Release (`.github/workflows/release.yml`):** **`docker/setup-qemu-action`**, **`docker/setup-buildx-action`**, and **`docker/login-action`** (same pattern as **gghstats**) so **`dockers_v2`** multi-arch **`linux/amd64,linux/arm64`** does not hit *Multi-platform build is not supported for the docker driver* on **`ubuntu-latest`**.
