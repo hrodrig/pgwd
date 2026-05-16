@@ -2,7 +2,7 @@
 
 Scripts and guidance for running security and quality scans **before merging to main** (e.g. on `develop` or in a PR). CI also runs some of these; see `.github/workflows/security.yml`.
 
-**Recommended before merge/release:** Run `./tools/scan.sh` (govulncheck + optional Grype on dir), then **build the image and run Grype on it** (see below) for a complete, release-grade scan of what you actually ship.
+**Recommended before merge/release:** Run **`make security`** (govulncheck + Grype on the built image — same as the CI Security workflow), or `./tools/scan.sh` (govulncheck only; optional Grype on the repo dir).
 
 ## What we use
 

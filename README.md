@@ -6,12 +6,12 @@
   <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.6.4-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.6.5-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![CI](https://github.com/hrodrig/pgwd/actions/workflows/ci.yml/badge.svg)](https://github.com/hrodrig/pgwd/actions)
 [![codecov](https://codecov.io/gh/hrodrig/pgwd/graph/badge.svg)](https://codecov.io/gh/hrodrig/pgwd)
 [![gghstats clones](https://gghstats.hermesrodriguez.com/api/v1/badge/hrodrig/pgwd?metric=clones)](https://gghstats.hermesrodriguez.com/hrodrig/pgwd)
-[![Go 1.26](https://img.shields.io/badge/go-1.26-00ADD8?logo=go)](https://go.dev/)
+[![Go 1.26.3](https://img.shields.io/badge/go-1.26.3-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![pkg.go.dev](https://pkg.go.dev/badge/github.com/hrodrig/pgwd)](https://pkg.go.dev/github.com/hrodrig/pgwd)
 [![Go Report Card](https://goreportcard.com/badge/github.com/hrodrig/pgwd)](https://goreportcard.com/report/github.com/hrodrig/pgwd)
@@ -57,6 +57,8 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 - [Solaris](#solaris)
 - [Roadmap](#roadmap)
 - [Get involved](#get-involved)
+- [Star History](#star-history)
+- [License](#license)
 
 ---
 
@@ -864,11 +866,11 @@ docker pull ghcr.io/hrodrig/pgwd:v0.6.4
 docker pull ghcr.io/hrodrig/pgwd:latest
 ```
 
-**Build from source:** The repo includes a multi-stage **Dockerfile** (Go 1.26, Alpine 3.23): build stage compiles the binary with version/commit/build date injected via build args; runtime stage is minimal and runs as non-root. Use `make docker-build` to build locally with version info.
+**Build from source:** The repo includes a multi-stage **Dockerfile** (Go 1.26.3 build stage; **Alpine 3.22** runtime): build stage compiles the binary with version/commit/build date injected via build args; runtime stage is minimal and runs as non-root. Use `make docker-build` to build locally with version info.
 
 **Image details**
 
-- **Runtime base:** Alpine 3.23. Only `ca-certificates` for HTTPS (Slack/Loki). No `wget`, `nc`, or `curl` (base image’s `wget`/`nc` are BusyBox applets and are removed; they are not separate packages, so we remove the symlinks).
+- **Runtime base:** Alpine **3.22** (not 3.23: 3.23 ships OpenSSL 3.5.x affected by CVE-2026-2673). Only `ca-certificates` for HTTPS (Slack/Loki). No `wget`, `nc`, or `curl` (base image’s `wget`/`nc` are BusyBox applets and are removed; they are not separate packages, so we remove the symlinks).
 - **User:** Runs as non-root user `pgwd` (binary in `/home/pgwd/pgwd`).
 - **Labels:** OCI image labels (title, description, source, authors).
 - **Build context:** `.dockerignore` uses a whitelist: only `go.mod`, `go.sum`, `cmd/`, and `internal/` are sent; `docs/`, `contrib/`, README, etc. are excluded.
@@ -1312,6 +1314,7 @@ Target **v1.0.0** by early July.
 | **0.5.0** | Mar 2026 ✅ | Loki database/cluster labels and log line, Grafana alert docs, security hardening (zlib, compose, k8s). |
 | **0.6.0** | Apr 2026 ✅ | **CSV export** — dump persisted metrics via `-export-metrics-format csv` / `metricsstore` (SQLite). Plus daemon/multi-DB, SQLite store, HTTP `/metrics`, Helm chart moved to pgwd-selfhosted, pgx security updates, Ansible platform tests, and more (see CHANGELOG). |
 | **0.6.4** | May 2026 ✅ | **PostgreSQL/MySQL metrics store** (`metrics_store.driver` / `dsn`), shared **`MetricsStorer`** interface, CSV export for SQL backends. See CHANGELOG. |
+| **0.6.5** | May 2026 ✅ | **Security patch:** Go 1.26.3, `golang.org/x/net` v0.53+, Alpine 3.22 runtime, EndpointSlice for `-kube-postgres`, `make security`. See CHANGELOG. |
 | **0.7.0** | May–Jun | **Extended metrics** — TimescaleDB or additional persistence options. Last 0.x before 1.0. |
 | **1.0.0** | Early Jul | **Breaking:** remove threshold-total and threshold-active. Stable API. Criteria: 100+ tests, logo, deprecations removed. |
 
@@ -1328,3 +1331,21 @@ Found pgwd useful? We’d love your help to make it better. You can:
 - **Star the repo** — it helps others discover pgwd
 
 Thanks for using pgwd. Happy watching.
+
+[↑ Back to top](#top)
+
+---
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/chart?repos=hrodrig/pgwd&type=date&legend=bottom-right)](https://www.star-history.com/?repos=hrodrig%2Fpgwd&type=date&legend=bottom-right)
+
+[↑ Back to top](#top)
+
+---
+
+## License
+
+[MIT License](LICENSE). See [LICENSE](LICENSE) for the full text.
+
+[↑ Back to top](#top)

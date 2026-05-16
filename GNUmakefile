@@ -53,6 +53,7 @@ help:
 	@echo "  cover              Unit tests with coverage (coverage.out + summary line)"
 	@echo "  cover-integration  Same stack as test-integration; go test ./... with coverage (coverage-integration.out)"
 	@echo "  tools              Install govulncheck and gocyclo to \$$GOBIN"
+	@echo "  security           govulncheck + docker-scan (same as CI Security workflow)"
 	@echo ""
 	@echo "Docker:"
 	@echo "  docker-build              Build image (native platform) as pgwd"
@@ -244,6 +245,15 @@ docker-buildx-amd64-push:
 		--build-arg VERSION=$(VERSION) --build-arg COMMIT=$(COMMIT) --build-arg BUILDDATE=$(BUILDDATE) --build-arg BRANCH=$(BRANCH) \
 		-t $(DOCKER_IMAGE) --push .
 
+# security: govulncheck (Go deps) + Grype on built image — mirrors .github/workflows/security.yml (not in release-check).
+.PHONY: security
+security:
+	@echo "Running security checks (govulncheck, docker-scan)..."
+	@command -v govulncheck >/dev/null 2>&1 || $(MAKE) tools
+	@govulncheck ./...
+	@$(MAKE) docker-scan
+	@echo "All security checks passed."
+
 # Build image as pgwd:scan and run Grype. Uses local grype if on PATH; otherwise anchore/grype via Docker (--pull=always).
 docker-scan:
 	$(check-docker)
@@ -275,7 +285,7 @@ release-check:
 	@echo "All release checks passed."
 
 # Release: only from main. Requires release-check to pass. Merge develop → main, update VERSION, then: git tag v0.1.0 && make release
-.PHONY: help release snapshot dist-freebsd dist-openbsd docker-build docker-buildx-amd64 docker-buildx-amd64-push docker-scan lint lint-fix test-integration port-openbsd-sync cover cover-integration integration-compose-up integration-compose-down tools
+.PHONY: help release snapshot dist-freebsd dist-openbsd docker-build docker-buildx-amd64 docker-buildx-amd64-push docker-scan security lint lint-fix test-integration port-openbsd-sync cover cover-integration integration-compose-up integration-compose-down tools
 release: release-check
 	$(check-docker)
 	@branch=$$(git branch --show-current 2>/dev/null); \

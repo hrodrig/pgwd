@@ -1,4 +1,4 @@
-FROM golang:1.26-alpine AS build
+FROM golang:1.26.3-alpine AS build
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILDDATE=unknown
@@ -13,8 +13,8 @@ RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=${VERSION} -X main.Co
 # Minimal runtime: only ca-certificates for HTTPS (Slack/Loki). wget and nc are BusyBox applets
 # (symlinks), not separate apk packages, so we cannot apk del them; we remove the symlinks with rm.
 # curl is not in the base image.
-# Use Alpine 3.21: OpenSSL 3.3.6 (CVE-2026-2673 affects 3.5/3.6 only). 3.23 has 3.5.5.
-FROM alpine:3.21
+# Runtime Alpine 3.22: newer than 3.21; avoid 3.23 (OpenSSL 3.5.x, CVE-2026-2673). Keep in sync with Dockerfile.release.
+FROM alpine:3.22
 LABEL org.opencontainers.image.title="pgwd"
 LABEL org.opencontainers.image.description="Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki"
 LABEL org.opencontainers.image.source="https://github.com/hrodrig/pgwd"

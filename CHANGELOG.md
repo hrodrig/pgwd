@@ -6,12 +6,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-05-16
+
+### Security
+
+- **Go 1.26.3** and **`golang.org/x/net` v0.53.0+** — fixes **govulncheck** findings affecting code paths that use **`net`**, **`net/http`**, and HTTP/2 (**GO-2026-4971**, **GO-2026-4918**), including **`notify.Loki.Send`**. Upgrade binaries and container images built before this release.
+- **Docker runtime `alpine:3.22`** in **`Dockerfile`** and **`Dockerfile.release`** (not 3.23 — avoids OpenSSL 3.5.x / **CVE-2026-2673**).
+
+### Added
+
+- **`make security`** — **govulncheck** + **`docker-scan`** (Grype on the built image), matching the CI **Security** workflow.
+- **README:** gghstats clones badge, **License** and **Star History** sections (with table of contents entries).
+
+### Changed
+
+- **Homebrew release:** GoReleaser cask upload to **`hrodrig/homebrew-pgwd`** is skipped when **`HOMEBREW_TAP_TOKEN`** is unset (release still succeeds).
+
 ### Fixed
 
-- **Kubernetes (`-kube-postgres` with `svc/`):** Resolve the backend pod using **`discovery.k8s.io/v1` EndpointSlice** (label **`kubernetes.io/service-name`**) instead of **`core/v1` Endpoints**, which is deprecated in Kubernetes 1.33+ and triggered API warnings in logs. Falls back to the Service selector + pod list when EndpointSlices are unavailable or empty.
-- **GoReleaser (`dockers_v2`):** Default **`sbom: true`** (GoReleaser v2.12+) makes **`docker buildx`** pass **`--attest=type=sbom`**, which **fails on GitHub Actions** with the default buildx driver (*Attestation is not supported for the docker driver*). Set **`sbom: false`** in **`.goreleaser.yaml`** so the Release workflow can publish multi-arch images to **ghcr.io** again.
-- **GoReleaser (`dockers_v2`):** **`annotations:`** became **`--annotation index:…`**; GitHub-hosted **docker** buildx rejects that with *index annotations not supported for single platform export*. Removed **`annotations:`**; **`labels:`** still set **`org.opencontainers.image.*`** on the image.
-- **GitHub Actions Release (`.github/workflows/release.yml`):** **`docker/setup-qemu-action`**, **`docker/setup-buildx-action`**, and **`docker/login-action`** (same pattern as **gghstats**) so **`dockers_v2`** multi-arch **`linux/amd64,linux/arm64`** does not hit *Multi-platform build is not supported for the docker driver* on **`ubuntu-latest`**.
+- **Kubernetes (`-kube-postgres` with `svc/`):** Resolve the backend pod via **`discovery.k8s.io/v1` EndpointSlice** instead of deprecated **`core/v1` Endpoints** (Kubernetes 1.33+ warnings). Falls back to Service selector + pod list when slices are missing.
+- **GoReleaser (`dockers_v2`):** **`sbom: false`** (GHA buildx attestation failure), removed **`annotations:`** (index annotation export failure), and **QEMU/buildx/GHCR login** in **`.github/workflows/release.yml`** for multi-arch **`linux/amd64,linux/arm64`**.
 
 ## [0.6.4] - 2026-05-03
 
@@ -341,7 +355,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.6.4...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.6.5...HEAD
+[0.6.5]: https://github.com/hrodrig/pgwd/compare/v0.6.4...v0.6.5
 [0.6.4]: https://github.com/hrodrig/pgwd/compare/v0.6.0...v0.6.4
 [0.6.0]: https://github.com/hrodrig/pgwd/compare/v0.5.10...v0.6.0
 [0.5.10]: https://github.com/hrodrig/pgwd/compare/v0.5.8...v0.5.10
