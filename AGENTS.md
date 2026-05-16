@@ -45,7 +45,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 
 - Build image with version info: `make docker-build` (passes VERSION, COMMIT, BUILDDATE; without it the binary reports `dev`/`unknown`). For **linux/amd64** only (e.g. push to a private registry from another arch): `make docker-buildx-amd64` (`pgwd:amd64` locally) or `make docker-buildx-amd64-push DOCKER_IMAGE=registry/repo:tag` after `docker login`.
 - Build context is whitelisted via `.dockerignore`: only `go.mod`, `go.sum`, `cmd/`, and `internal/` are sent.
-- Dockerfile: multi-stage (Go 1.26, Alpine 3.23), non-root user `pgwd`, minimal runtime (ca-certificates only; wget/nc removed).
+- Dockerfile: multi-stage (Go 1.26.3 build; **Alpine 3.22** runtime — not 3.23, OpenSSL/CVE-2026-2673), non-root user `pgwd`, minimal runtime (ca-certificates only; wget/nc removed).
 
 ## Repository structure
 
@@ -61,7 +61,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 - `contrib/HELM.md` — pointer to the Helm chart in **pgwd-selfhosted** (this repo does not ship the chart).
 - `contrib/k8s/README.md` — Kubernetes deployment notes (raw manifests); Helm lives in pgwd-selfhosted.
 - `testing/platforms/` — Ansible roles and playbooks for multi-platform install/test/uninstall validation (Linux, BSD). See `testing/platforms/README.md`.
-- `tools/` — scripts for scanning before merging to main: `tools/scan.sh` (govulncheck, optional Grype). See `tools/README.md`. CI runs govulncheck in the Security workflow.
+- `tools/` — **`make security`** (govulncheck + `docker-scan` / Grype on image; mirrors CI Security). Also `tools/scan.sh` (govulncheck only). See `tools/README.md`.
 
 ## Skills
 
