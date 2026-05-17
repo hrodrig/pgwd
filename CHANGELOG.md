@@ -6,6 +6,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+### Fixed
+
+- **GoReleaser (Homebrew cask):** `skip_upload` used undefined template function `empty`; use `eq (index .Env "HOMEBREW_TAP_TOKEN") ""` so the release workflow completes when the tap token is unset.
+
 ## [0.6.5] - 2026-05-16
 
 ### Security
