@@ -8,7 +8,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ### Fixed
 
-- **GoReleaser (Homebrew cask):** `skip_upload` used undefined template function `empty`; use `eq (index .Env "HOMEBREW_TAP_TOKEN") ""` so the release workflow completes when the tap token is unset.
+- **GoReleaser (Homebrew cask):** Removed broken `empty` template and optional `skip_upload`; release **requires** `HOMEBREW_TAP_TOKEN` and always publishes `Casks/pgwd.rb` to **`hrodrig/homebrew-pgwd`**. Workflow fails early if the secret is unset.
 
 ## [0.6.5] - 2026-05-16
 
@@ -24,7 +24,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ### Changed
 
-- **Homebrew release:** GoReleaser cask upload to **`hrodrig/homebrew-pgwd`** is skipped when **`HOMEBREW_TAP_TOKEN`** is unset (release still succeeds).
+- **Homebrew release:** GoReleaser publishes the cask to **`hrodrig/homebrew-pgwd`** (requires **`HOMEBREW_TAP_TOKEN`** in CI or local env).
 
 ### Fixed
 

@@ -653,7 +653,16 @@ git tag -a v1.0.0 -m "Release 1.0.0"
 git push origin v1.0.0
 ```
 
-**5. Publish release** — requires tokens:
+**5. Publish release** — tokens required:
+
+**GitHub Actions (tag push):** In the **pgwd** repo, add **Settings → Secrets and variables → Actions**:
+
+| Secret | Purpose |
+|--------|---------|
+| `GITHUB_TOKEN` | Provided automatically — release assets and `ghcr.io` image. |
+| `HOMEBREW_TAP_TOKEN` | **Required.** PAT with **contents:write** on [`hrodrig/homebrew-pgwd`](https://github.com/hrodrig/homebrew-pgwd) so GoReleaser can push `Casks/pgwd.rb`. The workflow fails if this secret is missing. |
+
+**Local `make release`:**
 
 ```bash
 export GITHUB_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -661,10 +670,9 @@ export HOMEBREW_TAP_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 make release
 ```
 
-- **GITHUB_TOKEN:** `repo` scope — GitHub release, Docker push to ghcr.io.
-- **HOMEBREW_TAP_TOKEN:** `repo` scope — pushes the Homebrew cask to the tap (`hrodrig/homebrew-pgwd`). Can be the same token as `GITHUB_TOKEN`.
+- **HOMEBREW_TAP_TOKEN:** classic `repo` scope, or fine-grained token with write access to **`homebrew-pgwd`** only. Can be the same PAT as `GITHUB_TOKEN` if it has access to both repos.
 
-Use a [Personal Access Token](https://github.com/settings/tokens) with `repo` scope. Before releasing, verify each token's **expiration date** and **scopes** at [github.com/settings/tokens](https://github.com/settings/tokens).
+Use a [Personal Access Token](https://github.com/settings/tokens). Before releasing, verify **expiration** and **scopes** at [github.com/settings/tokens](https://github.com/settings/tokens).
 
 **Snapshot (no publish):** `make snapshot` — outputs to `dist/` without pushing (no Docker; install [goreleaser](https://goreleaser.com) on `PATH`).
 
