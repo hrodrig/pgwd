@@ -1,0 +1,46 @@
+---
+# rc.d failure diagnostics (included from rescue block in pgwd_daemon).
+
+- name: "rcd: diagnose when start/check fails (OpenBSD)"
+  ansible.builtin.shell: |
+    echo "=== rcctl start (rc={{ rcd_start.rc | default('?') }}) ==="
+    echo "{{ rcd_start.stdout | default('') }}"
+    echo "{{ rcd_start.stderr | default('') }}"
+    echo "=== /etc/pgwd/pgwd.conf (first 40 lines) ==="
+    sed -n '1,40p' /etc/pgwd/pgwd.conf 2>/dev/null || echo "no config"
+    echo "=== processes ==="
+    pgrep -af pgwd || echo "no pgwd process"
+    echo "=== rc.d (daemon, rc_bg) ==="
+    grep -E '^(daemon=|rc_bg=|daemon_flags=)' /etc/rc.d/pgwd 2>/dev/null || true
+    echo "=== dry-run (interval 0) ==="
+    /usr/local/bin/pgwd -config /etc/pgwd/pgwd.conf -dry-run -interval 0 2>&1 | tail -20
+    echo "=== rcctl check ==="
+    rcctl check pgwd 2>&1 || true
+    echo "=== daemon log (tail) ==="
+    tail -n 30 /var/log/daemon 2>/dev/null || echo "no /var/log/daemon"
+  args:
+    executable: "{{ pgwd_rcd_shell | default('/bin/ksh') }}"
+  register: rcd_start_diag
+  changed_when: false
+  when: pgwd_tarball_os | default('') == 'openbsd'
+
+- name: "rcd: diagnose when start/check fails (FreeBSD / generic rc.d)"
+  ansible.builtin.shell: |
+    echo "=== start (rc={{ rcd_start.rc | default('?') }}) ==="
+    echo "{{ rcd_start.stdout | default('') }}"
+    echo "{{ rcd_start.stderr | default('') }}"
+    echo "=== service status ==="
+    {{ pgwd_rcd_status_cmd }}
+    echo "=== processes ==="
+    pgrep -af pgwd || true
+    echo "=== dry-run ==="
+    {{ pgwd_binary_path }} -config /etc/pgwd/pgwd.conf -dry-run -interval 0 2>&1 | tail -20
+  args:
+    executable: /bin/sh
+  register: rcd_start_diag
+  changed_when: false
+  when: pgwd_tarball_os | default('') != 'openbsd'
+
+- name: "rcd: show diagnostics"
+  ansible.builtin.debug:
+    msg: "{{ rcd_start_diag.stdout | default('') }}"

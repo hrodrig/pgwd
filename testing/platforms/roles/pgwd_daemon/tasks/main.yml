@@ -17,6 +17,42 @@
   ansible.builtin.set_fact:
     _repo_root: "{{ playbook_dir | dirname | dirname | dirname }}"
 
+# Stop stray instances before start (re-runs, partial failures, manual tests on the VM).
+- name: "cleanup: stop pgwd via rc.d when starting"
+  ansible.builtin.shell: "{{ pgwd_rcd_stop_cmd }}"
+  args:
+    executable: "{{ pgwd_rcd_shell | default('/bin/sh') }}"
+  changed_when: false
+  failed_when: false
+  when:
+    - pgwd_daemon_state == "started"
+    - pgwd_init_system == "rcd"
+
+- name: "cleanup: stop pgwd via systemd when starting"
+  ansible.builtin.systemd:
+    name: pgwd
+    state: stopped
+  failed_when: false
+  when:
+    - pgwd_daemon_state == "started"
+    - pgwd_init_system == "systemd"
+
+- name: "cleanup: stop pgwd via OpenRC when starting"
+  ansible.builtin.command: rc-service pgwd stop
+  changed_when: false
+  failed_when: false
+  when:
+    - pgwd_daemon_state == "started"
+    - pgwd_init_system == "openrc"
+
+- name: "cleanup: ensure no pgwd process still running"
+  ansible.builtin.shell: pkill -x pgwd 2>/dev/null || pkill pgwd 2>/dev/null || true
+  args:
+    executable: /bin/sh
+  changed_when: false
+  failed_when: false
+  when: pgwd_daemon_state == "started"
+
 # ==================== systemd ====================
 - name: "systemd: install service unit"
   ansible.builtin.copy:
@@ -151,7 +187,7 @@
   ansible.builtin.copy:
     src: "{{ _repo_root }}/{{ pgwd_rcd_script_src }}"
     dest: "{{ pgwd_rcd_script_dest }}"
-    mode: "0755"
+    mode: "{{ pgwd_rcd_script_mode | default('0755') }}"
   when:
     - pgwd_init_system == "rcd"
     - pgwd_daemon_state == "started"
@@ -159,7 +195,7 @@
 - name: "rcd: enable pgwd"
   ansible.builtin.shell: "{{ pgwd_rcd_enable_cmd }}"
   args:
-    executable: /bin/sh
+    executable: "{{ pgwd_rcd_shell | default('/bin/sh') }}"
   changed_when: true
   when:
     - pgwd_init_system == "rcd"
@@ -168,25 +204,18 @@
 - name: "rcd: start pgwd"
   ansible.builtin.shell: "{{ pgwd_rcd_start_cmd }}"
   args:
-    executable: /bin/sh
+    executable: "{{ pgwd_rcd_shell | default('/bin/sh') }}"
   register: rcd_start
   changed_when: rcd_start.rc == 0
-  failed_when: rcd_start.rc != 0 and 'already running' not in (rcd_start.stderr | default(''))
+  failed_when: false
   when:
     - pgwd_init_system == "rcd"
     - pgwd_daemon_state == "started"
 
-- name: "rcd: wait for process"
-  ansible.builtin.pause:
-    seconds: 5
-  when:
-    - pgwd_init_system == "rcd"
-    - pgwd_daemon_state == "started"
-
-- name: "rcd: verify running"
+- name: "rcd: init status after start"
   ansible.builtin.shell: "{{ pgwd_rcd_status_cmd }}"
   args:
-    executable: /bin/sh
+    executable: "{{ pgwd_rcd_shell | default('/bin/sh') }}"
   register: rcd_status
   changed_when: false
   failed_when: false
@@ -194,20 +223,47 @@
     - pgwd_init_system == "rcd"
     - pgwd_daemon_state == "started"
 
-- name: "rcd: assert running"
-  ansible.builtin.assert:
-    that:
-      - rcd_status.rc == 0
-    fail_msg: "pgwd rc.d service not running: {{ rcd_status.stdout | default('') }}"
-    success_msg: "pgwd is running (rc.d)"
+- name: "rcd: verify daemon up (rc.d)"
   when:
     - pgwd_init_system == "rcd"
     - pgwd_daemon_state == "started"
+  block:
+    - name: "rcd: wait for process"
+      ansible.builtin.pause:
+        seconds: 5
+
+    - name: "rcd: assert rcctl check (OpenBSD)"
+      ansible.builtin.assert:
+        that:
+          - rcd_status.stdout is search('ok')
+        fail_msg: "rcctl check pgwd failed: {{ rcd_status.stdout | default('empty') }}"
+        success_msg: "pgwd is running (rcctl {{ rcd_status.stdout | trim }})"
+      when: pgwd_tarball_os | default('') == 'openbsd'
+
+    - name: "rcd: assert service status (FreeBSD / NetBSD / DragonFly)"
+      ansible.builtin.assert:
+        that:
+          - rcd_status.rc == 0
+        fail_msg: "pgwd rc.d service not running: {{ rcd_status.stdout | default('') }}"
+        success_msg: "pgwd is running (rc.d)"
+      when: pgwd_tarball_os | default('') != 'openbsd'
+
+  rescue:
+    - name: "rcd: collect failure diagnostics"
+      ansible.builtin.include_tasks: diagnose_rcd.yml
+
+    - name: "rcd: fail with diagnostics"
+      ansible.builtin.fail:
+        msg: >-
+          pgwd rc.d start failed. rc start rc={{ rcd_start.rc | default('?') }}
+          stdout={{ rcd_start.stdout | default('') }} stderr={{ rcd_start.stderr | default('') }}.
+          init: {{ rcd_status.stdout | default('') }}.
+          See diagnose task output above.
 
 - name: "rcd: stop pgwd"
   ansible.builtin.shell: "{{ pgwd_rcd_stop_cmd }}"
   args:
-    executable: /bin/sh
+    executable: "{{ pgwd_rcd_shell | default('/bin/sh') }}"
   changed_when: true
   failed_when: false
   when:
@@ -217,7 +273,7 @@
 - name: "rcd: disable pgwd"
   ansible.builtin.shell: "{{ pgwd_rcd_disable_cmd }}"
   args:
-    executable: /bin/sh
+    executable: "{{ pgwd_rcd_shell | default('/bin/sh') }}"
   changed_when: true
   failed_when: false
   when:

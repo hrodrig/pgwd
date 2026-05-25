@@ -316,7 +316,10 @@ port-openbsd-sync:
 	  -e 's#^DISTFILES =.*#DISTFILES =	pgwd_v$(PORT_VERSION)_openbsd_$${MACHINE_ARCH:S/aarch64/arm64/}.tar.gz#' \
 	  contrib/openbsd/port/Makefile
 	@rm -f contrib/openbsd/port/Makefile.bak
+	@cp contrib/openbsd/pgwd contrib/openbsd/port/pkg/pgwd.rc
+	@cp contrib/openbsd/pgwd contrib/openbsd/port/files/pgwd
 	@echo "Updated contrib/openbsd/port/Makefile to $(PORT_VERSION)"
+	@echo "Synced contrib/openbsd/port/pkg/pgwd.rc and port/files/pgwd from contrib/openbsd/pgwd"
 
 # Snapshot build (no tag required), outputs to dist/. No Docker required (dockers_v2 disabled for snapshots in .goreleaser.yaml).
 # Snapshot version comes from VERSION (e.g. VERSION=0.6.4 => snapshot 0.6.4-next), independent from reachable git tags.

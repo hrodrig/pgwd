@@ -13,7 +13,7 @@
 
 all:
   vars:
-    pgwd_version: "0.6.4"
+    pgwd_version: "0.6.6"
     pgwd_release_url: "https://github.com/hrodrig/pgwd/releases/download/v{{ pgwd_version }}"
     # Package source mode:
     # - auto    (default): use pgwd_local_package when set, else download release asset
@@ -78,7 +78,7 @@ all:
           ansible_port: 2296
           ansible_user: root
           platform_vars: openbsd
-          # pgwd_local_package: "/tmp/dist/pgwd_v0.6.4_openbsd_amd64.tar.gz"
+          # pgwd_local_package: "/tmp/dist/pgwd_v0.6.6_openbsd_amd64.tar.gz"
         pgwd-netbsd:
           ansible_host: 203.0.113.10
           ansible_port: 2294

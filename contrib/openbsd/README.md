@@ -1,8 +1,24 @@
 # OpenBSD support for pgwd
 
-[OpenBSD](https://www.openbsd.org) uses rc.d, not systemd. The `pgwd` script runs pgwd as a daemon. See `port/` for the official port (submit to ports@openbsd.org).
+[OpenBSD](https://www.openbsd.org) uses **rc.d**, not systemd. **`daemon="/usr/local/bin/pgwd"`** with **`rc_bg=YES`** — **`rc.subr`** backgrounds the daemon (no custom `rc_start` with `&`).
 
-**One config = one Postgres.** For multiple instances (different clusters, thresholds), cron is often simpler: one cron entry per config file. See main README "Running from cron" and "Example: multiple services".
+| Piece | Role |
+|--------|------|
+| **`/usr/local/bin/pgwd`** | Application binary |
+| **`/etc/rc.d/pgwd`** | rc.d script (`contrib/openbsd/pgwd` or port **`pkg/pgwd.rc`** + **`@rcscript`**) |
+| **`/etc/pgwd/pgwd.conf`** | Config (YAML); copy from **`pgwd.conf.example`** |
+
+**One config = one Postgres.** For multiple instances, cron is often simpler — see main README "Running from cron".
+
+**Maintainers (port + release):**
+
+| Doc | Content |
+|-----|---------|
+| **[../BSD-PORTS-STEP-BY-STEP.md](../BSD-PORTS-STEP-BY-STEP.md)** | Full BSD port workflow (start here) |
+| **[PORT-RELEASE.md](PORT-RELEASE.md)** | Distfile, VM **`make package`**, **ports@** diff |
+| **[port/README.md](port/README.md)** | Port directory / ports tree checkout |
+| **[DEBUG-VM.md](DEBUG-VM.md)** | Manual rc.d checklist on a test VM |
+| **[testing/platforms/README.md](../../testing/platforms/README.md)** | Ansible **`make test-platforms`** |
 
 ## Install (from tarball)
 

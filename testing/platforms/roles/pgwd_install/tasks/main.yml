@@ -153,6 +153,21 @@
     executable: /bin/sh
   when: pgwd_install_method == "tarball"
 
+# OpenBSD: rc.d from release tarball when present; pgwd_daemon also installs from repo (current).
+- name: Install OpenBSD rc.d from tarball when present
+  ansible.builtin.shell: |
+    if [ -f /tmp/share/openbsd/rc.d/pgwd ]; then
+      install -m 555 /tmp/share/openbsd/rc.d/pgwd /etc/rc.d/pgwd
+      echo "installed-rc.d"
+    fi
+  args:
+    executable: /bin/sh
+  register: pgwd_openbsd_tarball_rc
+  changed_when: pgwd_openbsd_tarball_rc.stdout | length > 0
+  when:
+    - pgwd_install_method == "tarball"
+    - pgwd_tarball_os == "openbsd"
+
 # --- Verification ---
 - name: Verify pgwd is installed
   ansible.builtin.command: pgwd -version

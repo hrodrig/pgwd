@@ -28,7 +28,7 @@ Kubernetes and container deployments are **not** in scope here — they are cove
 | Arch Linux | tarball | systemd |
 | Alpine 3.x | tarball | OpenRC |
 | FreeBSD 15 | tarball | rc.d (sysrc/service) |
-| OpenBSD 7.x | tarball | rc.d (rcctl) |
+| OpenBSD 7.x | tarball (+ optional `share/openbsd/rc.d/pgwd` in release) | rc.d (`rcctl`; repo `contrib/openbsd/pgwd` in Ansible) |
 | NetBSD 10.x | tarball | rc.d (/etc/rc.d) |
 | DragonFly BSD 6.x | tarball | rc.d (sysrc/service) |
 
@@ -235,6 +235,25 @@ all:
 ```
 
 For **BSD** hosts, use the matching `*_freebsd_*`, `*_openbsd_*`, `*_netbsd_*`, or `*_dragonfly_*` tarball from `dist/`.
+
+### OpenBSD (Ansible vs manual install)
+
+| Path | What gets installed |
+| --- | --- |
+| **Ansible `full-cycle`** | Binary (+ man) from release tarball or `pgwd_local_package`; **`contrib/openbsd/pgwd`** → `/etc/rc.d/pgwd` (overwrites tarball rc.d when both run); `rcctl` enable/start; dry-run + notification mock + cron |
+| **Release tarball only** | `pgwd`, man, **`share/openbsd/rc.d/pgwd`** — see **`contrib/openbsd/README.md`** |
+| **OpenBSD ports** | **`contrib/openbsd/port/`** — not used by playbooks yet |
+
+**OpenBSD rc.d:** `daemon="/usr/local/bin/pgwd"`, **`rc_bg=YES`**. No separate serve wrapper (unlike gghstats). VM checklist: **`contrib/openbsd/DEBUG-VM.md`**.
+
+**Stuck daemon / port conflicts:** `rcctl stop pgwd; pkill -x pgwd`. Setup stops stray processes before each start.
+
+**Without `curl`:** platform tests do not require HTTP on the host; dry-run and notification tests use the CLI. For optional **`/healthz`**, use `ftp` or install `curl` manually.
+
+```bash
+make test-platforms-ping PLATFORM=pgwd-openbsd
+make test-platforms PLATFORM=pgwd-openbsd
+```
 
 ### FreeBSD manual smoke test (CLI + rc.d)
 
