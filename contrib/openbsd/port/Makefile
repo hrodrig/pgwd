@@ -4,8 +4,8 @@
 # Uses pledge() for security.
 
 COMMENT =	postgres connection watchdog with Slack/Loki alerts
-DISTNAME =	pgwd_v0.6.4_openbsd_${MACHINE_ARCH:S/aarch64/arm64/}
-PKGNAME =	pgwd-0.6.4
+DISTNAME =	pgwd_v0.6.6_openbsd_${MACHINE_ARCH:S/aarch64/arm64/}
+PKGNAME =	pgwd-0.6.6
 CATEGORIES =	sysutils
 HOMEPAGE =	https://github.com/hrodrig/pgwd
 MAINTAINER =	hrodrig@usb.ve
@@ -17,8 +17,8 @@ PERMIT_DISTFILES =	Yes
 # Local test before release: copy tarball to DISTDIR or use
 #   make fetch MASTER_SITES=file:///absolute/path/to/dir/
 # See README.md "Test with a local tarball".
-MASTER_SITES =	https://github.com/hrodrig/pgwd/releases/download/v0.6.4/
-DISTFILES =	pgwd_v0.6.4_openbsd_${MACHINE_ARCH:S/aarch64/arm64/}.tar.gz
+MASTER_SITES =	https://github.com/hrodrig/pgwd/releases/download/v0.6.6/
+DISTFILES =	pgwd_v0.6.6_openbsd_${MACHINE_ARCH:S/aarch64/arm64/}.tar.gz
 EXTRACT_SUFX =	.tar.gz
 
 ONLY_FOR_ARCHS =	amd64 arm64 aarch64
@@ -33,7 +33,6 @@ do-install:
 	${INSTALL_DATA} ${WRKDIR}/share/doc/pgwd/LICENSE ${PREFIX}/share/doc/pgwd/
 	${INSTALL_DATA_DIR} ${PREFIX}/share/examples/pgwd
 	${INSTALL_DATA} ${WRKDIR}/etc/pgwd/pgwd.conf.example ${PREFIX}/share/examples/pgwd/
-	${INSTALL_DATA_DIR} ${PREFIX}/etc/rc.d
-	${INSTALL_SCRIPT} ${FILESDIR}/pgwd ${PREFIX}/etc/rc.d/pgwd
+# rc.d: pkg/pgwd.rc + @rcscript in PLIST — generate-readmes copies *.rc → ${RCDIR}/pgwd.
 
 .include <bsd.port.mk>
