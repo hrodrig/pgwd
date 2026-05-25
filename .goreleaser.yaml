@@ -146,15 +146,19 @@ dockers_v2:
     # No `annotations:` (OCI index-level): GoReleaser passes `--annotation index:…`; the default
     # GitHub Actions docker buildx driver fails with "index annotations not supported for single platform export".
 
-# Homebrew: publish cask to tap so users can "brew install hrodrig/pgwd/pgwd"
-# Create repo https://github.com/hrodrig/homebrew-pgwd first. For CI, add repo secret HOMEBREW_TAP_TOKEN
-# (PAT with contents:write on the tap repo). Without it, cask publish is skipped so the release still succeeds.
+# Homebrew: publish cask to https://github.com/hrodrig/homebrew-pgwd (brew install hrodrig/pgwd/pgwd).
+# CI: set repo secret HOMEBREW_TAP_TOKEN (PAT with contents:write on the tap repo; GITHUB_TOKEN cannot push there).
 homebrew_casks:
   - name: pgwd
-    skip_upload: '{{ eq (index .Env "HOMEBREW_TAP_TOKEN") "" }}'
+    ids:
+      - default
     directory: Casks
     homepage: "https://github.com/hrodrig/pgwd"
     description: "Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki"
+    commit_msg_template: "Brew cask update for {{ .ProjectName }} version {{ .Tag }}"
+    commit_author:
+      name: Hermes Rodríguez
+      email: hrodrig@usb.ve
     repository:
       owner: hrodrig
       name: homebrew-pgwd

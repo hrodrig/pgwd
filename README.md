@@ -6,7 +6,7 @@
   <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.6.5-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.6.6-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![CI](https://github.com/hrodrig/pgwd/actions/workflows/ci.yml/badge.svg)](https://github.com/hrodrig/pgwd/actions)
 [![codecov](https://codecov.io/gh/hrodrig/pgwd/graph/badge.svg)](https://codecov.io/gh/hrodrig/pgwd)
@@ -22,6 +22,10 @@
 **Repo:** [github.com/hrodrig/pgwd](https://github.com/hrodrig/pgwd) · **Releases:** [Releases](https://github.com/hrodrig/pgwd/releases)
 
 Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via **Slack** and/or **Loki** when configured thresholds are exceeded. It can also alert on **stale connections** (connections that stay open and never close).
+
+**Self-hosted deployment (Docker Compose, Helm, Kubernetes manifests):** **[pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted)** — production paths, env layout, and observability stacks live there; this repo ships the application binary, packages, and container image only.
+
+**GitHub repo traffic (history beyond 14 days):** sibling tool **[gghstats](https://github.com/hrodrig/gghstats)** — [live stats for pgwd](https://gghstats.hermesrodriguez.com/hrodrig/pgwd) (clone badge above).
 
 **Documentation:** [Sequence diagrams](docs/README.md#sequence-diagrams) (Mermaid) for each use case, [audited against the code](docs/sequence/AUDIT.md), [terminal demo](docs/README.md#terminal-demo-vhs) (VHS — regenerate with `make install` then `bash -c "vhs docs/demo.tape"`), [upgrading 0.5.x → 0.6.x](docs/UPGRADE-0.5-to-0.6.md) (operator checklist; index under [docs/README — Upgrading](docs/README.md#upgrading)), and `man pgwd` (included in .deb/.rpm packages) — see [docs/](docs/README.md). **Scanning** before release (govulncheck, Grype): [tools/README.md](tools/README.md).
 
@@ -653,7 +657,16 @@ git tag -a v1.0.0 -m "Release 1.0.0"
 git push origin v1.0.0
 ```
 
-**5. Publish release** — requires tokens:
+**5. Publish release** — tokens required:
+
+**GitHub Actions (tag push):** In the **pgwd** repo, add **Settings → Secrets and variables → Actions**:
+
+| Secret | Purpose |
+|--------|---------|
+| `GITHUB_TOKEN` | Provided automatically — release assets and `ghcr.io` image. |
+| `HOMEBREW_TAP_TOKEN` | **Required.** PAT with **contents:write** on [`hrodrig/homebrew-pgwd`](https://github.com/hrodrig/homebrew-pgwd) so GoReleaser can push `Casks/pgwd.rb`. The workflow fails if this secret is missing. |
+
+**Local `make release`:**
 
 ```bash
 export GITHUB_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -661,10 +674,9 @@ export HOMEBREW_TAP_TOKEN="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 make release
 ```
 
-- **GITHUB_TOKEN:** `repo` scope — GitHub release, Docker push to ghcr.io.
-- **HOMEBREW_TAP_TOKEN:** `repo` scope — pushes the Homebrew cask to the tap (`hrodrig/homebrew-pgwd`). Can be the same token as `GITHUB_TOKEN`.
+- **HOMEBREW_TAP_TOKEN:** classic `repo` scope, or fine-grained token with write access to **`homebrew-pgwd`** only. Can be the same PAT as `GITHUB_TOKEN` if it has access to both repos.
 
-Use a [Personal Access Token](https://github.com/settings/tokens) with `repo` scope. Before releasing, verify each token's **expiration date** and **scopes** at [github.com/settings/tokens](https://github.com/settings/tokens).
+Use a [Personal Access Token](https://github.com/settings/tokens). Before releasing, verify **expiration** and **scopes** at [github.com/settings/tokens](https://github.com/settings/tokens).
 
 **Snapshot (no publish):** `make snapshot` — outputs to `dist/` without pushing (no Docker; install [goreleaser](https://goreleaser.com) on `PATH`).
 
@@ -1315,6 +1327,7 @@ Target **v1.0.0** by early July.
 | **0.6.0** | Apr 2026 ✅ | **CSV export** — dump persisted metrics via `-export-metrics-format csv` / `metricsstore` (SQLite). Plus daemon/multi-DB, SQLite store, HTTP `/metrics`, Helm chart moved to pgwd-selfhosted, pgx security updates, Ansible platform tests, and more (see CHANGELOG). |
 | **0.6.4** | May 2026 ✅ | **PostgreSQL/MySQL metrics store** (`metrics_store.driver` / `dsn`), shared **`MetricsStorer`** interface, CSV export for SQL backends. See CHANGELOG. |
 | **0.6.5** | May 2026 ✅ | **Security patch:** Go 1.26.3, `golang.org/x/net` v0.53+, Alpine 3.22 runtime, EndpointSlice for `-kube-postgres`, `make security`. See CHANGELOG. |
+| **0.6.6** | May 2026 ✅ | **`golang.org/x/net` v0.55.0** (GO-2026-5026), GoReleaser Homebrew fix, README deployment links. See CHANGELOG. |
 | **0.7.0** | May–Jun | **Extended metrics** — TimescaleDB or additional persistence options. Last 0.x before 1.0. |
 | **1.0.0** | Early Jul | **Breaking:** remove threshold-total and threshold-active. Stable API. Criteria: 100+ tests, logo, deprecations removed. |
 
