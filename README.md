@@ -23,6 +23,10 @@
 
 Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via **Slack** and/or **Loki** when configured thresholds are exceeded. It can also alert on **stale connections** (connections that stay open and never close).
 
+**Self-hosted deployment (Docker Compose, Helm, Kubernetes manifests):** **[pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted)** — production paths, env layout, and observability stacks live there; this repo ships the application binary, packages, and container image only.
+
+**GitHub repo traffic (history beyond 14 days):** sibling tool **[gghstats](https://github.com/hrodrig/gghstats)** — [live stats for pgwd](https://gghstats.hermesrodriguez.com/hrodrig/pgwd) (clone badge above).
+
 **Documentation:** [Sequence diagrams](docs/README.md#sequence-diagrams) (Mermaid) for each use case, [audited against the code](docs/sequence/AUDIT.md), [terminal demo](docs/README.md#terminal-demo-vhs) (VHS — regenerate with `make install` then `bash -c "vhs docs/demo.tape"`), [upgrading 0.5.x → 0.6.x](docs/UPGRADE-0.5-to-0.6.md) (operator checklist; index under [docs/README — Upgrading](docs/README.md#upgrading)), and `man pgwd` (included in .deb/.rpm packages) — see [docs/](docs/README.md). **Scanning** before release (govulncheck, Grype): [tools/README.md](tools/README.md).
 
 ![Terminal demo](docs/demo.gif)
