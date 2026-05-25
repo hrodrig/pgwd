@@ -6,9 +6,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+## [0.6.6] - 2026-05-25
+
+### Security
+
+- **`golang.org/x/net` v0.55.0** — fixes **GO-2026-5026** (Punycode / `idna.ToASCII` on HTTP URLs), reached from **`notify.Loki.Send`**. CI **govulncheck** and published **v0.6.5** images/binaries should upgrade to this release.
+
 ### Fixed
 
 - **GoReleaser (Homebrew cask):** Removed broken `empty` template and optional `skip_upload`; release **requires** `HOMEBREW_TAP_TOKEN` and always publishes `Casks/pgwd.rb` to **`hrodrig/homebrew-pgwd`**. Workflow fails early if the secret is unset.
+
+### Documentation
+
+- **README:** Links to **[pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted)** (Helm/Compose) and **[gghstats](https://github.com/hrodrig/gghstats)** from the intro.
 
 ## [0.6.5] - 2026-05-16
 
@@ -359,7 +369,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.6.5...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.6.6...HEAD
+[0.6.6]: https://github.com/hrodrig/pgwd/compare/v0.6.5...v0.6.6
 [0.6.5]: https://github.com/hrodrig/pgwd/compare/v0.6.4...v0.6.5
 [0.6.4]: https://github.com/hrodrig/pgwd/compare/v0.6.0...v0.6.4
 [0.6.0]: https://github.com/hrodrig/pgwd/compare/v0.5.10...v0.6.0
