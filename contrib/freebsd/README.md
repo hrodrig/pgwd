@@ -4,6 +4,17 @@ This directory contains the [FreeBSD](https://www.freebsd.org) port files for pg
 
 **One config = one Postgres.** For multiple instances (different clusters, thresholds), cron is often simpler: one cron entry per config file. See main README "Running from cron" and "Example: multiple services".
 
+## Supported architectures
+
+The port sets **`ONLY_FOR_ARCHS= amd64 aarch64`**, aligned with prebuilt tarballs on each [GitHub release](https://github.com/hrodrig/pgwd/releases):
+
+- `pgwd_v<version>_freebsd_amd64.tar.gz`
+- `pgwd_v<version>_freebsd_arm64.tar.gz`
+
+FreeBSD uses **`aarch64`** in **`ONLY_FOR_ARCHS`**; **`DISTFILES`** maps it to the **`arm64`** suffix in the release filename (`${ARCH:S/aarch64/arm64/}`).
+
+**riscv64** is not listed until a **`pgwd_v*_freebsd_riscv64.tar.gz`** is published on releases and **`make install`** has been smoke-tested on FreeBSD riscv64. Do not add **`riscv64`** to **`ONLY_FOR_ARCHS`** without both.
+
 ## Install from port
 
 When the port is in the official FreeBSD ports tree:
