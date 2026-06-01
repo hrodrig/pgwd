@@ -1,5 +1,5 @@
 PORTNAME=	pgwd
-PORTVERSION=	0.6.6
+PORTVERSION=	0.6.7
 DISTVERSIONPREFIX=	v
 CATEGORIES=	sysutils
 # Local test before release: copy the tarball into DISTDIR (see `make -V DISTDIR`
@@ -16,7 +16,8 @@ WWW=		https://github.com/hrodrig/pgwd
 LICENSE=	MIT
 
 NO_BUILD=	yes
-NO_ARCH=	yes
+# amd64/aarch64 only: matches GitHub release tarballs (see README.md "Supported architectures").
+ONLY_FOR_ARCHS=	amd64 aarch64
 
 do-install:
 	${INSTALL_PROGRAM} ${WRKDIR}/pgwd ${STAGEDIR}${PREFIX}/bin/pgwd

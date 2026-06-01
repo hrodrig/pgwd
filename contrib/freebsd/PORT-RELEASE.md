@@ -7,6 +7,18 @@ Steps to create or update the pgwd port for a new release.
 - FreeBSD machine or VM with ports tree
 - `pkg install sharutils` (provides `gshar`)
 
+## Supported architectures
+
+**`ONLY_FOR_ARCHS`** in the port **`Makefile`** must match assets on the GitHub release for that **`PORTVERSION`**:
+
+| FreeBSD `ARCH` | Release tarball suffix | In release today (v0.6.7) |
+|----------------|------------------------|---------------------------|
+| amd64 | `_freebsd_amd64` | yes |
+| aarch64 | `_freebsd_arm64` | yes |
+| riscv64 | `_freebsd_riscv64` | no — omit from **`ONLY_FOR_ARCHS`** until published and tested |
+
+QA for Bugzilla: document the FreeBSD version and arch you tested (e.g. FreeBSD 15 amd64). arm64 is supported when the matching tarball exists; riscv64 is out of scope until the table row is **yes**.
+
 ## Part A: In the pgwd repo (before release)
 
 1. **Bump version** in `contrib/freebsd/Makefile`:
@@ -14,7 +26,7 @@ Steps to create or update the pgwd port for a new release.
    # Edit PORTVERSION=	0.5.10  →  new version
    ```
 
-2. **Commit and release** pgwd (tag, `make release`). The GitHub release must have the tarball `pgwd_vX.Y.Z_freebsd_amd64.tar.gz` (and arm64 if built).
+2. **Commit and release** pgwd (tag, `make release`). The GitHub release must include **`pgwd_vX.Y.Z_freebsd_amd64.tar.gz`** and **`pgwd_vX.Y.Z_freebsd_arm64.tar.gz`** (see **Supported architectures**). Goreleaser does not publish **freebsd/riscv64** today.
 
 3. **Copy port files** to your FreeBSD ports tree:
    ```bash
@@ -88,7 +100,8 @@ Steps to create or update the pgwd port for a new release.
 
 | Variable | Example |
 |----------|---------|
-| PORTVERSION | 0.5.10 |
+| PORTVERSION | 0.6.7 |
+| ONLY_FOR_ARCHS | amd64 aarch64 |
 | DISTFILES | pgwd_v${PORTVERSION}_freebsd_${ARCH:S/aarch64/arm64/}.tar.gz |
 | MASTER_SITES | https://github.com/hrodrig/pgwd/releases/download/v${PORTVERSION}/ |
 

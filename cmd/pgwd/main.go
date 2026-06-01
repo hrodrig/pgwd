@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -28,6 +29,7 @@ import (
 	"github.com/hrodrig/pgwd/internal/postgres"
 	"github.com/hrodrig/pgwd/internal/store"
 	"github.com/hrodrig/pgwd/internal/validator"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -39,6 +41,10 @@ var (
 	Branch    string = ""
 )
 
+// printVersion writes the release identity line to stdout. Version comes from the
+// VERSION/Makefile ldflags; Commit, BuildDate, and Branch are injected at build
+// time (see Makefile). Empty commit, build date, or branch are shown as "unknown".
+// Used by handleVersion and the -version flag; it does not exit the process.
 func printVersion() {
 	commit := Commit
 	if commit == "" {
@@ -63,6 +69,10 @@ func handleVersion() {
 	}
 }
 
+// parseFlags registers pgwd CLI flags on cfg, parses os.Args, and returns whether
+// -version was set. Call after loading config from file/env so flag values override
+// those sources (see config.FinalizeAfterFlags). When true, the caller should
+// printVersion and exit without starting the monitor.
 func parseFlags(cfg *config.Config) (showVersion bool) {
 	showVersionFlag := flag.Bool("version", false, "print version and exit")
 	configPath := config.ConfigPath()
@@ -105,12 +115,19 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	return *showVersionFlag
 }
 
+// validateConfig runs validator.Validate on the merged config (file, env, flags).
+// On failure it logs the error and exits; on success it returns so main can start
+// kube port-forwards and the monitor loop.
 func validateConfig(cfg *config.Config) {
 	if err := validator.Validate(cfg); err != nil {
 		log.Fatal(err)
 	}
 }
 
+// exportMetricsAndExit runs a one-shot export of persisted check history from the
+// configured metrics store (sqlite.path or metrics_store) to dest using format
+// (e.g. csv). Requires both -export-metrics-format and -export-metrics-destination;
+// logs the row count and exits 0 on success, or log.Fatal on error.
 func exportMetricsAndExit(cfg *config.Config) {
 	format := strings.TrimSpace(cfg.ExportMetricsFormat)
 	dest := strings.TrimSpace(cfg.ExportMetricsDestination)
@@ -126,8 +143,11 @@ func exportMetricsAndExit(cfg *config.Config) {
 	os.Exit(0)
 }
 
-// setupKube starts port-forward and updates cfg.DBURL when -kube-postgres is set.
-// Returns a cleanup function that must be called on exit (e.g. defer in main).
+// setupKube configures Kubernetes access when -kube-postgres is set. If KubePostgres
+// is empty, it returns a no-op cleanup and leaves cfg unchanged. Otherwise it
+// verifies kubectl is on PATH, optionally discovers the DB password from the pod
+// (DISCOVER_MY_PASSWORD in -db-url), rewrites cfg.DBURL to localhost, and starts
+// port-forward. Returns a cleanup that stops the forward; defer it from main.
 func setupKube(ctx context.Context, cfg *config.Config) (cleanup func()) {
 	if cfg.KubePostgres == "" {
 		return func() {}
@@ -186,6 +206,10 @@ func setupKubeLoki(ctx context.Context, cfg *config.Config) (cleanup func()) {
 	return cleanup
 }
 
+// runContextStrings derives alert and metrics-store identity fields for one check
+// run: client from config; cluster and namespace when -kube-postgres is set;
+// database from the path segment of dbURL. Empty strings are left unset when
+// the source is missing or cannot be parsed.
 func runContextStrings(ctx context.Context, cfg *config.Config, dbURL string) (cluster, client, namespace, database string) {
 	if cfg.KubePostgres != "" {
 		cluster = kube.ClusterName(ctx, cfg.KubeContext)
@@ -202,6 +226,10 @@ func runContextStrings(ctx context.Context, cfg *config.Config, dbURL string) (c
 	return cluster, client, namespace, database
 }
 
+// buildSenders constructs the notification backends configured in cfg: Slack when
+// notifications-slack-webhook is set, Loki when notifications-loki-url is set.
+// Returns nil or a slice with one or both senders; an empty slice means no alerts
+// are delivered (dry-run still logs locally).
 func buildSenders(cfg *config.Config) []notify.Sender {
 	var senders []notify.Sender
 	if cfg.SlackWebhook != "" {
@@ -218,13 +246,25 @@ func buildSenders(cfg *config.Config) []notify.Sender {
 	return senders
 }
 
+// isTooManyClientsError reports whether err is Postgres SQLSTATE 53300 (too many
+// connections). Uses pgconn.PgError.Code so detection does not depend on the
+// server lc_messages locale (Italian, English, etc.).
+func isTooManyClientsError(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "53300"
+}
+
+// notifyConnectFailure sends an infrastructure alert when Postgres cannot be reached
+// or queried. No-op if senders is empty. Unlike threshold alerts, this runs even in
+// dry-run so connection problems stay visible. Maps SQLSTATE 53300 to event type
+// too_many_clients instead of connect_failure.
 func notifyConnectFailure(ctx context.Context, senders []notify.Sender, cfg *config.Config, cluster, client, ns, db string, connectErr error) {
 	if len(senders) == 0 {
 		return
 	}
 	log.Printf("Sending notification…")
 	// Connection failure is urgent: always notify when senders exist, even in dry-run (infrastructure failure must be visible).
-	tooManyClients := connectErr != nil && (strings.Contains(connectErr.Error(), "too many clients") || strings.Contains(connectErr.Error(), "53300"))
+	tooManyClients := isTooManyClientsError(connectErr)
 	ev := notify.Event{
 		Stats:          postgres.ConnectionStats{},
 		Threshold:      "connect_failure",
@@ -252,6 +292,10 @@ func notifyConnectFailure(ctx context.Context, senders []notify.Sender, cfg *con
 	}
 }
 
+// applyThresholdDefaults reads max_connections from the pool (or uses
+// -test-max-connections when set), fills in zero total/active thresholds from
+// -db-default-threshold-percent when not in level mode, then validates threshold
+// config. Called once per target after a successful Postgres connect.
 func applyThresholdDefaults(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config) error {
 	maxConn, maxConnErr := postgres.MaxConnections(ctx, pool)
 	if cfg.TestMaxConnections > 0 {
@@ -266,6 +310,10 @@ func applyThresholdDefaults(ctx context.Context, pool *pgxpool.Pool, cfg *config
 	return nil
 }
 
+// collectEvents builds notify.Event values for one check cycle from current stats
+// and cfg: stale connections, long-running queries, total/active (explicit or
+// 3-tier level mode), idle, and an optional force-notification test event.
+// Returns an empty slice when no thresholds are exceeded.
 func collectEvents(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, stats postgres.ConnectionStats, maxConn int, cluster, client, ns, db string) []notify.Event {
 	var events []notify.Event
 	ev := checker.BaseEvent(stats, maxConn, cfg.TestMaxConnections > 0, cluster, client, ns, db)
@@ -304,6 +352,8 @@ func collectEvents(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, 
 	return events
 }
 
+// collectStaleEvent queries stale connection count and returns a stale-threshold
+// event when count >= cfg.ThresholdStale. Returns nil on query error or below threshold.
 func collectStaleEvent(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, ev notify.Event) *notify.Event {
 	staleCount, err := postgres.StaleCount(ctx, pool, cfg.StaleAge)
 	if err != nil {
@@ -320,6 +370,9 @@ func collectStaleEvent(ctx context.Context, pool *pgxpool.Pool, cfg *config.Conf
 	return &e
 }
 
+// collectLongQueryEvent queries active queries longer than cfg.LongQueryMinSeconds
+// and returns a long_query event when count >= cfg.LongQueryMinCount. Returns nil
+// on query error or below threshold.
 func collectLongQueryEvent(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, ev notify.Event) *notify.Event {
 	n, err := postgres.LongQueryCount(ctx, pool, cfg.LongQueryMinSeconds)
 	if err != nil {
@@ -355,10 +408,79 @@ func sendEvents(ctx context.Context, senders []notify.Sender, cfg *config.Config
 		}
 		if n > 0 {
 			sent[ev.Threshold] = true
-			log.Printf("Notification sent: %s", ev.Message)
+			log.Printf("Notification sent: %s", notificationSentLine(ev))
 		}
 	}
 	return sent
+}
+
+func notificationSentLine(ev notify.Event) string {
+	line := fmt.Sprintf("%s %s | total=%d active=%d idle=%d",
+		notificationSentPrefix(ev), notificationSentMessage(ev),
+		ev.Stats.Total, ev.Stats.Active, ev.Stats.Idle)
+	line += notificationSentMaxConnSuffix(ev)
+	line += notificationSentThresholdSuffix(ev)
+	return line
+}
+
+func notificationSentPrefix(ev notify.Event) string {
+	if ev.Cluster == "" && ev.Database == "" && ev.Client == "" {
+		return "pgwd:"
+	}
+	parts := make([]string, 0, 3)
+	if ev.Cluster != "" {
+		parts = append(parts, fmt.Sprintf("cluster=%s", ev.Cluster))
+	}
+	if ev.Database != "" {
+		parts = append(parts, fmt.Sprintf("database=%s", ev.Database))
+	}
+	if ev.Client != "" {
+		parts = append(parts, fmt.Sprintf("client=%s", ev.Client))
+	}
+	return fmt.Sprintf("pgwd [%s]:", strings.Join(parts, " "))
+}
+
+func notificationSentMessage(ev notify.Event) string {
+	switch ev.Threshold {
+	case "total":
+		return fmt.Sprintf("Total connections %d >= %d", ev.Stats.Total, ev.ThresholdValue)
+	case "active":
+		return fmt.Sprintf("Active connections %d >= %d", ev.Stats.Active, ev.ThresholdValue)
+	default:
+		return ev.Message
+	}
+}
+
+func notificationSentMaxConnSuffix(ev notify.Event) string {
+	if ev.MaxConnections <= 0 {
+		return ""
+	}
+	s := fmt.Sprintf(" max_connections=%d", ev.MaxConnections)
+	if ev.MaxConnectionsIsOverride {
+		s += " (test override)"
+	}
+	return s
+}
+
+func notificationSentThresholdSuffix(ev notify.Event) string {
+	switch ev.Threshold {
+	case "test":
+		return " (delivery check)"
+	case "connect_failure":
+		return " (connection failed)"
+	case "too_many_clients":
+		return " (too many clients — DB saturated)"
+	case "resolution":
+		return " (returned to normal)"
+	default:
+		extra := ""
+		if ev.Level != "" && ev.MaxConnections > 0 && ev.ThresholdValue > 0 &&
+			(ev.Threshold == "total" || ev.Threshold == "active") {
+			pct := ev.ThresholdValue * 100 / ev.MaxConnections
+			extra = fmt.Sprintf(", %d%%, %s", pct, ev.Level)
+		}
+		return fmt.Sprintf(" (limit %s=%d%s)", ev.Threshold, ev.ThresholdValue, extra)
+	}
 }
 
 // runCheckResult is returned by doRunCheck for store integration.
@@ -370,6 +492,9 @@ type runCheckResult struct {
 	StaleCountForStore int // from SqliteStaleAge if >0, else StaleCount (for store)
 }
 
+// doRunCheck reads connection stats and stale counts from Postgres, then collects
+// threshold events for one target. Returns runCheckResult for store integration
+// and notification filtering in makeRunFunc.
 func doRunCheck(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, cluster, client, ns, db string) (runCheckResult, error) {
 	var res runCheckResult
 	stats, err := postgres.Stats(ctx, pool)
@@ -398,6 +523,9 @@ func doRunCheck(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, clu
 	return res, nil
 }
 
+// applyHysteresisFilter suppresses threshold alerts until the same state has been
+// seen for cfg.ConfirmAlert consecutive checks. connect_failure, too_many_clients,
+// and long_query events always pass through. No-op when store is nil or ConfirmAlert <= 1.
 func applyHysteresisFilter(ctx context.Context, st store.MetricsStorer, cfg *config.Config, client, cluster, db, state string, events []notify.Event) []notify.Event {
 	if st == nil || cfg.ConfirmAlert <= 1 || state == "ok" {
 		return events
@@ -415,6 +543,9 @@ func applyHysteresisFilter(ctx context.Context, st store.MetricsStorer, cfg *con
 	return filtered
 }
 
+// applyLongQueryCooldownFilter drops long_query events when the last alert for this
+// target is within cfg.LongQueryCooldownSeconds. Requires a store that implements
+// AlertCooldownRecorder. Other event types are unchanged.
 func applyLongQueryCooldownFilter(ctx context.Context, st store.MetricsStorer, cfg *config.Config, client, cluster, db string, events []notify.Event) []notify.Event {
 	if cfg.LongQueryMinSeconds <= 0 || st == nil {
 		return events
@@ -443,6 +574,9 @@ func applyLongQueryCooldownFilter(ctx context.Context, st store.MetricsStorer, c
 	return out
 }
 
+// trySendResolutionNotification sends a "returned to normal" event when the store
+// shows cfg.ConfirmOk consecutive ok states after a prior alert state. No-op when
+// store is nil or ConfirmOk < 1.
 func trySendResolutionNotification(ctx context.Context, st store.MetricsStorer, cfg *config.Config, senders []notify.Sender, res runCheckResult, cluster, client, ns, db string) {
 	if st == nil || cfg.ConfirmOk < 1 {
 		return
@@ -474,6 +608,9 @@ func trySendResolutionNotification(ctx context.Context, st store.MetricsStorer, 
 	sendEvents(ctx, senders, cfg, []notify.Event{ev})
 }
 
+// makeRunFunc returns the per-interval check closure for one target: stats query,
+// hysteresis and long-query cooldown filters, notification delivery, metrics store
+// insert, and optional resolution alert when state returns to ok.
 func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, cluster, client, ns, db string) func() {
 	return func() {
 		res, err := doRunCheck(ctx, pool, cfg, cluster, client, ns, db)
@@ -511,6 +648,7 @@ func makeRunFunc(ctx context.Context, pool *pgxpool.Pool, cfg *config.Config, se
 	}
 }
 
+// logDryRunStats logs connection counts for one target when -dry-run and log-level=debug.
 func logDryRunStats(cluster, client, database string, res runCheckResult) {
 	// target = cluster (if k8s) / client (monitor id) / database (Postgres DB name)
 	parts := []string{client}
@@ -528,6 +666,7 @@ func logDryRunStats(cluster, client, database string, res runCheckResult) {
 	}
 }
 
+// logStartupBanner logs version, build metadata, platform, and log level at daemon start.
 func logStartupBanner(cfg *config.Config) {
 	commit := Commit
 	if commit == "" {
@@ -545,6 +684,8 @@ func logStartupBanner(cfg *config.Config) {
 		Version, branch, commit, built, runtime.GOOS, runtime.GOARCH, cfg.LogLevel)
 }
 
+// logConfigTrace logs config file load status, PGWD_* env usage, and whether CLI
+// flags were passed. Called only when log-level=debug (via maybeLogConfigTrace).
 func logConfigTrace(path string, configLoaded bool, hasCLIArgs bool) {
 	if path != "" {
 		if configLoaded {
@@ -579,6 +720,8 @@ func logConfigTrace(path string, configLoaded bool, hasCLIArgs bool) {
 	}
 }
 
+// main is the pgwd entry point: load config, optional kube port-forwards, run checks
+// once or on a ticker, and serve HTTP /metrics when configured.
 func main() {
 	handleVersion()
 
@@ -625,6 +768,9 @@ func main() {
 	runTickerLoop(ctx, &cfg, senders, st, targets)
 }
 
+// loadAndParseConfig reads YAML (if present), applies defaults and env, parses CLI
+// flags, and handles -version early exit. Returns cfg, whether the file loaded,
+// and the config path used.
 func loadAndParseConfig() (config.Config, bool, string) {
 	path := config.ConfigPath()
 	cfg, loaded, err := config.FromFile(path)
@@ -646,18 +792,24 @@ func loadAndParseConfig() (config.Config, bool, string) {
 	return cfg, loaded, path
 }
 
+// maybeLogConfigTrace emits logConfigTrace when cfg.LogLevel is debug.
 func maybeLogConfigTrace(cfg *config.Config, path string, loaded bool, hasCLIArgs bool) {
 	if cfg.LogLevel == "debug" {
 		logConfigTrace(path, loaded, hasCLIArgs)
 	}
 }
 
+// applyDBURLOverride clears databases: when -db-url is set with interval 0 in
+// multi-database mode, force single-DB behaviour for one-shot CLI runs.
 func applyDBURLOverride(cfg *config.Config) {
 	if cfg.DBURL != "" && cfg.Interval <= 0 && cfg.UsesDatabases() {
 		cfg.Databases = nil
 	}
 }
 
+// openStoreIfConfigured opens the metrics store (SQLite, PostgreSQL, or MySQL) when
+// configured in cfg. Returns nil when no store driver/path/dsn is set; log.Fatal on
+// open errors.
 func openStoreIfConfigured(cfg *config.Config) store.MetricsStorer {
 	switch metricsstore.Driver(cfg) {
 	case metricsstore.DriverSQLite:
@@ -680,6 +832,8 @@ func openStoreIfConfigured(cfg *config.Config) store.MetricsStorer {
 	}
 }
 
+// setupHTTPIfConfigured starts the HTTP server (health + /metrics) when http.listen
+// is set. Returns a no-op cleanup when disabled, or a shutdown function to defer.
 func setupHTTPIfConfigured(cfg *config.Config, st store.MetricsStorer) func() {
 	if cfg.HTTPListen == "" {
 		return func() {}
@@ -698,6 +852,9 @@ func setupHTTPIfConfigured(cfg *config.Config, st store.MetricsStorer) func() {
 	}
 }
 
+// runOneTarget connects to one database target, applies threshold defaults, and
+// runs the first check. On connect or threshold errors it notifies (if configured)
+// and returns; single-target mode exits the process on connect failure.
 func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, targets []config.DatabaseTarget) {
 	targetCfg := cfg.ConfigForTarget(t)
 	runCluster, runClient, runNamespace, runDatabase := runContextStrings(ctx, targetCfg, t.URL)
@@ -722,6 +879,8 @@ func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Conf
 	run()
 }
 
+// runTickerLoop repeats runOneTarget for every target every cfg.Interval seconds
+// until ctx is cancelled (SIGINT/SIGTERM).
 func runTickerLoop(ctx context.Context, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, targets []config.DatabaseTarget) {
 	ticker := time.NewTicker(time.Duration(cfg.Interval) * time.Second)
 	defer ticker.Stop()
