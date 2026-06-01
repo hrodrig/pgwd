@@ -408,10 +408,79 @@ func sendEvents(ctx context.Context, senders []notify.Sender, cfg *config.Config
 		}
 		if n > 0 {
 			sent[ev.Threshold] = true
-			log.Printf("Notification sent: %s", ev.Message)
+			log.Printf("Notification sent: %s", notificationSentLine(ev))
 		}
 	}
 	return sent
+}
+
+func notificationSentLine(ev notify.Event) string {
+	line := fmt.Sprintf("%s %s | total=%d active=%d idle=%d",
+		notificationSentPrefix(ev), notificationSentMessage(ev),
+		ev.Stats.Total, ev.Stats.Active, ev.Stats.Idle)
+	line += notificationSentMaxConnSuffix(ev)
+	line += notificationSentThresholdSuffix(ev)
+	return line
+}
+
+func notificationSentPrefix(ev notify.Event) string {
+	if ev.Cluster == "" && ev.Database == "" && ev.Client == "" {
+		return "pgwd:"
+	}
+	parts := make([]string, 0, 3)
+	if ev.Cluster != "" {
+		parts = append(parts, fmt.Sprintf("cluster=%s", ev.Cluster))
+	}
+	if ev.Database != "" {
+		parts = append(parts, fmt.Sprintf("database=%s", ev.Database))
+	}
+	if ev.Client != "" {
+		parts = append(parts, fmt.Sprintf("client=%s", ev.Client))
+	}
+	return fmt.Sprintf("pgwd [%s]:", strings.Join(parts, " "))
+}
+
+func notificationSentMessage(ev notify.Event) string {
+	switch ev.Threshold {
+	case "total":
+		return fmt.Sprintf("Total connections %d >= %d", ev.Stats.Total, ev.ThresholdValue)
+	case "active":
+		return fmt.Sprintf("Active connections %d >= %d", ev.Stats.Active, ev.ThresholdValue)
+	default:
+		return ev.Message
+	}
+}
+
+func notificationSentMaxConnSuffix(ev notify.Event) string {
+	if ev.MaxConnections <= 0 {
+		return ""
+	}
+	s := fmt.Sprintf(" max_connections=%d", ev.MaxConnections)
+	if ev.MaxConnectionsIsOverride {
+		s += " (test override)"
+	}
+	return s
+}
+
+func notificationSentThresholdSuffix(ev notify.Event) string {
+	switch ev.Threshold {
+	case "test":
+		return " (delivery check)"
+	case "connect_failure":
+		return " (connection failed)"
+	case "too_many_clients":
+		return " (too many clients — DB saturated)"
+	case "resolution":
+		return " (returned to normal)"
+	default:
+		extra := ""
+		if ev.Level != "" && ev.MaxConnections > 0 && ev.ThresholdValue > 0 &&
+			(ev.Threshold == "total" || ev.Threshold == "active") {
+			pct := ev.ThresholdValue * 100 / ev.MaxConnections
+			extra = fmt.Sprintf(", %d%%, %s", pct, ev.Level)
+		}
+		return fmt.Sprintf(" (limit %s=%d%s)", ev.Threshold, ev.ThresholdValue, extra)
+	}
 }
 
 // runCheckResult is returned by doRunCheck for store integration.

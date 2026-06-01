@@ -116,7 +116,7 @@ pgwd -config /etc/pgwd/pgwd.conf -dry-run -interval 0
 
 ## Test with a local tarball (before a GitHub release)
 
-1. Match **DISTFILES** (e.g. **`pgwd_v0.6.6_openbsd_amd64.tar.gz`** after **`gmake port-openbsd-sync`**).
+1. Match **DISTFILES** (e.g. **`pgwd_v0.6.7_openbsd_amd64.tar.gz`** after **`gmake port-openbsd-sync`**).
 
 2. Build from repo root:
 
@@ -130,7 +130,7 @@ pgwd -config /etc/pgwd/pgwd.conf -dry-run -interval 0
 4. **Option B — `file://`:**
 
    ```sh
-   cp /path/to/pgwd/dist/pgwd_v0.6.6_openbsd_amd64.tar.gz /tmp/pgwd-dist/
+   cp /path/to/pgwd/dist/pgwd_v0.6.7_openbsd_amd64.tar.gz /tmp/pgwd-dist/
    cd /usr/ports/sysutils/pgwd
    make fetch MASTER_SITES=file:///tmp/pgwd-dist/
    make install

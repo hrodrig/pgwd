@@ -11,7 +11,7 @@ Steps to create or update the pgwd port for a new release.
 
 **`ONLY_FOR_ARCHS`** in the port **`Makefile`** must match assets on the GitHub release for that **`PORTVERSION`**:
 
-| FreeBSD `ARCH` | Release tarball suffix | In release today (v0.6.6) |
+| FreeBSD `ARCH` | Release tarball suffix | In release today (v0.6.7) |
 |----------------|------------------------|---------------------------|
 | amd64 | `_freebsd_amd64` | yes |
 | aarch64 | `_freebsd_arm64` | yes |
@@ -100,7 +100,7 @@ QA for Bugzilla: document the FreeBSD version and arch you tested (e.g. FreeBSD 
 
 | Variable | Example |
 |----------|---------|
-| PORTVERSION | 0.6.6 |
+| PORTVERSION | 0.6.7 |
 | ONLY_FOR_ARCHS | amd64 aarch64 |
 | DISTFILES | pgwd_v${PORTVERSION}_freebsd_${ARCH:S/aarch64/arm64/}.tar.gz |
 | MASTER_SITES | https://github.com/hrodrig/pgwd/releases/download/v${PORTVERSION}/ |
