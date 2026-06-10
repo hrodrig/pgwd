@@ -11,7 +11,7 @@
 [![CI](https://github.com/hrodrig/pgwd/actions/workflows/ci.yml/badge.svg)](https://github.com/hrodrig/pgwd/actions)
 [![codecov](https://codecov.io/gh/hrodrig/pgwd/graph/badge.svg)](https://codecov.io/gh/hrodrig/pgwd)
 [![gghstats clones](https://gghstats.hermesrodriguez.com/api/v1/badge/hrodrig/pgwd?metric=clones)](https://gghstats.hermesrodriguez.com/hrodrig/pgwd)
-[![Go 1.26.3](https://img.shields.io/badge/go-1.26.3-00ADD8?logo=go)](https://go.dev/)
+[![Go 1.26.4](https://img.shields.io/badge/go-1.26.4-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![pkg.go.dev](https://pkg.go.dev/badge/github.com/hrodrig/pgwd)](https://pkg.go.dev/github.com/hrodrig/pgwd)
 [![Go Report Card](https://goreportcard.com/badge/github.com/hrodrig/pgwd)](https://goreportcard.com/report/github.com/hrodrig/pgwd)
@@ -878,7 +878,7 @@ docker pull ghcr.io/hrodrig/pgwd:v0.6.4
 docker pull ghcr.io/hrodrig/pgwd:latest
 ```
 
-**Build from source:** The repo includes a multi-stage **Dockerfile** (Go 1.26.3 build stage; **Alpine 3.22** runtime): build stage compiles the binary with version/commit/build date injected via build args; runtime stage is minimal and runs as non-root. Use `make docker-build` to build locally with version info.
+**Build from source:** The repo includes a multi-stage **Dockerfile** (Go 1.26.4 build stage; **Alpine 3.22** runtime): build stage compiles the binary with version/commit/build date injected via build args; runtime stage is minimal and runs as non-root. Use `make docker-build` to build locally with version info.
 
 **Image details**
 

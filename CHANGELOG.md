@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+### Security
+
+- **Go 1.26.4** — stdlib fixes **GO-2026-5037** (`crypto/x509`, CVE-2026-27145), **GO-2026-5039** (`net/textproto`), and related **1.26.4** patches. Rebuild binaries and images; relevant for HTTPS notifiers (Slack/Loki) and TLS Postgres URLs.
+
+### Changed
+
+- **Go 1.26.4** — `go.mod`, **Dockerfile** build stage (`golang:1.26.4-alpine`), README Go badge.
+
 ## [0.6.7] - 2026-05-31
 
 ### Fixed
