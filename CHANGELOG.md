@@ -6,6 +6,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+## [0.6.8] - 2026-06-10
+
 ### Security
 
 - **Go 1.26.4** — stdlib fixes **GO-2026-5037** (`crypto/x509`, CVE-2026-27145), **GO-2026-5039** (`net/textproto`), and related **1.26.4** patches. Rebuild binaries and images; relevant for HTTPS notifiers (Slack/Loki) and TLS Postgres URLs.
@@ -13,6 +15,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 ### Changed
 
 - **Go 1.26.4** — `go.mod`, **Dockerfile** build stage (`golang:1.26.4-alpine`), README Go badge.
+
+### Documentation
+
+- **Roadmap:** **0.8.0** supply chain (Syft SBOM + Cosign); drop dedicated **0.7.0** Timescale feature — use **`metrics_store.driver: postgres`** for TimescaleDB. **`contrib/pgwd.conf.example`** note.
 
 ## [0.6.7] - 2026-05-31
 
@@ -391,7 +397,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.6.7...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.6.8...HEAD
+[0.6.8]: https://github.com/hrodrig/pgwd/compare/v0.6.7...v0.6.8
 [0.6.7]: https://github.com/hrodrig/pgwd/compare/v0.6.6...v0.6.7
 [0.6.6]: https://github.com/hrodrig/pgwd/compare/v0.6.5...v0.6.6
 [0.6.5]: https://github.com/hrodrig/pgwd/compare/v0.6.4...v0.6.5

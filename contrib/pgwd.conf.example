@@ -103,6 +103,7 @@ databases:
 #   stale_age: 300                # optional; seconds for stale count in store (0 = use db.stale_age)
 #
 # Optional: persist metrics to PostgreSQL or MySQL instead of SQLite (same FIFO semantics; max rows: sqlite.max_metrics).
+# TimescaleDB: use driver postgres with a DSN to your Timescale instance (no separate pgwd driver).
 # metrics_store:
 #   driver: postgres   # or mysql, postgresql (alias), sqlite (requires sqlite.path)
 #   dsn: "postgres://user:pass@host:5432/pgwd_metrics?sslmode=disable"

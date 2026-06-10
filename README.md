@@ -6,7 +6,7 @@
   <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.6.7-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.6.8-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![CI](https://github.com/hrodrig/pgwd/actions/workflows/ci.yml/badge.svg)](https://github.com/hrodrig/pgwd/actions)
 [![codecov](https://codecov.io/gh/hrodrig/pgwd/graph/badge.svg)](https://codecov.io/gh/hrodrig/pgwd)
@@ -438,7 +438,7 @@ When you run pgwd as a Deployment (Docker image in K8s), use **direct service UR
 - **Loki:** `notifications.loki.url` with in-cluster DNS, e.g. `http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push`.
 - **Passwords:** From a Secret via env (`PGWD_*` or `-config`). No `DISCOVER_MY_PASSWORD` — that requires cluster access (pgwd outside K8s) to read the Postgres pod env.
 - **HTTP:** Set `http.listen: ":8080"` for `/healthz` and `/metrics` (liveness, Prometheus).
-- **CSV export (metrics store):** Check history is persisted under **`sqlite.path`** (SQLite) or **`metrics_store.driver`** + **`metrics_store.dsn`** (PostgreSQL / MySQL). To dump stored rows: **`pgwd -config /etc/pgwd/pgwd.conf -export-metrics-format csv -export-metrics-destination /path/out.csv`**. SQLite export opens the file **read-only** (safe while the daemon runs). Overwrites the CSV each run; use **cron** for periodic snapshots. See **`internal/metricsstore`** and **`contrib/pgwd.conf.example`**.
+- **CSV export (metrics store):** Check history is persisted under **`sqlite.path`** (SQLite) or **`metrics_store.driver`** + **`metrics_store.dsn`** (PostgreSQL / MySQL). **[TimescaleDB](https://www.timescale.com/)** works as **`driver: postgres`** pointing at your Timescale endpoint (plain `metrics` table; no pgwd-specific hypertable integration). To dump stored rows: **`pgwd -config /etc/pgwd/pgwd.conf -export-metrics-format csv -export-metrics-destination /path/out.csv`**. SQLite export opens the file **read-only** (safe while the daemon runs). Overwrites the CSV each run; use **cron** for periodic snapshots. See **`internal/metricsstore`** and **`contrib/pgwd.conf.example`**.
 
 Simplest: use env vars from Secrets (no config file). Example Deployment env:
 
@@ -1318,7 +1318,7 @@ See [contrib/solaris/README.md](contrib/solaris/README.md) for details.
 
 ## Roadmap
 
-Target **v1.0.0** by early July.
+Target **v1.0.0** by early July. After **0.6.x** (metrics store + security patches), the line is **0.8.0** (supply chain, last **0.x** before **1.0**) → **1.0.0** (breaking stable). **TimescaleDB** for metrics history uses the existing **`metrics_store.driver: postgres`** DSN (no separate backend).
 
 | Version | Target | Scope |
 |---------|--------|-------|
@@ -1329,8 +1329,9 @@ Target **v1.0.0** by early July.
 | **0.6.5** | May 2026 ✅ | **Security patch:** Go 1.26.3, `golang.org/x/net` v0.53+, Alpine 3.22 runtime, EndpointSlice for `-kube-postgres`, `make security`. See CHANGELOG. |
 | **0.6.6** | May 2026 ✅ | **`golang.org/x/net` v0.55.0** (GO-2026-5026), GoReleaser Homebrew fix, README deployment links. See CHANGELOG. |
 | **0.6.7** | May 2026 ✅ | **too_many_clients** locale fix, enriched **Notification sent** daemon log. See CHANGELOG. |
-| **0.7.0** | May–Jun | **Extended metrics** — TimescaleDB or additional persistence options. Last 0.x before 1.0. |
-| **1.0.0** | Early Jul | **Breaking:** remove threshold-total and threshold-active. Stable API. Criteria: 100+ tests, logo, deprecations removed. |
+| **0.6.8** | Jun 2026 ✅ | **Security patch:** Go **1.26.4** (stdlib **GO-2026-5037** / **GO-2026-5039**). Roadmap/docs (Timescale via postgres driver). See CHANGELOG. |
+| **0.8.0** | Jun–Jul | **Supply chain** — **Syft SBOM** + **Cosign** keyless sign for GHCR images and release artifacts (same release-pipeline pattern as [groot](https://github.com/hrodrig/groot) / [kzero](https://github.com/hrodrig/kzero)); re-enable GoReleaser SBOM/docker signing once buildx supports attestations; document `cosign verify` for operators. **Last 0.x before 1.0.** |
+| **1.0.0** | Early Jul | **Breaking:** remove threshold-total and threshold-active. Stable API. Criteria: 100+ tests, logo, deprecations removed, **0.8.0** supply chain shipped. |
 
 [↑ Back to top](#top)
 
