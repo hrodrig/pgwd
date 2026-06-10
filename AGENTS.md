@@ -45,7 +45,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 
 - Build image with version info: `make docker-build` (passes VERSION, COMMIT, BUILDDATE; without it the binary reports `dev`/`unknown`). For **linux/amd64** only (e.g. push to a private registry from another arch): `make docker-buildx-amd64` (`pgwd:amd64` locally) or `make docker-buildx-amd64-push DOCKER_IMAGE=registry/repo:tag` after `docker login`.
 - Build context is whitelisted via `.dockerignore`: only `go.mod`, `go.sum`, `cmd/`, and `internal/` are sent.
-- Dockerfile: multi-stage (Go 1.26.3 build; **Alpine 3.22** runtime — not 3.23, OpenSSL/CVE-2026-2673), non-root user `pgwd`, minimal runtime (ca-certificates only; wget/nc removed).
+- Dockerfile: multi-stage (Go 1.26.4 build; **Alpine 3.22** runtime — not 3.23, OpenSSL/CVE-2026-2673), non-root user `pgwd`, minimal runtime (ca-certificates only; wget/nc removed).
 
 ## Repository structure
 
