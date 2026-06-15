@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hrodrig/pgwd/contrib"
 	"github.com/hrodrig/pgwd/internal/checker"
 	"github.com/hrodrig/pgwd/internal/config"
 	"github.com/hrodrig/pgwd/internal/httpsrv"
@@ -66,6 +67,16 @@ func handleVersion() {
 	if len(os.Args) >= 2 && (os.Args[1] == "version" || os.Args[1] == "-version" || os.Args[1] == "--version") {
 		printVersion()
 		os.Exit(0)
+	}
+}
+
+// handlePrintSampleConfig writes the annotated example config to stdout and exits when requested.
+func handlePrintSampleConfig() {
+	for _, arg := range os.Args[1:] {
+		if arg == "--print-sample-config" || arg == "-print-sample-config" {
+			fmt.Print(contrib.SampleConf())
+			os.Exit(0)
+		}
 	}
 }
 
@@ -724,6 +735,7 @@ func logConfigTrace(path string, configLoaded bool, hasCLIArgs bool) {
 // once or on a ticker, and serve HTTP /metrics when configured.
 func main() {
 	handleVersion()
+	handlePrintSampleConfig()
 
 	cfg, loaded, configPath := loadAndParseConfig()
 	applyDBURLOverride(&cfg)

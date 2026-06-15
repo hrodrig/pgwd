@@ -6,6 +6,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+### Added
+
+- **`pgwd --print-sample-config`** — writes annotated sample config to stdout (same as `contrib/pgwd.conf.example`).
+
 ## [0.6.8] - 2026-06-10
 
 ### Security

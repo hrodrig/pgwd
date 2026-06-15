@@ -127,7 +127,7 @@ pgwd loads settings from (in order): **config file** → **environment variables
 | Environment | `PGWD_*` |
 | CLI | `-flag` |
 
-**Config file** (YAML) — keys match `-flag` and `PGWD_*` env vars. See `contrib/pgwd.conf.example`. Use `databases:` for one or more Postgres (canonical). Legacy `db:` is deprecated and will be removed in v1.0. For kube.postgres, use `db:` until per-db kube support exists.
+**Config file** (YAML) — keys match `-flag` and `PGWD_*` env vars. See `contrib/pgwd.conf.example` (or **`pgwd --print-sample-config > /etc/pgwd/pgwd.conf`** when the example file is not on disk). Use `databases:` for one or more Postgres (canonical). Legacy `db:` is deprecated and will be removed in v1.0. For kube.postgres, use `db:` until per-db kube support exists.
 
 ```bash
 # Use default path /etc/pgwd/pgwd.conf
@@ -522,6 +522,7 @@ All parameters can be set via **config file**, **CLI**, or **environment variabl
 
 | CLI | Env | Description |
 |-----|-----|-------------|
+| `--print-sample-config` | — | Print annotated sample config to **stdout** and exit (same as `contrib/pgwd.conf.example`). |
 | `-config` | `PGWD_CONFIG` | Config file path (YAML). Default `/etc/pgwd/pgwd.conf`. See `contrib/pgwd.conf.example`. |
 | `-db-url` | `PGWD_DB_URL` | PostgreSQL connection URL (required). With `-kube-postgres`, use host localhost and port matching `-kube-local-port`. |
 | `-kube-postgres` | `PGWD_KUBE_POSTGRES` | Connect via port-forward (client-go): `namespace/type/name` (e.g. `default/svc/postgres`). Requires kubeconfig. |
