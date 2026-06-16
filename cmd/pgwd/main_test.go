@@ -56,6 +56,19 @@ func runBinary(args ...string) (stdout, stderr string, exitCode int) {
 	return stdout, stderr, exitCode
 }
 
+func TestMain_PrintSampleConfig(t *testing.T) {
+	stdout, stderr, code := runBinary("--print-sample-config")
+	if code != 0 {
+		t.Errorf("pgwd --print-sample-config: exit code %d, want 0", code)
+	}
+	if stdout == "" || !strings.Contains(stdout, "client:") {
+		t.Errorf("pgwd --print-sample-config: stdout %q does not contain sample config", stdout)
+	}
+	if stderr != "" {
+		t.Errorf("pgwd --print-sample-config: expected empty stderr, got %q", stderr)
+	}
+}
+
 func TestMain_Version(t *testing.T) {
 	stdout, _, code := runBinary("-version")
 	if code != 0 {

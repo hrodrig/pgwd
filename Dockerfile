@@ -8,6 +8,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
+COPY contrib/ ./contrib/
 RUN CGO_ENABLED=0 go build -ldflags "-s -w -X main.Version=${VERSION} -X main.Commit=${COMMIT} -X main.BuildDate=${BUILDDATE} -X main.Branch=${BRANCH}" -o /pgwd ./cmd/pgwd
 
 # Minimal runtime: only ca-certificates for HTTPS (Slack/Loki). wget and nc are BusyBox applets
