@@ -168,6 +168,9 @@ homebrew_casks:
       verified: "github.com/hrodrig/pgwd/"
     manpages:
       - share/man/man1/pgwd.1
+    caveats: |
+      Sample configuration is not bundled with the Homebrew cask.
+      Generate it with `pgwd --print-sample-config > /etc/pgwd/pgwd.conf`.
     hooks:
       post:
         install: |

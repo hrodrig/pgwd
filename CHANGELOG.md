@@ -6,9 +6,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+## [0.6.9] - 2026-06-16
+
 ### Added
 
-- **`pgwd --print-sample-config`** — writes annotated sample config to stdout (same as `contrib/pgwd.conf.example`).
+- **`pgwd --print-sample-config`** — writes annotated sample config to stdout (same as `contrib/pgwd.conf.example`); documented in README.
+
+### Fixed
+
+- **Docker image build:** include **`contrib/`** in build context for embedded sample config.
 
 ## [0.6.8] - 2026-06-10
 
@@ -401,7 +407,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.6.8...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.6.9...HEAD
+[0.6.9]: https://github.com/hrodrig/pgwd/compare/v0.6.8...v0.6.9
 [0.6.8]: https://github.com/hrodrig/pgwd/compare/v0.6.7...v0.6.8
 [0.6.7]: https://github.com/hrodrig/pgwd/compare/v0.6.6...v0.6.7
 [0.6.6]: https://github.com/hrodrig/pgwd/compare/v0.6.5...v0.6.6
