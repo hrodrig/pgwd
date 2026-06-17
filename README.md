@@ -6,7 +6,7 @@
   <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.6.9-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.6.10-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![CI](https://github.com/hrodrig/pgwd/actions/workflows/ci.yml/badge.svg)](https://github.com/hrodrig/pgwd/actions)
 [![codecov](https://codecov.io/gh/hrodrig/pgwd/graph/badge.svg)](https://codecov.io/gh/hrodrig/pgwd)
@@ -879,11 +879,11 @@ docker pull ghcr.io/hrodrig/pgwd:v0.6.4
 docker pull ghcr.io/hrodrig/pgwd:latest
 ```
 
-**Build from source:** The repo includes a multi-stage **Dockerfile** (Go 1.26.4 build stage; **Alpine 3.22** runtime): build stage compiles the binary with version/commit/build date injected via build args; runtime stage is minimal and runs as non-root. Use `make docker-build` to build locally with version info.
+**Build from source:** The repo includes a multi-stage **Dockerfile** (Go 1.26.4 build stage; **Alpine 3.24.1** runtime): build stage compiles the binary with version/commit/build date injected via build args; runtime stage is minimal and runs as non-root. Use `make docker-build` to build locally with version info.
 
 **Image details**
 
-- **Runtime base:** Alpine **3.22** (not 3.23: 3.23 ships OpenSSL 3.5.x affected by CVE-2026-2673). Only `ca-certificates` for HTTPS (Slack/Loki). No `wget`, `nc`, or `curl` (base image’s `wget`/`nc` are BusyBox applets and are removed; they are not separate packages, so we remove the symlinks).
+- **Runtime base:** Alpine **3.24.1** (OpenSSL security fixes, incl. CVE-2026-2673). Only `ca-certificates` for HTTPS (Slack/Loki). No `wget`, `nc`, or `curl` (base image’s `wget`/`nc` are BusyBox applets and are removed; they are not separate packages, so we remove the symlinks).
 - **User:** Runs as non-root user `pgwd` (binary in `/home/pgwd/pgwd`).
 - **Labels:** OCI image labels (title, description, source, authors).
 - **Build context:** `.dockerignore` uses a whitelist: only `go.mod`, `go.sum`, `cmd/`, and `internal/` are sent; `docs/`, `contrib/`, README, etc. are excluded.
@@ -1331,6 +1331,7 @@ Target **v1.0.0** by early July. After **0.6.x** (metrics store + security patch
 | **0.6.6** | May 2026 ✅ | **`golang.org/x/net` v0.55.0** (GO-2026-5026), GoReleaser Homebrew fix, README deployment links. See CHANGELOG. |
 | **0.6.7** | May 2026 ✅ | **too_many_clients** locale fix, enriched **Notification sent** daemon log. See CHANGELOG. |
 | **0.6.8** | Jun 2026 ✅ | **Security patch:** Go **1.26.4** (stdlib **GO-2026-5037** / **GO-2026-5039**). Roadmap/docs (Timescale via postgres driver). See CHANGELOG. |
+| **0.6.10** | Jun 2026 ✅ | **Security patch:** Docker runtime **Alpine 3.24.1** (Snyk low cleared; OpenSSL/CVE-2026-2673). See CHANGELOG. |
 | **0.8.0** | Jun–Jul | **Supply chain** — **Syft SBOM** + **Cosign** keyless sign for GHCR images and release artifacts (same release-pipeline pattern as [groot](https://github.com/hrodrig/groot) / [kzero](https://github.com/hrodrig/kzero)); re-enable GoReleaser SBOM/docker signing once buildx supports attestations; document `cosign verify` for operators. **Last 0.x before 1.0.** |
 | **1.0.0** | Early Jul | **Breaking:** remove threshold-total and threshold-active. Stable API. Criteria: 100+ tests, logo, deprecations removed, **0.8.0** supply chain shipped. |
 
