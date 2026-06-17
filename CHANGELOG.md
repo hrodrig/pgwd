@@ -6,6 +6,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ## [Unreleased]
 
+## [0.6.10] - 2026-06-17
+
+### Security
+
+- **Docker runtime `alpine:3.24.1`** in **`Dockerfile`** and **`Dockerfile.release`** (from 3.22; clears Snyk low findings; OpenSSL fixes incl. **CVE-2026-2673**). Grype may still report **Medium** busybox **CVE-2025-60876** until Alpine ships a fixed **apk**; runtime removes **`wget`** (affected applet).
+
 ## [0.6.9] - 2026-06-16
 
 ### Added
@@ -407,7 +413,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.6.9...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.6.10...HEAD
+[0.6.10]: https://github.com/hrodrig/pgwd/compare/v0.6.9...v0.6.10
 [0.6.9]: https://github.com/hrodrig/pgwd/compare/v0.6.8...v0.6.9
 [0.6.8]: https://github.com/hrodrig/pgwd/compare/v0.6.7...v0.6.8
 [0.6.7]: https://github.com/hrodrig/pgwd/compare/v0.6.6...v0.6.7

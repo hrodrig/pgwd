@@ -1,5 +1,5 @@
 PORTNAME=	pgwd
-PORTVERSION=	0.6.8
+PORTVERSION=	0.6.10
 DISTVERSIONPREFIX=	v
 CATEGORIES=	sysutils
 # Local test before release: copy the tarball into DISTDIR (see `make -V DISTDIR`

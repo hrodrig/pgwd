@@ -13,7 +13,7 @@
 
 all:
   vars:
-    pgwd_version: "0.6.8"
+    pgwd_version: "0.6.10"
     pgwd_release_url: "https://github.com/hrodrig/pgwd/releases/download/v{{ pgwd_version }}"
     # Package source mode:
     # - auto    (default): use pgwd_local_package when set, else download release asset
