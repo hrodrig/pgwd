@@ -1,5 +1,16 @@
 # pgwd — Documentation
 
+## Roadmap to v1.0
+
+Release bands from **v0.6.10** to **v1.0.0** (target early–mid July 2026). Behavior contract: [SPECIFICATIONS.md](../SPECIFICATIONS.md).
+
+| Band | Plan | Theme |
+|------|------|--------|
+| **0.7.x** | [plan-0.7.x.md](./plan-0.7.x.md) | PagerDuty, Teams, generic webhook, shared HTTP retry |
+| **0.8.x** | [plan-0.8.x.md](./plan-0.8.x.md) | Syft SBOM, Cosign signing |
+| **0.9.x** | [plan-0.9.x.md](./plan-0.9.x.md) | Polish, coverage, profiles, `--strict`, daemon telemetry (opt-in), SPEC audit |
+| **1.0.x** | [plan-1.0.x.md](./plan-1.0.x.md) | Breaking stable API, deprecations removed |
+
 ## Upgrading
 
 **[Upgrading from 0.5.x to 0.6.x](./UPGRADE-0.5-to-0.6.md)** — Checklist and links for moving from **0.5.10** (or earlier **0.5.x**) to **0.6.x**: config/CLI/env breaks introduced in **0.5.10**, optional **0.6.x** features (metrics store, HTTP, CSV export), and **Helm** moving to [pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted). For the raw rename table, see the [README breaking-changes section](../README.md#breaking-changes-upgrade-from-05x).
