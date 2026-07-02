@@ -8,7 +8,7 @@ Release bands from **v0.6.10** to **v1.0.0** (target early–mid July 2026). Beh
 |------|------|--------|
 | **0.7.x** | [plan-0.7.x.md](./plan-0.7.x.md) | PagerDuty, Teams, generic webhook, shared HTTP retry |
 | **0.8.x** | [plan-0.8.x.md](./plan-0.8.x.md) | Syft SBOM, Cosign signing |
-| **0.9.x** | [plan-0.9.x.md](./plan-0.9.x.md) | Polish, coverage, profiles, `--strict`, daemon telemetry (opt-in), SPEC audit |
+| **0.9.x** | [plan-0.9.x.md](./plan-0.9.x.md) | Polish, DISCOVER removal + K8s password alts, collector, `--strict`, SPEC audit |
 | **1.0.x** | [plan-1.0.x.md](./plan-1.0.x.md) | Breaking stable API, deprecations removed |
 
 ## Upgrading

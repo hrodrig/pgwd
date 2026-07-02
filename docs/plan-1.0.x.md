@@ -2,7 +2,7 @@
 
 **Theme:** Remove deprecated surface area; freeze CLI, env, and YAML contract documented in [SPECIFICATIONS.md](../SPECIFICATIONS.md).
 
-**Baseline:** [plan-0.9.x.md](./plan-0.9.x.md) complete (polish, coverage, profiles)  
+**Baseline:** [plan-0.9.x.md](./plan-0.9.x.md) complete (polish, coverage, profiles, **`DISCOVER_MY_PASSWORD` removed in 0.9**)  
 **Previous band:** [plan-0.9.x.md](./plan-0.9.x.md)  
 **Target:** **v1.0.0** early–mid July 2026
 
@@ -18,6 +18,8 @@
 | Config key `notify_on_connect_failure` | Removed |
 | `db:` config key (single-DB) | `databases:` array (even for one target) |
 | Legacy flag names `-threshold-total` / `-threshold-active` | Removed (if any alias remains) |
+
+**Already removed in 0.9.x (not 1.0):** `DISCOVER_MY_PASSWORD`, `-kube-password-var`, `-kube-password-container`, `GetPasswordFromPod` / `pods/exec`. Migration: [kubernetes-passwords.md](./kubernetes-passwords.md).
 
 ### Migration
 

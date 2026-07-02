@@ -30,7 +30,7 @@ Ready-to-use YAML snippets:
 |---------|----------|
 | `minimal-slack.yml` | One-shot Slack |
 | `daemon-loki.yml` | Daemon + Loki + SQLite |
-| `kube-prod.yml` | Outside cluster: kube port-forward + Slack/Loki |
+| `kube-prod.yml` | Outside cluster: kube port-forward + Secret/env (no `DISCOVER_MY_PASSWORD`) |
 | `multi-db.yml` | Multi-DB + Slack |
 
 Document profiles in SPECIFICATIONS.md §15 and README.
@@ -134,7 +134,149 @@ Env: `PGWD_ENABLE_COLLECTOR`, `PGWD_ENABLE_UPDATE_CHECK`. CLI flags optional: `-
 - Respect `HTTP_PROXY` / `HTTPS_PROXY`; fail silently on network error
 - No retries in loop; single attempt per process start
 
-### 9. Documentation and SPEC audit
+### 10. Remove `DISCOVER_MY_PASSWORD` (security) + secure alternatives
+
+**Problem:** Today pgwd runs `printenv` inside the Postgres pod via `pods/exec` (SPDY) when the DSN password is the literal `DISCOVER_MY_PASSWORD`. That needs **`pods/exec` RBAC** — not documented in SPEC/contrib/k8s/Helm — and contradicts read-only monitoring / least privilege. Password crosses into the pgwd process and DSN in memory.
+
+**Goal users had:** run pgwd **outside** the cluster with `-kube-postgres` without storing the Postgres password in config files or git.
+
+**0.9 approach:** ship **documented replacements first**, then **remove** the placeholder in the same band (deprecation warning in early 0.9.x patch if needed; hard fail + code removal before 0.9.0 tag or in final 0.9.x — pick one release cut).
+
+#### What to remove
+
+| Area | Remove |
+|------|--------|
+| `internal/kube/kube.go` | `discoverPasswordPlaceholder`, `GetPasswordFromPod`, `DiscoverPasswordPlaceholder`, `URLContainsDiscoverPassword`; password branch in `ReplaceDBURLForKube` |
+| `internal/config/` | `KubePasswordVar`, `KubePasswordContainer`, YAML `kube.password_var` / `kube.password_container`, env `PGWD_KUBE_PASSWORD_*` |
+| `cmd/pgwd/main.go` | Discovery branch in `setupKube`; flags `-kube-password-var`, `-kube-password-container` |
+| Tests/docs | `kube_test` discovery cases, README/AGENTS/SPEC/man/BSD contrib examples, `test-e2e-kube.sh` DISCOVER path |
+
+**Validation after removal:** if DSN still contains `DISCOVER_MY_PASSWORD`, exit 1 with migration link:
+
+```text
+DISCOVER_MY_PASSWORD was removed in pgwd 0.9.x (security).
+Use a Secret-backed URL — see docs/kubernetes-passwords.md
+```
+
+#### Secure alternatives (same outcomes, no `pods/exec`)
+
+Operators choose by deployment model. Document all in **`docs/kubernetes-passwords.md`** (new) and link from README § Kubernetes.
+
+##### A. In-cluster (preferred — already supported)
+
+pgwd Deployment/DaemonSet; DSN from Secret → env. No `-kube-postgres`, no port-forward.
+
+```yaml
+env:
+  - name: PGWD_DB_URL
+    valueFrom:
+      secretKeyRef:
+        name: pgwd-db
+        key: url
+```
+
+Source: [contrib/k8s/README.md](../contrib/k8s/README.md), pgwd-selfhosted Helm. **RBAC:** none beyond default SA (no access to Postgres pod).
+
+##### B. Outside cluster — wrapper script (no pgwd code change)
+
+Ship **`contrib/k8s/pgwd-kube-run.sh`**: reads Secret with `kubectl`, builds `PGWD_DB_URL`, execs `pgwd` with `-kube-postgres`. Password never in repo; **RBAC on the operator identity** (human CI), not on a long-lived pgwd ServiceAccount with `pods/exec`.
+
+```bash
+# Example pattern (script wraps error handling + port defaults)
+SECRET_NS=default SECRET_NAME=postgres-credentials SECRET_KEY=password \
+  DB_USER=postgres DB_NAME=mydb DB_PORT=5432 \
+  ./contrib/k8s/pgwd-kube-run.sh \
+    -kube-postgres default/svc/postgres \
+    -client prod -interval 60 \
+    -notifications-slack-webhook "$WEBHOOK"
+```
+
+Cron/systemd: same script; kubeconfig + `kubectl` on PATH.
+
+##### C. Outside cluster — `kube.password_from_secret` (optional pgwd feature, 0.9)
+
+**Replacement inside pgwd** for users who want config-file ergonomics without exec:
+
+```yaml
+kube:
+  postgres: default/svc/postgres
+  password_from_secret:
+    namespace: default
+    name: postgres-credentials
+    key: password          # or key: url → full DSN, skip URL assembly
+db:
+  url: "postgres://postgres@localhost:5432/mydb?sslmode=disable"  # no password in URL
+```
+
+Implementation: client-go **`secrets.Get`** (read only), assemble DSN locally. **RBAC for pgwd SA:**
+
+```yaml
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["postgres-credentials"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods", "services"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["create"]
+```
+
+No `pods/exec`. Namespace-scoped Role, not ClusterRole. Document in `contrib/k8s/rbac-outside-cluster.yaml`.
+
+**Decision:** ship in **0.9.0** (with wrapper script as secondary path).
+
+##### D. Outside cluster — pre-export env (manual / CI)
+
+One-liner before `pgwd` (documented, no new code):
+
+```bash
+export PGWD_DB_URL="postgres://postgres:$(kubectl get secret postgres-credentials -n default \
+  -o jsonpath='{.data.password}' | base64 -d)@localhost:5432/mydb?sslmode=disable"
+pgwd -kube-postgres default/svc/postgres -client prod ...
+```
+
+##### E. Enterprise sync
+
+External Secrets Operator, Vault Agent, Sealed Secrets → file or env consumed by pgwd or wrapper. Point to patterns; no pgwd-specific code required.
+
+##### F. Direct TCP (no kube)
+
+If Postgres is reachable without port-forward: Secret → `PGWD_DB_URL` or `~/.pgpass` (mode `0600`). Out of kube scope.
+
+#### Comparison
+
+| Method | pgwd outside cluster | Password in git/config | pgwd needs `pods/exec` | pgwd needs `secrets get` |
+|--------|---------------------|------------------------|-------------------------|---------------------------|
+| ~~DISCOVER_MY_PASSWORD~~ | yes | placeholder only | **yes** | no |
+| Wrapper script | yes | no | no | no (kubectl in shell) |
+| `password_from_secret` | yes | no | no | **yes** (scoped) |
+| In-cluster Secret env | no (inside) | no | no | no (kube mounts env) |
+| Manual `kubectl` export | yes | no | no | no |
+
+#### Deliverables (0.9.x)
+
+| Item | Action |
+|------|--------|
+| `docs/kubernetes-passwords.md` | **Create** — decision tree + all alternatives above |
+| `contrib/k8s/pgwd-kube-run.sh` | **Create** — wrapper for outside-cluster |
+| `contrib/k8s/rbac-outside-cluster.yaml` | **Create** — SA + Role (port-forward + optional secrets get) |
+| `contrib/profiles/kube-prod.yml` | Secret/wrapper pattern, no placeholder |
+| `internal/kube/` + config | Remove exec discovery; add `password_from_secret` (**0.9.0**) |
+| `testing/scripts/test-e2e-kube.sh` | Use kubectl secret read or `password_from_secret`; drop DISCOVER retries |
+| `contrib/k8s/README.md` | Link passwords doc; outside vs in-cluster split |
+| pgwd-selfhosted (follow-up) | Chart values + RBAC without exec |
+| `CHANGELOG.md` | Security removal + migration |
+| `SPECIFICATIONS.md` §9 | Remove DISCOVER; document `password_from_secret` if shipped |
+| [plan-1.0.x.md](./plan-1.0.x.md) | Note: DISCOVER removed in 0.9 (not deferred to 1.0) |
+
+#### Phasing (suggested)
+
+1. **0.9.0 (develop):** `password_from_secret`, `docs/kubernetes-passwords.md`, wrapper, RBAC sample, profile; e2e migrated; remove DISCOVER; fail fast on old placeholder.
+
+### 11. Documentation and SPEC audit
 
 - Finish [SPECIFICATIONS.md](../SPECIFICATIONS.md) audit against **0.9.x** code (K8s client-go, HTTP `/healthz`/`/metrics`, metrics store interface, CSV columns, config load order, **collector privacy**)
 - Sequence diagrams in [docs/sequence/](./sequence/) re-audit if behavior changed
@@ -149,8 +291,13 @@ Env: `PGWD_ENABLE_COLLECTOR`, `PGWD_ENABLE_UPDATE_CHECK`. CLI flags optional: `-
 | `cmd/pgwd/main.go` | `--strict`, deprecation warnings, `startCollector` when `interval > 0` |
 | `internal/config/config.go` | `EnableCollector`, `EnableUpdateCheck`; file/env mapping |
 | `internal/validator/validator.go` | Strict-mode validation if needed |
-| `contrib/profiles/` | **Create** profile YAML snippets |
-| `contrib/pgwd.conf.example` | Collector flags (commented) + privacy note |
+| `internal/kube/` | Remove `DISCOVER_MY_PASSWORD` / exec; add `password_from_secret` (0.9.0) |
+| `contrib/k8s/pgwd-kube-run.sh` | **Create** — outside-cluster wrapper |
+| `contrib/k8s/rbac-outside-cluster.yaml` | **Create** — least-privilege SA |
+| `docs/kubernetes-passwords.md` | **Create** — migration + alternatives |
+| `testing/scripts/test-e2e-kube.sh` | No DISCOVER; secret-based URL |
+| `contrib/profiles/` | **Create** profile YAML snippets (kube-prod without DISCOVER) |
+| `contrib/pgwd.conf.example` | Remove `kube.password_*`; optional `password_from_secret` block |
 | `SPECIFICATIONS.md` | Exit codes, profiles, collector, audited behavior |
 | `README.md` | Profiles, strict mode, anonymous usage |
 | Various `*_test.go` | Coverage improvements |
@@ -159,7 +306,7 @@ Env: `PGWD_ENABLE_COLLECTOR`, `PGWD_ENABLE_UPDATE_CHECK`. CLI flags optional: `-
 
 ## Testing
 
-- `make test`, `make lint`, `make test-integration`, `make test-e2e-kube`
+- `make test`, `make lint`, `make test-integration`, `make test-e2e-kube` (no `pods/exec` in e2e path)
 - Coverage report: `make cover` meets 70% target (or documented exceptions)
 - Platform smoke: at least Ubuntu + one BSD if install paths touched
 
@@ -172,6 +319,7 @@ Env: `PGWD_ENABLE_COLLECTOR`, `PGWD_ENABLE_UPDATE_CHECK`. CLI flags optional: `-
 | 1 | Logo/branding for 1.0? | Wait for user input on design direction. |
 | 2 | Implement distinct exit codes 2–3 (connect vs query) or only 4 in strict? | Defer granular 2/3 to 1.0 or post-1.0 unless needed for cron. |
 | 3 | Collector endpoint: dedicated `collect.pgwd…` vs shared backend with `product: pgwd`? | Decide before coding `internal/collector`. |
+| 4 | Ship `kube.password_from_secret` in 0.9.0 or 0.9.1? | **0.9.0** — with wrapper script as alternate path. |
 
 ---
 
@@ -180,5 +328,5 @@ Env: `PGWD_ENABLE_COLLECTOR`, `PGWD_ENABLE_UPDATE_CHECK`. CLI flags optional: `-
 - [ ] Tag `v0.9.0` from `main`
 - [ ] SPEC audited for 0.9.x
 - [ ] Profiles shipped under `contrib/profiles/`
-- [ ] Collector: opt-in default verified; README privacy section published
+- [ ] `DISCOVER_MY_PASSWORD` removed; `docs/kubernetes-passwords.md` + wrapper/RBAC shipped; e2e kube updated
 - [ ] CHANGELOG [Unreleased] → 0.9.x section
