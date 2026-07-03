@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"text/template"
 
 	"github.com/hrodrig/pgwd/internal/config"
 	"github.com/hrodrig/pgwd/internal/kube"
@@ -104,14 +105,51 @@ func ValidateStale(cfg *config.Config) error {
 
 // ValidateNotifiers ensures at least one notifier or dry-run when needed.
 func ValidateNotifiers(cfg *config.Config) error {
+	if err := validateNotifierChannels(cfg); err != nil {
+		return err
+	}
+	if err := validateNotifyRetry(cfg); err != nil {
+		return err
+	}
 	if !cfg.HasAnyNotifier() && !cfg.DryRun {
-		return fmt.Errorf("pgwd: no notifier configured: set PGWD_NOTIFICATIONS_SLACK_WEBHOOK and/or PGWD_NOTIFICATIONS_LOKI_URL (or -notifications-slack-webhook / -notifications-loki-url), or use -dry-run")
+		return fmt.Errorf("pgwd: no notifier configured: set a notification channel (Slack, Loki, PagerDuty, Teams, generic webhook, or kube-loki), or use -dry-run")
 	}
 	if cfg.ForceNotification && !cfg.HasAnyNotifier() {
-		return fmt.Errorf("pgwd: force-notification requires at least one notifier (-notifications-slack-webhook or -notifications-loki-url)")
+		return fmt.Errorf("pgwd: force-notification requires at least one notifier")
 	}
 	if cfg.NotifyOnConnectFailure && !cfg.HasAnyNotifier() {
-		return fmt.Errorf("pgwd: notify-on-connect-failure requires at least one notifier (-notifications-slack-webhook or -notifications-loki-url)")
+		return fmt.Errorf("pgwd: notify-on-connect-failure requires at least one notifier")
+	}
+	return nil
+}
+
+func validateNotifierChannels(cfg *config.Config) error {
+	if cfg.PagerDutyActive() && cfg.PagerDutyRoutingKey == "" {
+		return fmt.Errorf("pgwd: notifications.pagerduty.routing_key is required when PagerDuty is enabled")
+	}
+	if cfg.TeamsActive() && cfg.TeamsWebhook == "" {
+		return fmt.Errorf("pgwd: notifications.teams.webhook_url is required when Teams is enabled")
+	}
+	if cfg.GenericActive() && cfg.GenericWebhookURL == "" {
+		return fmt.Errorf("pgwd: notifications.generic.webhook_url is required when generic webhook is enabled")
+	}
+	if cfg.GenericBodyTemplate != "" {
+		if _, err := template.New("generic").Parse(cfg.GenericBodyTemplate); err != nil {
+			return fmt.Errorf("pgwd: notifications.generic.body_template: %w", err)
+		}
+	}
+	return nil
+}
+
+func validateNotifyRetry(cfg *config.Config) error {
+	if cfg.RetryMaxAttempts < 0 {
+		return fmt.Errorf("pgwd: notifications.retry.max_attempts must be >= 0")
+	}
+	if cfg.RetryInitialBackoff < 0 {
+		return fmt.Errorf("pgwd: notifications.retry.initial_backoff must be >= 0")
+	}
+	if cfg.RetryMaxBackoff < 0 {
+		return fmt.Errorf("pgwd: notifications.retry.max_backoff must be >= 0")
 	}
 	return nil
 }

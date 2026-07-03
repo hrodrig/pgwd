@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -76,6 +77,31 @@ type fileConfig struct {
 		Slack struct {
 			Webhook string `yaml:"webhook"`
 		} `yaml:"slack"`
+		PagerDuty struct {
+			Enabled    bool   `yaml:"enabled"`
+			RoutingKey string `yaml:"routing_key"`
+			Severity   string `yaml:"severity"`
+			Source     string `yaml:"source"`
+		} `yaml:"pagerduty"`
+		Teams struct {
+			Enabled    bool   `yaml:"enabled"`
+			WebhookURL string `yaml:"webhook_url"`
+		} `yaml:"teams"`
+		Generic struct {
+			Enabled      bool              `yaml:"enabled"`
+			WebhookURL   string            `yaml:"webhook_url"`
+			JSONKey      string            `yaml:"json_key"`
+			Headers      map[string]string `yaml:"headers"`
+			ExtraFields  map[string]string `yaml:"extra_fields"`
+			BodyTemplate string            `yaml:"body_template"`
+			HMACSecret   string            `yaml:"hmac_secret"`
+			HMACHeader   string            `yaml:"hmac_header"`
+		} `yaml:"generic"`
+		Retry struct {
+			MaxAttempts    int    `yaml:"max_attempts"`
+			InitialBackoff string `yaml:"initial_backoff"`
+			MaxBackoff     string `yaml:"max_backoff"`
+		} `yaml:"retry"`
 	} `yaml:"notifications"`
 }
 
@@ -135,6 +161,23 @@ func fileConfigToConfig(fc fileConfig) Config {
 		HTTPHealthPath:           fc.HTTP.HealthPath,
 		HTTPMetricsPath:          fc.HTTP.MetricsPath,
 		SlackWebhook:             fc.Notifications.Slack.Webhook,
+		PagerDutyEnabled:         fc.Notifications.PagerDuty.Enabled,
+		PagerDutyRoutingKey:      fc.Notifications.PagerDuty.RoutingKey,
+		PagerDutySeverity:        fc.Notifications.PagerDuty.Severity,
+		PagerDutySource:          fc.Notifications.PagerDuty.Source,
+		TeamsEnabled:             fc.Notifications.Teams.Enabled,
+		TeamsWebhook:             fc.Notifications.Teams.WebhookURL,
+		GenericEnabled:           fc.Notifications.Generic.Enabled,
+		GenericWebhookURL:        fc.Notifications.Generic.WebhookURL,
+		GenericJSONKey:           fc.Notifications.Generic.JSONKey,
+		GenericHeaders:           fc.Notifications.Generic.Headers,
+		GenericExtraFields:       fc.Notifications.Generic.ExtraFields,
+		GenericBodyTemplate:      fc.Notifications.Generic.BodyTemplate,
+		GenericHMACSecret:        fc.Notifications.Generic.HMACSecret,
+		GenericHMACHeader:        fc.Notifications.Generic.HMACHeader,
+		RetryMaxAttempts:         fc.Notifications.Retry.MaxAttempts,
+		RetryInitialBackoff:      parseDurationOrZero(fc.Notifications.Retry.InitialBackoff),
+		RetryMaxBackoff:          parseDurationOrZero(fc.Notifications.Retry.MaxBackoff),
 		StaleAge:                 fc.DB.StaleAge,
 		ThresholdTotal:           fc.DB.Threshold.Total,
 		ThresholdActive:          fc.DB.Threshold.Active,
@@ -225,6 +268,7 @@ func databaseNameFromURL(raw string) string {
 func ApplyDefaults(c *Config) {
 	applyKubeDefaults(c)
 	applyGeneralDefaults(c)
+	applyNotifyDefaults(c)
 	applySqliteAndConfirmDefaults(c)
 	applyHTTPDefaults(c)
 }
@@ -262,6 +306,8 @@ func applyGeneralDefaults(c *Config) {
 
 // FinalizeAfterFlags applies derived defaults that depend on CLI flags (call after flag.Parse).
 func FinalizeAfterFlags(c *Config) {
+	MergeNotifyJSONFields(c)
+	applyNotifyDefaults(c)
 	if c.LongQueryMinSeconds > 0 {
 		if c.LongQueryMinCount <= 0 {
 			c.LongQueryMinCount = 1
@@ -297,4 +343,16 @@ func applyHTTPDefaults(c *Config) {
 	if c.HTTPMetricsPath == "" {
 		c.HTTPMetricsPath = "/metrics"
 	}
+}
+
+func parseDurationOrZero(s string) time.Duration {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return 0
+	}
+	return d
 }

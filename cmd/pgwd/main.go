@@ -102,6 +102,23 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.StringVar(&cfg.LokiLabels, "notifications-loki-labels", cfg.LokiLabels, "Loki labels, e.g. app=pgwd,env=prod (PGWD_NOTIFICATIONS_LOKI_LABELS)")
 	flag.StringVar(&cfg.LokiOrgID, "notifications-loki-org-id", cfg.LokiOrgID, "Loki X-Scope-OrgID header (multi-tenancy); for 401 Unauthorized (PGWD_NOTIFICATIONS_LOKI_ORG_ID)")
 	flag.StringVar(&cfg.LokiBearerToken, "notifications-loki-bearer-token", cfg.LokiBearerToken, "Loki Authorization: Bearer token (PGWD_NOTIFICATIONS_LOKI_BEARER_TOKEN)")
+	flag.BoolVar(&cfg.PagerDutyEnabled, "notifications-pagerduty-enabled", cfg.PagerDutyEnabled, "Enable PagerDuty Events v2 notifications (PGWD_NOTIFICATIONS_PAGERDUTY_ENABLED)")
+	flag.StringVar(&cfg.PagerDutyRoutingKey, "notifications-pagerduty-routing-key", cfg.PagerDutyRoutingKey, "PagerDuty Events v2 routing key (PGWD_NOTIFICATIONS_PAGERDUTY_ROUTING_KEY)")
+	flag.StringVar(&cfg.PagerDutySeverity, "notifications-pagerduty-severity", cfg.PagerDutySeverity, "PagerDuty default severity (PGWD_NOTIFICATIONS_PAGERDUTY_SEVERITY; default warning)")
+	flag.StringVar(&cfg.PagerDutySource, "notifications-pagerduty-source", cfg.PagerDutySource, "PagerDuty event source (PGWD_NOTIFICATIONS_PAGERDUTY_SOURCE; default pgwd)")
+	flag.BoolVar(&cfg.TeamsEnabled, "notifications-teams-enabled", cfg.TeamsEnabled, "Enable Microsoft Teams notifications (PGWD_NOTIFICATIONS_TEAMS_ENABLED)")
+	flag.StringVar(&cfg.TeamsWebhook, "notifications-teams-webhook", cfg.TeamsWebhook, "Microsoft Teams incoming webhook URL (PGWD_NOTIFICATIONS_TEAMS_WEBHOOK)")
+	flag.BoolVar(&cfg.GenericEnabled, "notifications-generic-enabled", cfg.GenericEnabled, "Enable generic webhook notifications (PGWD_NOTIFICATIONS_GENERIC_ENABLED)")
+	flag.StringVar(&cfg.GenericWebhookURL, "notifications-generic-webhook-url", cfg.GenericWebhookURL, "Generic webhook target URL (PGWD_NOTIFICATIONS_GENERIC_WEBHOOK_URL)")
+	flag.StringVar(&cfg.GenericJSONKey, "notifications-generic-json-key", cfg.GenericJSONKey, "Generic webhook JSON field for message text (PGWD_NOTIFICATIONS_GENERIC_JSON_KEY; default text)")
+	flag.StringVar(&cfg.GenericHeadersJSON, "notifications-generic-headers", cfg.GenericHeadersJSON, "Generic webhook HTTP headers as JSON object (PGWD_NOTIFICATIONS_GENERIC_HEADERS)")
+	flag.StringVar(&cfg.GenericExtraFieldsJSON, "notifications-generic-extra-fields", cfg.GenericExtraFieldsJSON, "Generic webhook extra JSON fields as JSON object (PGWD_NOTIFICATIONS_GENERIC_EXTRA_FIELDS)")
+	flag.StringVar(&cfg.GenericBodyTemplate, "notifications-generic-body-template", cfg.GenericBodyTemplate, "Generic webhook Go template for custom JSON body (PGWD_NOTIFICATIONS_GENERIC_BODY_TEMPLATE)")
+	flag.StringVar(&cfg.GenericHMACSecret, "notifications-generic-hmac-secret", cfg.GenericHMACSecret, "Generic webhook HMAC-SHA256 signing secret (PGWD_NOTIFICATIONS_GENERIC_HMAC_SECRET)")
+	flag.StringVar(&cfg.GenericHMACHeader, "notifications-generic-hmac-header", cfg.GenericHMACHeader, "Generic webhook HMAC signature header (PGWD_NOTIFICATIONS_GENERIC_HMAC_HEADER; default X-Pgwd-Signature)")
+	flag.IntVar(&cfg.RetryMaxAttempts, "notifications-retry-max-attempts", cfg.RetryMaxAttempts, "Notifier HTTP retry max attempts (PGWD_NOTIFICATIONS_RETRY_MAX_ATTEMPTS; default 3)")
+	retryInitialBackoff := flag.String("notifications-retry-initial-backoff", "", "Notifier HTTP retry initial backoff, e.g. 1s (PGWD_NOTIFICATIONS_RETRY_INITIAL_BACKOFF; default 1s)")
+	retryMaxBackoff := flag.String("notifications-retry-max-backoff", "", "Notifier HTTP retry max backoff, e.g. 10s (PGWD_NOTIFICATIONS_RETRY_MAX_BACKOFF; default 10s)")
 	flag.IntVar(&cfg.Interval, "interval", cfg.Interval, "Run every N seconds; 0 = run once (PGWD_INTERVAL)")
 	flag.BoolVar(&cfg.DryRun, "dry-run", cfg.DryRun, "Only print, do not send notifications (PGWD_DRY_RUN)")
 	flag.BoolVar(&cfg.ForceNotification, "force-notification", cfg.ForceNotification, "Always send a test notification to validate delivery/format (PGWD_FORCE_NOTIFICATION)")
@@ -123,6 +140,16 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.StringVar(&cfg.ExportMetricsFormat, "export-metrics-format", cfg.ExportMetricsFormat, "Export persisted metrics from the configured metrics store; format: csv (file). Then exit (PGWD_EXPORT_METRICS_FORMAT)")
 	flag.StringVar(&cfg.ExportMetricsDestination, "export-metrics-destination", cfg.ExportMetricsDestination, "Output path for -export-metrics-format csv (PGWD_EXPORT_METRICS_DESTINATION)")
 	flag.Parse()
+	if *retryInitialBackoff != "" {
+		if d, err := time.ParseDuration(*retryInitialBackoff); err == nil {
+			cfg.RetryInitialBackoff = d
+		}
+	}
+	if *retryMaxBackoff != "" {
+		if d, err := time.ParseDuration(*retryMaxBackoff); err == nil {
+			cfg.RetryMaxBackoff = d
+		}
+	}
 	return *showVersionFlag
 }
 
@@ -239,9 +266,11 @@ func runContextStrings(ctx context.Context, cfg *config.Config, dbURL string) (c
 
 // buildSenders constructs the notification backends configured in cfg: Slack when
 // notifications-slack-webhook is set, Loki when notifications-loki-url is set.
-// Returns nil or a slice with one or both senders; an empty slice means no alerts
+// PagerDuty, Teams, and generic webhook senders are wired in a follow-up stage.
+// Returns nil or a slice with configured senders; an empty slice means no alerts
 // are delivered (dry-run still logs locally).
 func buildSenders(cfg *config.Config) []notify.Sender {
+	notify.ApplyRetryConfig(notifyRetryFromConfig(cfg))
 	var senders []notify.Sender
 	if cfg.SlackWebhook != "" {
 		senders = append(senders, &notify.Slack{WebhookURL: cfg.SlackWebhook})
@@ -255,6 +284,24 @@ func buildSenders(cfg *config.Config) []notify.Sender {
 		})
 	}
 	return senders
+}
+
+func notifyRetryFromConfig(cfg *config.Config) notify.RetryConfig {
+	rc := notify.RetryConfig{
+		MaxAttempts:    cfg.RetryMaxAttempts,
+		InitialBackoff: cfg.RetryInitialBackoff,
+		MaxBackoff:     cfg.RetryMaxBackoff,
+	}
+	if rc.MaxAttempts <= 0 {
+		rc.MaxAttempts = notify.DefaultRetryConfig.MaxAttempts
+	}
+	if rc.InitialBackoff <= 0 {
+		rc.InitialBackoff = notify.DefaultRetryConfig.InitialBackoff
+	}
+	if rc.MaxBackoff <= 0 {
+		rc.MaxBackoff = notify.DefaultRetryConfig.MaxBackoff
+	}
+	return rc
 }
 
 // isTooManyClientsError reports whether err is Postgres SQLSTATE 53300 (too many

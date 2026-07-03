@@ -117,9 +117,14 @@ func TestValidateNotifiers(t *testing.T) {
 	}{
 		{"dry-run no notifier", &config.Config{DryRun: true}, false, ""},
 		{"has slack", &config.Config{SlackWebhook: "https://x"}, false, ""},
+		{"has pagerduty", &config.Config{PagerDutyRoutingKey: "rk"}, false, ""},
 		{"no notifier no dry-run", &config.Config{}, true, "no notifier"},
 		{"force-notification no notifier", &config.Config{ForceNotification: true, DryRun: true}, true, "force-notification requires"},
 		{"notify-on-connect-failure no notifier", &config.Config{NotifyOnConnectFailure: true, DryRun: true}, true, "notify-on-connect-failure requires"},
+		{"pagerduty enabled missing key", &config.Config{PagerDutyEnabled: true, DryRun: true}, true, "routing_key is required"},
+		{"teams enabled missing webhook", &config.Config{TeamsEnabled: true, DryRun: true}, true, "webhook_url is required"},
+		{"generic enabled missing url", &config.Config{GenericEnabled: true, DryRun: true}, true, "webhook_url is required"},
+		{"invalid generic template", &config.Config{GenericEnabled: true, GenericWebhookURL: "https://x", GenericBodyTemplate: "{{", DryRun: true}, true, "body_template"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
