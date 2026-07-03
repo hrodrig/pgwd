@@ -550,6 +550,23 @@ All parameters can be set via **config file**, **CLI**, or **environment variabl
 | `-notifications-loki-labels` | `PGWD_NOTIFICATIONS_LOKI_LABELS` | Loki labels, e.g. `app=pgwd,env=prod` |
 | `-notifications-loki-org-id` | `PGWD_NOTIFICATIONS_LOKI_ORG_ID` | Loki `X-Scope-OrgID` header (multi-tenancy). Required for 401; **must match Grafana's Loki data source** or logs won't appear (e.g. `1`, `my-tenant`). |
 | `-notifications-loki-bearer-token` | `PGWD_NOTIFICATIONS_LOKI_BEARER_TOKEN` | Loki `Authorization: Bearer` token |
+| `-notifications-pagerduty-enabled` | `PGWD_NOTIFICATIONS_PAGERDUTY_ENABLED` | Enable PagerDuty Events v2 |
+| `-notifications-pagerduty-routing-key` | `PGWD_NOTIFICATIONS_PAGERDUTY_ROUTING_KEY` | PagerDuty routing key |
+| `-notifications-pagerduty-severity` | `PGWD_NOTIFICATIONS_PAGERDUTY_SEVERITY` | PagerDuty default severity (default `warning`) |
+| `-notifications-pagerduty-source` | `PGWD_NOTIFICATIONS_PAGERDUTY_SOURCE` | PagerDuty event source (default `pgwd`) |
+| `-notifications-teams-enabled` | `PGWD_NOTIFICATIONS_TEAMS_ENABLED` | Enable Microsoft Teams webhook |
+| `-notifications-teams-webhook` | `PGWD_NOTIFICATIONS_TEAMS_WEBHOOK` | Microsoft Teams incoming webhook URL |
+| `-notifications-generic-enabled` | `PGWD_NOTIFICATIONS_GENERIC_ENABLED` | Enable generic webhook |
+| `-notifications-generic-webhook-url` | `PGWD_NOTIFICATIONS_GENERIC_WEBHOOK_URL` | Generic webhook target URL |
+| `-notifications-generic-json-key` | `PGWD_NOTIFICATIONS_GENERIC_JSON_KEY` | JSON field for message text (default `text`) |
+| `-notifications-generic-headers` | `PGWD_NOTIFICATIONS_GENERIC_HEADERS` | Custom headers as JSON object string |
+| `-notifications-generic-extra-fields` | `PGWD_NOTIFICATIONS_GENERIC_EXTRA_FIELDS` | Extra JSON fields as JSON object string |
+| `-notifications-generic-body-template` | `PGWD_NOTIFICATIONS_GENERIC_BODY_TEMPLATE` | Go template for custom JSON body |
+| `-notifications-generic-hmac-secret` | `PGWD_NOTIFICATIONS_GENERIC_HMAC_SECRET` | HMAC-SHA256 signing secret |
+| `-notifications-generic-hmac-header` | `PGWD_NOTIFICATIONS_GENERIC_HMAC_HEADER` | HMAC signature header (default `X-Pgwd-Signature`) |
+| `-notifications-retry-max-attempts` | `PGWD_NOTIFICATIONS_RETRY_MAX_ATTEMPTS` | Notifier HTTP retry max attempts (default 3) |
+| `-notifications-retry-initial-backoff` | `PGWD_NOTIFICATIONS_RETRY_INITIAL_BACKOFF` | Initial retry backoff, e.g. `1s` |
+| `-notifications-retry-max-backoff` | `PGWD_NOTIFICATIONS_RETRY_MAX_BACKOFF` | Max retry backoff, e.g. `10s` |
 | `-interval` | `PGWD_INTERVAL` | Run every N seconds; 0 = run once |
 | `-dry-run` | `PGWD_DRY_RUN` | Only print stats, do not send notifications |
 | `-force-notification` | `PGWD_FORCE_NOTIFICATION` | Always send at least one notification: test event when connected (to validate delivery, format, and channel). Requires at least one notifier. (Connection failure is always notified when a notifier is configured, with or without this flag.) |
@@ -738,14 +755,14 @@ Using **127.0.0.1** and host port **5433** avoids hitting a local Postgres on 54
 ## Requirements
 
 - At least one of: a threshold (`-db-threshold-levels` for 3-tier, `-db-threshold-idle`, or `-db-threshold-stale` with `-db-stale-age`), `-dry-run`, or `-force-notification`. If you set only `-db-url` and a notifier, pgwd uses 3-tier levels (75,85,95%) of `max_connections`.
-- If not using `-dry-run`: at least one notifier (`-notifications-slack-webhook`, `-notifications-loki-url`, or `-kube-loki`). For `-force-notification`, a notifier is required.
+- If not using `-dry-run`: at least one notifier (Slack, Loki, `-kube-loki`, PagerDuty, Teams, or generic webhook). For `-force-notification`, a notifier is required.
 - For `threshold-stale`, `stale-age` must be set and greater than 0.
 
 ## Behavior and exit
 
 - **One-shot** (`interval` 0 or unset): runs one check, sends alerts if thresholds are exceeded, then exits. Exit code 0 on success; non-zero on fatal errors (e.g. DB connection failure).
 - **Daemon** (`interval` greater than 0): runs every `interval` seconds until interrupted (Ctrl+C or SIGTERM). Exits with 0 after a clean shutdown.
-- **Dry run**: same as above but no HTTP calls to Slack/Loki; only logs stats to stdout.
+- **Dry run**: same as above but no HTTP calls to notifiers; only logs stats to stdout.
 
 ## Help
 
@@ -796,6 +813,20 @@ Example: `pgwd [cluster=prod] [database=myapp] [client=pgwd-vps-01]: Test notifi
 
 Same placeholders as Slack. Timestamp is the time of the push. You can query in Grafana or LogCLI by label (e.g. `{app="pgwd", threshold="total"}` or `{app="pgwd", level="danger"}`). For Grafana alert rules, see [docs/loki-grafana-alerts.md](docs/loki-grafana-alerts.md) (labels, LogQL examples, payload structure).
 
+## PagerDuty
+
+Set `notifications.pagerduty.routing_key` (or `-notifications-pagerduty-routing-key` / `PGWD_NOTIFICATIONS_PAGERDUTY_ROUTING_KEY`) and enable PagerDuty (`enabled: true` or set routing key via env/CLI). Events POST to PagerDuty Events API v2 with severity derived from pgwd levels (`danger` / connect failures → `critical`, `alert` → `warning`, `attention` / resolution / test → `info`). Optional `severity` and `source` (default `pgwd`).
+
+## Microsoft Teams
+
+Create an [Incoming Webhook](https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook) in your Teams channel. Set `notifications.teams.webhook_url` or `-notifications-teams-webhook`. Payload is plain text (`{"text": "..."}`) with the same summary fields as Slack (connections, cluster, database, client).
+
+## Generic webhook
+
+For custom APIs (including JWT bearer auth), set `notifications.generic.webhook_url`. Default JSON: `{"text": "<summary>", ...extra_fields}`. Set `headers` for auth (e.g. `Authorization: Bearer <token>`). Optional `body_template` (Go template, must render valid JSON). Optional `hmac_secret` signs the body as `sha256=<hex>` in `hmac_header` (default `X-Pgwd-Signature`).
+
+All notifiers share HTTP retry settings under `notifications.retry` (or `-notifications-retry-*`).
+
 ---
 
 ## Troubleshooting
@@ -804,9 +835,9 @@ Same placeholders as Slack. Timestamp is the time of the push. You can query in 
 |--------|----------------|
 | **"missing database URL"** | Set `PGWD_DB_URL` or `-db-url`. The URL must be a valid [PostgreSQL connection string](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING). |
 | **"no thresholds set and could not default from server..."** | pgwd could not read `max_connections` from the server (error or 0). Use `-test-max-connections N` to override, or `-dry-run`, or `-force-notification`. With a normal Postgres, only `-db-url` and a notifier should be enough (defaults to 3-tier levels 75,85,95%). |
-| **"no notifier configured"** | Set `PGWD_NOTIFICATIONS_SLACK_WEBHOOK`, `PGWD_NOTIFICATIONS_LOKI_URL`, or `PGWD_KUBE_LOKI` (or use `-dry-run` to skip notifications). |
-| **"force-notification requires at least one notifier"** | Use `-force-notification` together with `-notifications-slack-webhook` and/or `-notifications-loki-url` or `-kube-loki`. |
-| **"notify-on-connect-failure requires at least one notifier"** | You set `-notify-on-connect-failure` but have no notifier. Add `-notifications-slack-webhook` and/or `-notifications-loki-url` or `-kube-loki`. (Connect failure is always notified when a notifier is configured; the flag is optional.) |
+| **"no notifier configured"** | Set a notification channel: Slack, Loki, `-kube-loki`, PagerDuty, Teams, or generic webhook (or use `-dry-run`). |
+| **"force-notification requires at least one notifier"** | Use `-force-notification` together with at least one configured notifier. |
+| **"notify-on-connect-failure requires at least one notifier"** | You set `-notify-on-connect-failure` but have no notifier. Add a notification channel. (Connect failure is always notified when a notifier is configured; the flag is optional.) |
 | **"load kubeconfig" / cluster unreachable** | When using `-kube-postgres` or `-kube-loki`, ensure a valid kubeconfig exists (`KUBECONFIG` env or `~/.kube/config`). pgwd uses client-go; no kubectl binary required. |
 | **"when using -db-threshold-stale, -db-stale-age must be > 0"** | Set `-db-stale-age N` (e.g. 600) when using `-db-threshold-stale`. |
 | **Slack/Loki not receiving alerts** | Run once with `-force-notification` to send a test message. Check webhook URL, network/firewall, and that the app can reach Slack/Loki. |

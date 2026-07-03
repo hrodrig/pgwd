@@ -237,10 +237,11 @@ func buildSenders(cfg *config.Config) []notify.Sender {
 
 ## Documentation (release gate)
 
-- Update [SPECIFICATIONS.md](../SPECIFICATIONS.md) §4 (config) and §6 (notifications)
-- Update [README.md](../README.md) parameter table
-- Update [contrib/pgwd.conf.example](../contrib/pgwd.conf.example)
-- Update [CHANGELOG.md](../CHANGELOG.md) under new 0.7.x version
+- [x] Update [SPECIFICATIONS.md](../SPECIFICATIONS.md) §4 (config) and §6 (notifications)
+- [x] Update [README.md](../README.md) parameter table
+- [x] Update [contrib/pgwd.conf.example](../contrib/pgwd.conf.example)
+- [x] Update [CHANGELOG.md](../CHANGELOG.md) under `[Unreleased]` (0.7.0 scope)
+- [ ] Update [contrib/man/man1/pgwd.1](../contrib/man/man1/pgwd.1) `.TH` line on VERSION bump
 
 ---
 

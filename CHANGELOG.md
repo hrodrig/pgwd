@@ -6,14 +6,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ## [Unreleased]
 
-Documentation and deprecation runway on `develop` (no behavior change until 0.9.x code removal). Not yet tagged.
+On `develop` ahead of **v0.7.0** tag. `VERSION` file remains **0.6.10** until release.
+
+### Added
+
+- **PagerDuty Events v2** notifier (`notifications.pagerduty`, `-notifications-pagerduty-*`, `PGWD_NOTIFICATIONS_PAGERDUTY_*`). Severity mapping from pgwd levels; `custom_details` with connection stats and context.
+- **Microsoft Teams** incoming webhook (`notifications.teams`, `-notifications-teams-*`).
+- **Generic webhook** with custom headers (JWT bearer), optional HMAC-SHA256 signing, and Go `body_template` for custom JSON payloads.
+- **Shared HTTP retry/backoff** for all notifiers (`notifications.retry`, `-notifications-retry-*`). Slack and Loki migrated to shared retry. Defaults: 3 attempts, 1s initial backoff, 10s max backoff; retry on 5xx and network errors only.
 
 ### Documentation
 
 - **[ROADMAP.md](ROADMAP.md)** — canonical release index (0.7 → 1.0, calendar, document map, key decisions).
-- **[SPECIFICATIONS.md](SPECIFICATIONS.md)** — config load order fixed (env ignored when file loads); client-go kube (not kubectl); HTTP `/metrics` = Prometheus text exposition; dry-run bypass for connect failure documented; **`DISCOVER_MY_PASSWORD` deprecated** (removed 0.9.x).
-- **[docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)** — decision record for deprecating `DISCOVER_MY_PASSWORD` (RBAC, exec vs Secret, alternatives, migration).
-- **README / AGENTS / man / contrib** — roadmap links, config precedence, Secret-backed K8s examples, deprecation notes.
+- **[SPECIFICATIONS.md](SPECIFICATIONS.md)** — §4/§6 updated for 0.7.x notifiers and retry; config load order; client-go kube; **`DISCOVER_MY_PASSWORD` deprecated** (removed 0.9.x).
+- **[docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)** — decision record for deprecating `DISCOVER_MY_PASSWORD`.
+- **`contrib/pgwd.conf.example`**, **README**, **man page** — PagerDuty, Teams, generic webhook, and retry settings.
 
 ### Deprecated (behavior unchanged until 0.9.x)
 

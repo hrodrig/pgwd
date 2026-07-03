@@ -4,8 +4,8 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 
 ## Project overview
 
-- **What it is:** Go CLI that monitors PostgreSQL connection counts (total, active, idle, stale), optional **long-running query** alerts (`db.long_query_*`, cooldown via metrics store), and notifies via Slack and/or Loki when configured thresholds are exceeded.
-- **Entrypoint:** `cmd/pgwd/main.go`. Packages: `internal/config`, `internal/postgres`, `internal/notify` (Slack, Loki).
+- **What it is:** Go CLI that monitors PostgreSQL connection counts (total, active, idle, stale), optional **long-running query** alerts (`db.long_query_*`, cooldown via metrics store), and notifies via Slack, Loki, PagerDuty, Teams, and/or generic webhook when configured thresholds are exceeded.
+- **Entrypoint:** `cmd/pgwd/main.go`. Packages: `internal/config`, `internal/postgres`, `internal/notify` (Slack, Loki, PagerDuty, Teams, generic webhook; shared HTTP retry).
 - **Config:** Config file (YAML) at `/etc/pgwd/pgwd.conf` or `-config` / `PGWD_CONFIG`. Use `databases:` for one or more Postgres (canonical). Legacy `db:` deprecated (emits warning, removed in v1.0). **`kube.postgres` / `-kube-postgres` is not supported with `databases:`** (multi-DB requires direct URLs; single-DB + kube until per-db kube exists). **SQLite / hysteresis** rows are keyed by **`(client, cluster, database)`** — not by URL host; use a **unique `client` per `databases:` entry** when the same DB name is used on different hosts. When file loads, env vars ignored; otherwise `ApplyDefaults` + `ApplyEnv`. CLI flags override. See `internal/config`, `contrib/pgwd.conf.example`, README “Multi-database limitations”.
 - **Kubernetes:** Optional `-kube-postgres namespace/svc/name` (or `pod/name`) runs client-go port-forward and connects to localhost. **Deprecated:** URL password `DISCOVER_MY_PASSWORD` reads pod env via `pods/exec` (removed in 0.9.x) — decision record [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md). Optional `-kube-loki namespace/svc/loki` port-forwards to Loki when Loki is inside the cluster and pgwd runs outside. Requires loadable kubeconfig (client-go; no kubectl binary). See `internal/kube`. **Helm / in-cluster deployment manifests** are in **[pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted)**; see `contrib/HELM.md` and `contrib/k8s/README.md`.
 - **Metrics persistence:** Daemon writes check history to **`sqlite.path`** (SQLite) or **`metrics_store.driver`** + **`metrics_store.dsn`** (PostgreSQL / MySQL via **`internal/store/sqlstore`**) for hysteresis, resolution alerts, and `/metrics`. **`internal/metricsstore`** selects the backend for export; **`store.MetricsStorer`** is the interface used by **`cmd/pgwd`** and **`internal/httpsrv`**. **CSV export:** `-export-metrics-format csv` + `-export-metrics-destination` → **`internal/metricsexport`** + **`metricsstore.ExportRows`** — see README.
@@ -54,7 +54,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 - `internal/validator/` — config validation returning errors (extracted from main for testability).
 - `internal/config/` — config from file (YAML), env (`PGWD_*`), and CLI. `file.go`: FromFile, ApplyDefaults.
 - `internal/postgres/` — pool, stats, stale count, max_connections.
-- `internal/notify/` — Slack and Loki senders, event type.
+- `internal/notify/` — Slack, Loki, PagerDuty, Teams, generic webhook senders; shared HTTP retry
 - `internal/kube/` — Kubernetes port-forward (client-go), pod resolution; legacy password discovery via `pods/exec` (**deprecated**, removed 0.9.x).
 - `docs/` — sequence diagrams (Mermaid), VHS demo tape (`docs/demo.tape` → `docs/demo.gif`). Regenerate after **`VERSION` changes:** `make install && bash -c "vhs docs/demo.tape"` from repo root (use `bash -c` so zsh/Oh My Zsh does not break recording — see `docs/README.md`).
 - `contrib/systemd/` — systemd units (daemon, timer, one-shot).

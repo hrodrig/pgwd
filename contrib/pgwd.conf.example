@@ -156,3 +156,28 @@ notifications:
     org_id: ""
   slack:
     webhook: ""
+  # PagerDuty Events API v2 (optional)
+  pagerduty:
+    enabled: false
+    routing_key: ""
+    severity: warning   # default when event has no level mapping; events map danger/connect_failure → critical, alert → warning, attention/resolution/test → info
+    source: pgwd
+  # Microsoft Teams incoming webhook (optional)
+  teams:
+    enabled: false
+    webhook_url: ""
+  # Generic webhook with optional JWT headers and HMAC signing (optional)
+  generic:
+    enabled: false
+    webhook_url: ""
+    json_key: text
+    headers: {}         # e.g. Authorization: "Bearer eyJ..."
+    extra_fields: {}    # merged into default JSON payload
+    body_template: ""   # Go template; must render valid JSON. Vars: Message, Threshold, Level, Total, Active, Idle, MaxConn, Cluster, Client, Database, Namespace, EventType
+    hmac_secret: ""
+    hmac_header: X-Pgwd-Signature
+  # Shared outbound HTTP retry for all notifiers (Slack, Loki, PagerDuty, Teams, generic)
+  retry:
+    max_attempts: 3
+    initial_backoff: 1s
+    max_backoff: 10s

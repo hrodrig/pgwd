@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-`pgwd` (Postgres Watch Dog) is a Go CLI that **monitors PostgreSQL connection counts** (total, active, idle, stale) and optionally alerts on **long-running queries**. When configured thresholds are exceeded, it notifies via configured channels (Slack, Loki, and/or future PagerDuty, Teams, Generic webhook). It can run as a **one-shot check** (for cron or ad-hoc) or as a **daemon** (recurring interval).
+`pgwd` (Postgres Watch Dog) is a Go CLI that **monitors PostgreSQL connection counts** (total, active, idle, stale) and optionally alerts on **long-running queries**. When configured thresholds are exceeded, it notifies via configured channels (Slack, Loki, PagerDuty, Microsoft Teams, and/or generic webhook). It can run as a **one-shot check** (for cron or ad-hoc) or as a **daemon** (recurring interval).
 
 This document is the source of truth for **observable behavior** and test expectations (**baseline: v0.6.10** shipped code; deprecated and planned items are labeled). **Roadmap:** [ROADMAP.md](ROADMAP.md). Band plans: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md). Shipped releases: **[CHANGELOG.md](CHANGELOG.md)**.
 
@@ -17,7 +17,7 @@ This document is the source of truth for **observable behavior** and test expect
   - **Explicit** — `-db-threshold-total` / `-db-threshold-active` / `-db-threshold-idle` / `-db-threshold-stale`
   - **3-tier level mode** — `-db-threshold-levels` (default `75,85,95`): attention, alert, danger.
   - **Long-running query alerts** — `-db-long-query-min-seconds` (requires a metrics store for cooldown).
-- Notifications: **Slack** Incoming Webhook, **Loki** push API (with org ID, bearer token, kube port-forward).
+- Notifications: **Slack** Incoming Webhook, **Loki** push API (with org ID, bearer token, kube port-forward), **PagerDuty** Events v2, **Microsoft Teams** incoming webhook, **generic webhook** (custom headers, HMAC, JSON template). Shared HTTP retry/backoff for all outbound notifier calls.
 - Metrics persistence: **SQLite** (default) or **PostgreSQL/MySQL** (`metrics_store.driver` + `metrics_store.dsn`). Used for hysteresis (confirm-alert/confirm-ok), resolution notifications, long-query cooldown, and HTTP `/metrics` endpoint.
 - HTTP server: optional `/metrics` and `/healthz` endpoints for Kubernetes probes.
 - CSV export: one-shot dump of persisted metrics via `-export-metrics-format csv`.
@@ -53,7 +53,7 @@ This document is the source of truth for **observable behavior** and test expect
 | `pgwd version` | Same output as `--version`. |
 | `pgwd -config <path>` | Explicit YAML config path. |
 | `pgwd --print-sample-config` | Writes annotated sample YAML to **stdout** and exits 0. |
-| `pgwd -dry-run` | Runs normally but skips all outbound HTTP notifications (Slack, Loki, etc.). Logs every event as `[dry-run] would send: …`. |
+| `pgwd -dry-run` | Runs normally but skips all outbound HTTP notifications (Slack, Loki, PagerDuty, Teams, generic webhook, etc.). Logs every event as `[dry-run] would send: …`. |
 | `pgwd -force-notification` | Sends one test event to all configured notifiers after a successful Postgres connect, regardless of thresholds. |
 | `pgwd -validate-k8s-access` | Validates cluster connectivity (lists pods), then exits. Uses `-kube-context` when set. Does not require `-kube-postgres`. |
 | `pgwd -export-metrics-format csv -export-metrics-destination <path>` | Dumps persisted metrics from the configured store to a CSV file, then exits. |
@@ -136,11 +136,28 @@ When `databases:` is non-empty in the config file, each entry is one Postgres ta
 | `db.long_query_min_seconds` | int | 0 | 0 = off. |
 | `db.long_query_cooldown_seconds` | int | 3600 | |
 | `db.long_query_min_count` | int | 1 | |
-| `notifications.slack.webhook_url` | string | — | Slack webhook. |
+| `notifications.slack.webhook` | string | — | Slack Incoming Webhook URL. |
 | `notifications.loki.url` | string | — | Loki push API. |
 | `notifications.loki.labels` | string | — | `k1=v1,k2=v2`. |
 | `notifications.loki.org_id` | string | — | X-Scope-OrgID. |
 | `notifications.loki.bearer_token` | string | — | Bearer token. |
+| `notifications.pagerduty.enabled` | bool | false | Enable PagerDuty Events v2. |
+| `notifications.pagerduty.routing_key` | string | — | PagerDuty integration routing key. Required when enabled. |
+| `notifications.pagerduty.severity` | string | `warning` | Default severity when event mapping does not apply. |
+| `notifications.pagerduty.source` | string | `pgwd` | PagerDuty event source. |
+| `notifications.teams.enabled` | bool | false | Enable Microsoft Teams webhook. |
+| `notifications.teams.webhook_url` | string | — | Teams incoming webhook URL. Required when enabled. |
+| `notifications.generic.enabled` | bool | false | Enable generic webhook. |
+| `notifications.generic.webhook_url` | string | — | Target URL. Required when enabled. |
+| `notifications.generic.json_key` | string | `text` | JSON field for summary text (default payload). |
+| `notifications.generic.headers` | map | — | Custom HTTP headers (e.g. JWT bearer). |
+| `notifications.generic.extra_fields` | map | — | Extra key-value pairs in default JSON payload. |
+| `notifications.generic.body_template` | string | — | Go template for custom JSON body; validated at load and on first send. |
+| `notifications.generic.hmac_secret` | string | — | HMAC-SHA256 signing key for request body. |
+| `notifications.generic.hmac_header` | string | `X-Pgwd-Signature` | Header for HMAC signature (`sha256=<hex>`). |
+| `notifications.retry.max_attempts` | int | 3 | HTTP retry attempts (5xx and network errors). |
+| `notifications.retry.initial_backoff` | duration | `1s` | Initial retry backoff. |
+| `notifications.retry.max_backoff` | duration | `10s` | Maximum retry backoff. |
 | `interval` | int | 0 | 0 = one-shot. |
 | `dry_run` | bool | false | |
 | `force_notification` | bool | false | |
@@ -166,11 +183,28 @@ All config keys map to `PGWD_<UPPER_SNAKE>` equivalents. Notifier env vars:
 
 | Env | Maps to |
 |-----|---------|
-| `PGWD_NOTIFICATIONS_SLACK_WEBHOOK` | `notifications.slack.webhook_url` |
+| `PGWD_NOTIFICATIONS_SLACK_WEBHOOK` | `notifications.slack.webhook` |
 | `PGWD_NOTIFICATIONS_LOKI_URL` | `notifications.loki.url` |
 | `PGWD_NOTIFICATIONS_LOKI_LABELS` | `notifications.loki.labels` |
 | `PGWD_NOTIFICATIONS_LOKI_ORG_ID` | `notifications.loki.org_id` |
 | `PGWD_NOTIFICATIONS_LOKI_BEARER_TOKEN` | `notifications.loki.bearer_token` |
+| `PGWD_NOTIFICATIONS_PAGERDUTY_ENABLED` | `notifications.pagerduty.enabled` |
+| `PGWD_NOTIFICATIONS_PAGERDUTY_ROUTING_KEY` | `notifications.pagerduty.routing_key` |
+| `PGWD_NOTIFICATIONS_PAGERDUTY_SEVERITY` | `notifications.pagerduty.severity` |
+| `PGWD_NOTIFICATIONS_PAGERDUTY_SOURCE` | `notifications.pagerduty.source` |
+| `PGWD_NOTIFICATIONS_TEAMS_ENABLED` | `notifications.teams.enabled` |
+| `PGWD_NOTIFICATIONS_TEAMS_WEBHOOK` | `notifications.teams.webhook_url` |
+| `PGWD_NOTIFICATIONS_GENERIC_ENABLED` | `notifications.generic.enabled` |
+| `PGWD_NOTIFICATIONS_GENERIC_WEBHOOK_URL` | `notifications.generic.webhook_url` |
+| `PGWD_NOTIFICATIONS_GENERIC_JSON_KEY` | `notifications.generic.json_key` |
+| `PGWD_NOTIFICATIONS_GENERIC_HEADERS` | `notifications.generic.headers` (JSON object string) |
+| `PGWD_NOTIFICATIONS_GENERIC_EXTRA_FIELDS` | `notifications.generic.extra_fields` (JSON object string) |
+| `PGWD_NOTIFICATIONS_GENERIC_BODY_TEMPLATE` | `notifications.generic.body_template` |
+| `PGWD_NOTIFICATIONS_GENERIC_HMAC_SECRET` | `notifications.generic.hmac_secret` |
+| `PGWD_NOTIFICATIONS_GENERIC_HMAC_HEADER` | `notifications.generic.hmac_header` |
+| `PGWD_NOTIFICATIONS_RETRY_MAX_ATTEMPTS` | `notifications.retry.max_attempts` |
+| `PGWD_NOTIFICATIONS_RETRY_INITIAL_BACKOFF` | `notifications.retry.initial_backoff` |
+| `PGWD_NOTIFICATIONS_RETRY_MAX_BACKOFF` | `notifications.retry.max_backoff` |
 
 ### Multi-database limitations
 
@@ -179,7 +213,11 @@ All config keys map to `PGWD_<UPPER_SNAKE>` equivalents. Notifier env vars:
 
 ### Validation rules
 
-- At least one notifier OR `-dry-run` must be configured (or config validation fails).
+- At least one notifier (Slack, Loki, kube-loki, PagerDuty, Teams, or generic webhook) OR `-dry-run` must be configured (or config validation fails).
+- PagerDuty enabled (or routing key set) → `routing_key` required.
+- Teams enabled (or webhook URL set) → `webhook_url` required.
+- Generic enabled (or webhook URL set) → `webhook_url` required; `body_template` must compile; rendered output must be valid JSON on send.
+- Notification retry: `max_attempts` ≥ 0; backoffs ≥ 0 (defaults applied when zero).
 - `-force-notification` requires at least one notifier (not compatible with `-dry-run`).
 - `-notify-on-connect-failure` requires at least one notifier.
 - When `-kube-postgres` or `-kube-loki` is set, a valid **kubeconfig** must be loadable (client-go; no kubectl binary required).
@@ -269,6 +307,15 @@ When Postgres connection fails:
 
 Only the highest breached level fires per check cycle.
 
+### Shared HTTP retry
+
+All notifier senders (Slack, Loki, PagerDuty, Teams, generic webhook) use shared outbound HTTP with:
+
+- 30s client timeout
+- Retry on **5xx** and network errors only (4xx fails immediately)
+- Defaults: `max_attempts=3`, `initial_backoff=1s`, `max_backoff=10s` (configurable via `notifications.retry` or CLI/env)
+- Non-2xx final response logs an error but does not fail the check
+
 ### Slack
 
 - Incoming Webhook: POST JSON with `attachments[].{color, text, fallback}`
@@ -283,6 +330,27 @@ Only the highest breached level fires per check cycle.
 - Log line includes: prefix (`pgwd:` or `pgwd [cluster=X database=Y client=Z]:`), message, total/active/idle, max_connections
 - Support for `X-Scope-OrgID` header (multi-tenancy) and `Authorization: Bearer ***`
 - Non-2xx response logs an error but does not fail the check
+
+### PagerDuty
+
+- Events API v2: POST `https://events.pagerduty.com/v2/enqueue`
+- Envelope: `routing_key`, `event_action: trigger`, `payload.{summary, source, severity, timestamp, custom_details}`
+- `custom_details`: total, active, idle, max_connections, threshold, threshold_value, level, database, client, cluster, namespace
+- Severity mapping: `danger` / `too_many_clients` / `connect_failure` → `critical`; `alert` → `warning`; `attention` / `resolution` / `test` → `info`; otherwise config default (`warning`)
+- Default source: `pgwd`
+
+### Microsoft Teams
+
+- Incoming webhook: POST JSON `{"text": "<plain-text summary>"}`
+- Summary matches Slack content (connections, cluster, database, client, namespace, timestamp) without attachments or color
+
+### Generic webhook
+
+- POST JSON to configured URL
+- Default payload: `{<json_key>: "<summary>", ...extra_fields}` (`json_key` default `text`)
+- Optional `headers` (e.g. `Authorization: Bearer <JWT>`)
+- Optional `body_template` (Go template → valid JSON). Variables: `Message`, `Threshold`, `Level`, `Total`, `Active`, `Idle`, `MaxConn`, `Cluster`, `Client`, `Database`, `Namespace`, `EventType`
+- Optional HMAC-SHA256 over raw body: header `X-Pgwd-Signature` (configurable) with value `sha256=<hex>`
 
 ### Connect failure notification
 
@@ -443,7 +511,7 @@ internal/
   kube/                 — Kubernetes port-forward (client-go); legacy password discovery via pods/exec (deprecated, 0.9.x)
   metricsexport/        — CSV export
   metricsstore/         — Backend selection for metrics store
-  notify/               — Slack, Loki senders (Sender interface)
+  notify/               — Slack, Loki, PagerDuty, Teams, generic webhook senders (Sender interface)
   postgres/             — Pool, stats, stale count, max_connections
   store/                — MetricsStorer interface, SQLite + SQL backends
   validator/            — Config validation
