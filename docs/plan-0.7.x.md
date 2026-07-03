@@ -1,6 +1,6 @@
 # pgwd plan 0.7.x — notification channels expansion
 
-**Roadmap index:** [ROADMAP.md](../ROADMAP.md) · **Band:** 0.7.x (next after v0.6.10)
+**Roadmap index:** [ROADMAP.md](../ROADMAP.md) · **Band:** 0.7.x · **Status:** 🚧 in progress
 
 **Theme:** Add PagerDuty Events v2, Microsoft Teams, and Generic Webhook + JWT/HMAC notifiers, following the same pattern as [groot](https://github.com/hrodrig/groot). Refactor outbound HTTP with shared retry/backoff.
 

@@ -2,7 +2,7 @@
 
 **Current release:** [v0.6.10](VERSION) · **Branch:** `develop` · **Target:** [v1.0.0](docs/plan-1.0.x.md) stable API (early–mid July 2026)
 
-**Status (2026-07-02):** v0.6.10 shipped. **Next band: 0.7.x** (notifiers). Calendar below is aspirational — adjust windows if bands slip.
+**Status (2026-07-02):** v0.6.10 shipped. **Active band: 0.7.x 🚧 in progress** (notifiers on `develop`). Calendar below is aspirational — adjust if bands slip.
 
 This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md) (v0.6.10). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md). Doc-only changes on `develop` appear under CHANGELOG `[Unreleased]` until tagged.
 
@@ -18,7 +18,7 @@ This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md]
 
 ```mermaid
 flowchart LR
-  A["0.6.10 ✅ shipped"] --> B["0.7.x notifiers"]
+  A["0.6.10 ✅ shipped"] --> B["0.7.x 🚧 in progress"]
   B --> C["0.8.0 supply chain"]
   C --> D["0.9.x polish + security"]
   D --> E["1.0.0 breaking stable"]
@@ -27,12 +27,12 @@ flowchart LR
 | Band | Status | Target | Theme | Plan |
 |------|--------|--------|-------|------|
 | **0.6.x** | ✅ Shipped | Jun 2026 | Metrics store, multi-DB, HTTP `/metrics`, CSV export, security patches | [CHANGELOG](CHANGELOG.md) |
-| **0.7.x** | 📋 Next | Jun–Jul 2026 | PagerDuty, Teams, generic webhook + JWT/HMAC, shared HTTP retry | [plan-0.7.x.md](docs/plan-0.7.x.md) |
+| **0.7.x** | 🚧 In progress | Jun–Jul 2026 | PagerDuty, Teams, generic webhook + JWT/HMAC, shared HTTP retry | [plan-0.7.x.md](docs/plan-0.7.x.md) |
 | **0.8.0** | 📋 Planned | Jun–Jul 2026 | Syft SBOM + Cosign keyless signing (GHCR + release artifacts) | [plan-0.8.x.md](docs/plan-0.8.x.md) |
 | **0.9.x** | 📋 Planned | Jul 2026 | Pre-1.0 polish, **remove `DISCOVER_MY_PASSWORD`**, profiles, `--strict`, SPEC audit | [plan-0.9.x.md](docs/plan-0.9.x.md) |
 | **1.0.0** | 📋 Planned | Early–mid Jul 2026 | Breaking stable API, deprecations removed | [plan-1.0.x.md](docs/plan-1.0.x.md) |
 
-**Suggested calendar** (from band plans — **slip OK**; 0.7 not started as of 2026-07-02):
+**Suggested calendar** (from band plans — **slip OK**; 0.7.x started 2026-07-02):
 
 | Window | Milestone |
 |--------|-----------|

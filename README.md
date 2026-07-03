@@ -1331,7 +1331,7 @@ Summary: from **v0.6.10** → **0.7.x** (notifiers) → **0.8.0** (SBOM + Cosign
 | Band | Status | Plan |
 |------|--------|------|
 | **0.6.10** | ✅ Shipped Jun 2026 | [CHANGELOG](CHANGELOG.md) |
-| **0.7.x** | 📋 Next | [plan-0.7.x.md](docs/plan-0.7.x.md) |
+| **0.7.x** | 🚧 In progress | [plan-0.7.x.md](docs/plan-0.7.x.md) |
 | **0.8.0** | 📋 Planned | [plan-0.8.x.md](docs/plan-0.8.x.md) |
 | **0.9.x** | 📋 Planned | [plan-0.9.x.md](docs/plan-0.9.x.md) |
 | **1.0.0** | 📋 Planned | [plan-1.0.x.md](docs/plan-1.0.x.md) |
