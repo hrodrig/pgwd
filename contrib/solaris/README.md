@@ -196,8 +196,9 @@ client: "pgwd-solaris-01"
 interval: 60
 dry_run: false
 
+# Deprecated: DISCOVER_MY_PASSWORD removed in 0.9.x — use Secret-backed password in URL
 db:
-  url: "postgres://postgres:DISCOVER_MY_PASSWORD@localhost:25432/mydb"
+  url: "postgres://postgres:YOUR_PASSWORD@localhost:25432/mydb"
   threshold:
     levels: "75,85,95"
 

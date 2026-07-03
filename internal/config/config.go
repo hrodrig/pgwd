@@ -1,9 +1,11 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // DefaultThresholdLevels is the default comma-separated percentages for 3-tier alerts (MySQL-style).
@@ -64,6 +66,29 @@ type Config struct {
 	LokiLabels      string // comma-separated key=value
 	LokiOrgID       string // X-Scope-OrgID header (Loki multi-tenancy); empty = not set
 	LokiBearerToken string // Authorization: Bearer <token>; empty = not set
+
+	PagerDutyEnabled    bool
+	PagerDutyRoutingKey string
+	PagerDutySeverity   string // default "warning"
+	PagerDutySource     string // default "pgwd"
+
+	TeamsEnabled bool
+	TeamsWebhook string
+
+	GenericEnabled         bool
+	GenericWebhookURL      string
+	GenericJSONKey         string // default "text"
+	GenericHeaders         map[string]string
+	GenericExtraFields     map[string]string
+	GenericBodyTemplate    string
+	GenericHMACSecret      string
+	GenericHMACHeader      string // default "X-Pgwd-Signature"
+	GenericHeadersJSON     string // CLI/env JSON; merged in FinalizeAfterFlags
+	GenericExtraFieldsJSON string // CLI/env JSON; merged in FinalizeAfterFlags
+
+	RetryMaxAttempts    int
+	RetryInitialBackoff time.Duration
+	RetryMaxBackoff     time.Duration
 
 	// Behavior
 	Interval                int    // seconds; 0 = run once
@@ -138,6 +163,30 @@ func envBool(key string, def bool) bool {
 		return def
 	}
 	return v == "1" || v == "true" || v == "yes"
+}
+
+func envDuration(key string, def time.Duration) time.Duration {
+	v := os.Getenv("PGWD_" + key)
+	if v == "" {
+		return def
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		return def
+	}
+	return d
+}
+
+func envJSONMap(key string) map[string]string {
+	v := os.Getenv("PGWD_" + key)
+	if v == "" {
+		return nil
+	}
+	var m map[string]string
+	if err := json.Unmarshal([]byte(v), &m); err != nil {
+		return nil
+	}
+	return m
 }
 
 // ApplyEnv overrides cfg with environment variables (PGWD_*) when set.
@@ -277,21 +326,11 @@ func applyEnvThresholds(cfg *Config) {
 }
 
 func applyEnvNotifiers(cfg *Config) {
-	if v := env("NOTIFICATIONS_SLACK_WEBHOOK", ""); v != "" {
-		cfg.SlackWebhook = v
-	}
-	if v := env("NOTIFICATIONS_LOKI_URL", ""); v != "" {
-		cfg.LokiURL = v
-	}
-	if v := env("NOTIFICATIONS_LOKI_LABELS", ""); v != "" {
-		cfg.LokiLabels = v
-	}
-	if v := env("NOTIFICATIONS_LOKI_ORG_ID", ""); v != "" {
-		cfg.LokiOrgID = v
-	}
-	if v := env("NOTIFICATIONS_LOKI_BEARER_TOKEN", ""); v != "" {
-		cfg.LokiBearerToken = v
-	}
+	applyEnvSlackLoki(cfg)
+	applyEnvPagerDuty(cfg)
+	applyEnvTeams(cfg)
+	applyEnvGenericWebhook(cfg)
+	applyEnvNotifyRetry(cfg)
 }
 
 func applyEnvBehaviour(cfg *Config) {
@@ -480,9 +519,25 @@ func (c *Config) HasAnyThreshold() bool {
 		c.ThresholdStale > 0 || c.UsesLevelMode() || c.LongQueryMinSeconds > 0
 }
 
-// HasAnyNotifier returns true if Slack or Loki is configured.
+// HasAnyNotifier returns true if at least one notification channel is configured.
 func (c *Config) HasAnyNotifier() bool {
-	return c.SlackWebhook != "" || c.LokiURL != "" || c.KubeLoki != ""
+	return c.SlackWebhook != "" || c.LokiURL != "" || c.KubeLoki != "" ||
+		c.PagerDutyActive() || c.TeamsActive() || c.GenericActive()
+}
+
+// PagerDutyActive reports whether PagerDuty notifications are enabled.
+func (c *Config) PagerDutyActive() bool {
+	return c.PagerDutyEnabled || c.PagerDutyRoutingKey != ""
+}
+
+// TeamsActive reports whether Microsoft Teams notifications are enabled.
+func (c *Config) TeamsActive() bool {
+	return c.TeamsEnabled || c.TeamsWebhook != ""
+}
+
+// GenericActive reports whether generic webhook notifications are enabled.
+func (c *Config) GenericActive() bool {
+	return c.GenericEnabled || c.GenericWebhookURL != ""
 }
 
 // Targets returns the database targets to monitor. When Databases is non-empty, returns those.

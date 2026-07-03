@@ -119,6 +119,27 @@ func TestStore_LatestRecords(t *testing.T) {
 	}
 }
 
+func TestStore_LastStates_zeroN(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(filepath.Join(t.TempDir(), "z.db"), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	states, err := st.LastStates(ctx, "c", "cl", "d", 0)
+	if err != nil || states != nil {
+		t.Fatalf("states=%v err=%v", states, err)
+	}
+}
+
+func TestStore_Open_defaultMaxMetrics(t *testing.T) {
+	st, err := Open(filepath.Join(t.TempDir(), "d.db"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.Close()
+}
+
 func TestQueryAllMetricsReadOnly_Empty(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()

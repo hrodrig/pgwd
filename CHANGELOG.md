@@ -2,9 +2,33 @@
 
 All notable changes to this project are documented in this file.
 
-Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). History below is derived from the project plan (release scope).
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Release bands: [ROADMAP.md](ROADMAP.md). Behavior contract: [SPECIFICATIONS.md](SPECIFICATIONS.md).
 
 ## [Unreleased]
+
+### Added
+
+- **`make cover-check`** — statement coverage gate (default **≥ 80%** on library packages; `internal/cli` excluded, exercised via `cmd/pgwd` black-box tests). Part of **`make release-check`** and CI.
+
+## [0.7.0] - 2026-07-03
+
+### Added
+
+- **PagerDuty Events v2** notifier (`notifications.pagerduty`, `-notifications-pagerduty-*`, `PGWD_NOTIFICATIONS_PAGERDUTY_*`). Severity mapping from pgwd levels; `custom_details` with connection stats and context.
+- **Microsoft Teams** incoming webhook (`notifications.teams`, `-notifications-teams-*`).
+- **Generic webhook** with custom headers (JWT bearer), optional HMAC-SHA256 signing, and Go `body_template` for custom JSON payloads.
+- **Shared HTTP retry/backoff** for all notifiers (`notifications.retry`, `-notifications-retry-*`). Slack and Loki migrated to shared retry. Defaults: 3 attempts, 1s initial backoff, 10s max backoff; retry on 5xx and network errors only.
+
+### Documentation
+
+- **[ROADMAP.md](ROADMAP.md)** — canonical release index (0.7 → 1.0, calendar, document map, key decisions).
+- **[SPECIFICATIONS.md](SPECIFICATIONS.md)** — §4/§6 updated for 0.7.x notifiers and retry; config load order; client-go kube; **`DISCOVER_MY_PASSWORD` deprecated** (removed 0.9.x).
+- **[docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)** — decision record for deprecating `DISCOVER_MY_PASSWORD`.
+- **`contrib/pgwd.conf.example`**, **README**, **man page** — PagerDuty, Teams, generic webhook, and retry settings.
+
+### Deprecated (behavior unchanged until 0.9.x)
+
+- **`DISCOVER_MY_PASSWORD`** in `-db-url` / config — requires `pods/exec` RBAC. Decision record: [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md). Removal: [plan-0.9.x.md](docs/plan-0.9.x.md) §10.
 
 ## [0.6.10] - 2026-06-17
 
@@ -413,7 +437,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Histor
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.6.10...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/hrodrig/pgwd/compare/v0.6.10...v0.7.0
 [0.6.10]: https://github.com/hrodrig/pgwd/compare/v0.6.9...v0.6.10
 [0.6.9]: https://github.com/hrodrig/pgwd/compare/v0.6.8...v0.6.9
 [0.6.8]: https://github.com/hrodrig/pgwd/compare/v0.6.7...v0.6.8

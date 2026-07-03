@@ -14,7 +14,7 @@ type ConnectionStats struct {
 }
 
 // Stats returns connection counts (total, active, idle) from the database.
-func Stats(ctx context.Context, pool *pgxpool.Pool) (ConnectionStats, error) {
+func Stats(ctx context.Context, pool Querier) (ConnectionStats, error) {
 	const q = `
 SELECT
 	count(*) FILTER (WHERE state = 'active')   AS active,
@@ -30,7 +30,7 @@ WHERE datname = current_database()
 
 // LongQueryCount returns backends in state 'active' whose current query has been running longer
 // than minSeconds (based on query_start). Excludes this session (pg_backend_pid).
-func LongQueryCount(ctx context.Context, pool *pgxpool.Pool, minSeconds int) (int, error) {
+func LongQueryCount(ctx context.Context, pool Querier, minSeconds int) (int, error) {
 	if minSeconds <= 0 {
 		return 0, nil
 	}
@@ -50,7 +50,7 @@ WHERE datname = current_database()
 
 // StaleCount returns the number of connections that have been open longer than maxAgeSeconds
 // (based on backend_start). Use this to detect connections that stay open and never close.
-func StaleCount(ctx context.Context, pool *pgxpool.Pool, maxAgeSeconds int) (int, error) {
+func StaleCount(ctx context.Context, pool Querier, maxAgeSeconds int) (int, error) {
 	const q = `
 SELECT count(*)
 FROM pg_stat_activity
@@ -68,7 +68,7 @@ func Pool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
 }
 
 // MaxConnections returns the server's max_connections setting.
-func MaxConnections(ctx context.Context, pool *pgxpool.Pool) (int, error) {
+func MaxConnections(ctx context.Context, pool Querier) (int, error) {
 	var n int
 	err := pool.QueryRow(ctx, "SELECT current_setting('max_connections')::int").Scan(&n)
 	return n, err

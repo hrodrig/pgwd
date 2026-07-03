@@ -8,6 +8,10 @@ check-docker = @docker info >/dev/null 2>&1 || { echo "Error: Docker is not runn
 DIST     := dist
 # Grype image scan (docker-scan): anchore/grype default gate; override e.g. GRYPE_FAIL_ON=critical
 GRYPE_FAIL_ON ?= high
+# Minimum total statement coverage for `make cover-check` (library packages; see COVER_TEST_PKGS).
+COVERAGE_MIN ?= 80
+# Packages measured by cover-check (excludes internal/cli — exercised via cmd/pgwd black-box tests).
+COVER_TEST_PKGS := $(shell go list ./internal/... ./contrib/... | grep -v '/internal/cli$$')
 # Version: read from VERSION file (e.g. 0.1.0); if missing, use v0.1.0. Override: make build VERSION=v0.2.0
 VERSION  ?= $(shell v=$$(cat VERSION 2>/dev/null | tr -d '\n\r'); [ -n "$$v" ] && echo "v$$v" || echo "v0.1.0")
 COMMIT   := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -51,6 +55,7 @@ help:
 	@echo "  lint               Check gofmt, go vet, and gocyclo"
 	@echo "  lint-fix           Fix formatting (gofmt -s -w)"
 	@echo "  cover              Unit tests with coverage (coverage.out + summary line)"
+	@echo "  cover-check        Fail if library coverage < $(COVERAGE_MIN)% (Docker + Postgres; see COVER_TEST_PKGS)"
 	@echo "  cover-integration  Same stack as test-integration; go test ./... with coverage (coverage-integration.out)"
 	@echo "  tools              Install govulncheck and gocyclo to \$$GOBIN"
 	@echo "  security           govulncheck + docker-scan (same as CI Security workflow)"
@@ -62,7 +67,7 @@ help:
 	@echo "  docker-scan               Build image and run Grype (uses Grype on PATH, else anchore/grype container)"
 	@echo ""
 	@echo "Release:"
-	@echo "  release-check      Run all checks (lint, test, test-integration, test-e2e-kube, docker-scan)"
+	@echo "  release-check      Run all checks (lint, test, cover-check, test-integration, test-e2e-kube, docker-scan)"
 	@echo "  release            Full release (from main only; runs release-check first)"
 	@echo "  snapshot           Goreleaser snapshot build (outputs to dist/)"
 	@echo "  dist-freebsd       Build FreeBSD tar.gz distfile for ports local testing"
@@ -124,10 +129,24 @@ test:
 	go test ./...
 
 # Coverage report (writes coverage.out in repo root; not part of release-check)
-.PHONY: cover cover-integration integration-compose-up integration-compose-down
+.PHONY: cover cover-check cover-integration integration-compose-up integration-compose-down
 cover:
 	go test ./... -coverprofile=coverage.out -covermode=atomic
 	@go tool cover -func=coverage.out | tail -1
+
+# cover-check: library packages >= COVERAGE_MIN% (default 80). Requires Docker (Postgres for store/postgres tests).
+cover-check:
+	$(check-docker)
+	@echo "Running cover-check (minimum $(COVERAGE_MIN)% on library packages)..."
+	@$(MAKE) integration-compose-up
+	@PGWD_TEST_DB_URL="postgres://pgwd:pgwd@localhost:5432/pgwd?sslmode=disable" \
+	 go test $(COVER_TEST_PKGS) ./cmd/pgwd -count=1 -coverprofile=coverage.out -covermode=atomic || \
+	 ($(MAKE) integration-compose-down; exit 1)
+	@go tool cover -func=coverage.out | tail -1
+	@pct=$$(go tool cover -func=coverage.out | grep '^total:' | awk '{print $$NF}' | tr -d '%'); \
+	echo "Total statement coverage: $$pct% (minimum $(COVERAGE_MIN)%)"; \
+	awk -v p="$$pct" -v m="$(COVERAGE_MIN)" 'BEGIN { if (p+0 < m+0) { print "Error: coverage is below " m "% — add tests or set COVERAGE_MIN="; exit 1 } }'
+	@$(MAKE) integration-compose-down
 
 # Start Postgres + Loki for integration tests (shared by test-integration and cover-integration).
 integration-compose-up:
@@ -267,7 +286,7 @@ docker-scan:
 	fi
 
 # --- Release (requires goreleaser: brew install goreleaser) ---
-# release-check: MANDATORY before release. Requires Docker (all tests use it). Runs lint, test, test-integration, test-e2e-kube, docker-scan. All must pass.
+# release-check: MANDATORY before release. Requires Docker (all tests use it). Runs lint, test, cover-check, test-integration, test-e2e-kube, docker-scan. All must pass.
 .PHONY: release-check
 release-check:
 	$(check-docker)
@@ -276,16 +295,17 @@ release-check:
 	ver_raw=$$(cat VERSION | tr -d '\n\r'); ver=$${ver_raw#v}; \
 	echo "$$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$$' || { echo "Error: VERSION must be semantic MAJOR.MINOR.PATCH (got: $$ver_raw)"; exit 1; }; \
 	echo "Release version: $$ver (tag v$$ver)"; \
-	echo "Running release checks (lint, test, test-integration, test-e2e-kube, docker-scan)...";
+	echo "Running release checks (lint, test, cover-check, test-integration, test-e2e-kube, docker-scan)...";
 	@$(MAKE) lint
 	@$(MAKE) test
+	@$(MAKE) cover-check
 	@$(MAKE) test-integration
 	@$(MAKE) test-e2e-kube
 	@$(MAKE) docker-scan
 	@echo "All release checks passed."
 
 # Release: only from main. Requires release-check to pass. Merge develop → main, update VERSION, then: git tag v0.1.0 && make release
-.PHONY: help release snapshot dist-freebsd dist-openbsd docker-build docker-buildx-amd64 docker-buildx-amd64-push docker-scan security lint lint-fix test-integration port-openbsd-sync cover cover-integration integration-compose-up integration-compose-down tools
+.PHONY: help release snapshot dist-freebsd dist-openbsd docker-build docker-buildx-amd64 docker-buildx-amd64-push docker-scan security lint lint-fix test-integration port-openbsd-sync cover cover-check cover-integration integration-compose-up integration-compose-down tools
 release: release-check
 	$(check-docker)
 	@branch=$$(git branch --show-current 2>/dev/null); \

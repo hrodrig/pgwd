@@ -1,7 +1,6 @@
 package notify
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -115,33 +114,19 @@ func thresholdSuffix(threshold string, value int) string {
 
 // Send pushes a log line to Loki.
 func (l *Loki) Send(ctx context.Context, ev Event) error {
-	client := l.Client
-	if client == nil {
-		client = http.DefaultClient
-	}
-
 	raw, err := l.PushPayload(ev)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, l.URL, bytes.NewReader(raw))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if l.OrgID != "" {
-		req.Header.Set("X-Scope-OrgID", l.OrgID)
-	}
-	if l.BearerToken != "" {
-		req.Header.Set("Authorization", "Bearer "+l.BearerToken)
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("loki push returned %s", resp.Status)
+	if err := postJSONWithRetryClient(ctx, l.Client, l.URL, raw, func(req *http.Request) {
+		if l.OrgID != "" {
+			req.Header.Set("X-Scope-OrgID", l.OrgID)
+		}
+		if l.BearerToken != "" {
+			req.Header.Set("Authorization", "Bearer "+l.BearerToken)
+		}
+	}); err != nil {
+		return fmt.Errorf("loki push: %w", err)
 	}
 	return nil
 }

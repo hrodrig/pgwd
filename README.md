@@ -6,7 +6,7 @@
   <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.6.10-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.7.0-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![CI](https://github.com/hrodrig/pgwd/actions/workflows/ci.yml/badge.svg)](https://github.com/hrodrig/pgwd/actions)
 [![codecov](https://codecov.io/gh/hrodrig/pgwd/graph/badge.svg)](https://codecov.io/gh/hrodrig/pgwd)
@@ -27,7 +27,7 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 
 **GitHub repo traffic (history beyond 14 days):** sibling tool **[gghstats](https://github.com/hrodrig/gghstats)** — [live stats for pgwd](https://gghstats.hermesrodriguez.com/hrodrig/pgwd) (clone badge above).
 
-**Documentation:** [Sequence diagrams](docs/README.md#sequence-diagrams) (Mermaid) for each use case, [audited against the code](docs/sequence/AUDIT.md), [terminal demo](docs/README.md#terminal-demo-vhs) (VHS — regenerate with `make install` then `bash -c "vhs docs/demo.tape"`), [upgrading 0.5.x → 0.6.x](docs/UPGRADE-0.5-to-0.6.md) (operator checklist; index under [docs/README — Upgrading](docs/README.md#upgrading)), and `man pgwd` (included in .deb/.rpm packages) — see [docs/](docs/README.md). **Scanning** before release (govulncheck, Grype): [tools/README.md](tools/README.md).
+**Documentation:** [ROADMAP.md](ROADMAP.md), [SPECIFICATIONS.md](SPECIFICATIONS.md) (behavior contract), [Kubernetes passwords / DISCOVER deprecation](docs/kubernetes-passwords.md), [docs/](docs/README.md) (band plans, sequence diagrams, upgrades), `man pgwd`. **Scanning:** [tools/README.md](tools/README.md).
 
 ![Terminal demo](docs/demo.gif)
 
@@ -138,7 +138,7 @@ pgwd -config /etc/pgwd/pgwd.conf
 PGWD_CONFIG=/path/to/pgwd.conf pgwd
 ```
 
-**CLI overrides env, env overrides config file.** Use env for secrets and overrides; use config file for base settings.
+**Precedence:** **CLI > config file > defaults** when a config file is loaded (`PGWD_*` env vars are **not** applied in that case). When **no** config file is loaded: **CLI > env > defaults**. Use env for secrets and one-off overrides when running without a file; use a config file for stable base settings.
 
 **`-db-url` override (one-shot):** When the config file has `databases:` (multi-DB), passing `-db-url` and `-interval 0` runs against that single URL only, ignoring the databases from config for that run. Useful for quick ad-hoc checks without editing the config.
 
@@ -356,6 +356,8 @@ Each run is independent; no port clashes when using different configs (each has 
 
 **Alternative: single script for many services.** You can run pgwd for several Postgres instances (e.g. one per Kubernetes service) from a single cron schedule: use a bash script that sets `KUBECONFIG`, `PGWD_NOTIFICATIONS_SLACK_WEBHOOK`, and `PATH`, then invokes pgwd once per service with distinct **`-kube-local-port`** values so port-forwards do not clash. Add a second script that runs **`-force-notification`** on a schedule (e.g. every 2 hours) as a “still alive” heartbeat.
 
+> **Passwords:** Prefer a Secret-backed `PGWD_DB_URL` (see [Kubernetes — outside cluster](#pgwd-outside-kubernetes-port-forward-via-client-go)). **`DISCOVER_MY_PASSWORD`** is **deprecated** (removed 0.9.x) — [why and what to use instead](docs/kubernetes-passwords.md).
+
 **Check script** (e.g. `~/bin/pgwd-cron.sh`): runs every 5 minutes, checks all services, alerts only when thresholds are exceeded.
 
 ```bash
@@ -365,21 +367,23 @@ export KUBECONFIG=/path/to/your/kubeconfig
 export PGWD_NOTIFICATIONS_SLACK_WEBHOOK="https://hooks.slack.com/services/..."
 export PATH="/usr/local/bin:$PATH"
 PGWD=${PGWD:-/usr/local/bin/pgwd}
+# Password from Secret (preferred — do not use DISCOVER_MY_PASSWORD; removed in 0.9.x)
+PGPASSWORD=$(kubectl get secret postgres-credentials -n mynamespace -o jsonpath='{.data.password}' | base64 -d)
 
 echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) checking postgres-a"
 $PGWD -kube-postgres mynamespace/svc/postgres-a \
   -kube-local-port 15432 \
-  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@postgres-a:15432/db_a'
+  -db-url "postgres://postgres:${PGPASSWORD}@localhost:15432/db_a?sslmode=disable"
 
 echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) checking postgres-b"
 $PGWD -kube-postgres mynamespace/svc/postgres-b \
   -kube-local-port 15433 \
-  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@postgres-b:15433/db_b'
+  -db-url "postgres://postgres:${PGPASSWORD}@localhost:15433/db_b?sslmode=disable"
 
 echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) checking postgres-c"
 $PGWD -kube-postgres mynamespace/svc/postgres-c \
   -kube-local-port 15434 \
-  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@postgres-c:15434/db_c'
+  -db-url "postgres://postgres:${PGPASSWORD}@localhost:15434/db_c?sslmode=disable"
 
 exit 0
 ```
@@ -393,15 +397,16 @@ export KUBECONFIG=/path/to/your/kubeconfig
 export PGWD_NOTIFICATIONS_SLACK_WEBHOOK="https://hooks.slack.com/services/..."
 export PATH="/usr/local/bin:$PATH"
 PGWD=${PGWD:-/usr/local/bin/pgwd}
+PGPASSWORD=$(kubectl get secret postgres-credentials -n mynamespace -o jsonpath='{.data.password}' | base64 -d)
 
 $PGWD -kube-postgres mynamespace/svc/postgres-a \
   -kube-local-port 25432 \
-  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@postgres-a:25432/db_a' \
+  -db-url "postgres://postgres:${PGPASSWORD}@localhost:25432/db_a?sslmode=disable" \
   -force-notification
 
 $PGWD -kube-postgres mynamespace/svc/postgres-b \
   -kube-local-port 25433 \
-  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@postgres-b:25433/db_b' \
+  -db-url "postgres://postgres:${PGPASSWORD}@localhost:25433/db_b?sslmode=disable" \
   -force-notification
 
 exit 0
@@ -436,7 +441,7 @@ When you run pgwd as a Deployment (Docker image in K8s), use **direct service UR
 
 - **Postgres:** `databases[].url` with in-cluster DNS, e.g. `postgres://user:pass@postgres.default.svc.cluster.local:5432/mydb` (shorter: `postgres-service.namespace:5432`).
 - **Loki:** `notifications.loki.url` with in-cluster DNS, e.g. `http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push`.
-- **Passwords:** From a Secret via env (`PGWD_*` or `-config`). No `DISCOVER_MY_PASSWORD` — that requires cluster access (pgwd outside K8s) to read the Postgres pod env.
+- **Passwords:** From a Secret via env (`PGWD_*` or `-config`). **Do not use `DISCOVER_MY_PASSWORD`** (deprecated; removed in 0.9.x).
 - **HTTP:** Set `http.listen: ":8080"` for `/healthz` and `/metrics` (liveness, Prometheus).
 - **CSV export (metrics store):** Check history is persisted under **`sqlite.path`** (SQLite) or **`metrics_store.driver`** + **`metrics_store.dsn`** (PostgreSQL / MySQL). **[TimescaleDB](https://www.timescale.com/)** works as **`driver: postgres`** pointing at your Timescale endpoint (plain `metrics` table; no pgwd-specific hypertable integration). To dump stored rows: **`pgwd -config /etc/pgwd/pgwd.conf -export-metrics-format csv -export-metrics-destination /path/out.csv`**. SQLite export opens the file **read-only** (safe while the daemon runs). Overwrites the CSV each run; use **cron** for periodic snapshots. See **`internal/metricsstore`** and **`contrib/pgwd.conf.example`**.
 
@@ -475,7 +480,7 @@ When pgwd runs on a host (VM, cron) and Postgres/Loki are inside the cluster, us
 **Format:** `-kube-postgres <namespace>/<type>/<name>` with `type` = `svc` or `pod`, e.g. `default/svc/postgres` or `default/pod/postgres-0`.
 
 - Set **`PGWD_DB_URL`** with host **`localhost`** and the same port as **`-kube-local-port`** (default 5432). Example: `postgres://user:pass@localhost:5432/mydb`.
-- **Password from the pod:** If the URL password is the literal **`DISCOVER_MY_PASSWORD`**, pgwd reads the password from the Postgres pod's environment (`POSTGRES_PASSWORD` by default, or `PGPASSWORD`). Use **`-kube-password-var`** and **`-kube-password-container`** if needed.
+- **Password:** Prefer a Secret-backed URL in env or config. **`DISCOVER_MY_PASSWORD`** is **deprecated** (requires `pods/exec`; removed **0.9.x**) — full rationale and migration: **[docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)**.
 - **Requires:** A valid kubeconfig (file or `KUBECONFIG` env). **When running from cron**, ensure `KUBECONFIG` is set or `~/.kube/config` exists and is readable.
 - **Multiple contexts:** Use **`-kube-context`** (or `PGWD_KUBE_CONTEXT`) to select context.
 - **Validate connectivity:** Use **`-validate-k8s-access`** to check cluster access before a real run.
@@ -487,16 +492,16 @@ pgwd -validate-k8s-access
 # With specific context:
 pgwd -kube-context prod -validate-k8s-access
 
-# With password in URL
+# With password in URL (from Secret / env — preferred)
 PGWD_DB_URL="postgres://postgres:secret@localhost:5432/mydb" \
   pgwd -kube-postgres default/svc/postgres -notifications-slack-webhook "https://..." -dry-run
 
-# Password from pod env (POSTGRES_PASSWORD)
-PGWD_DB_URL="postgres://postgres:DISCOVER_MY_PASSWORD@localhost:5432/mydb" \
-  pgwd -kube-postgres default/svc/postgres -dry-run
+# Legacy (deprecated — removed in 0.9.x): DISCOVER_MY_PASSWORD reads pod env via pods/exec
+# PGWD_DB_URL="postgres://postgres:DISCOVER_MY_PASSWORD@localhost:5432/mydb" \
+#   pgwd -kube-postgres default/svc/postgres -dry-run
 
 # Loki inside cluster (pgwd runs outside): port-forward to Loki, then notify
-PGWD_DB_URL="postgres://postgres:DISCOVER_MY_PASSWORD@localhost:5432/mydb" \
+PGWD_DB_URL="postgres://postgres:secret@localhost:5432/mydb" \
   pgwd -kube-postgres default/svc/postgres -kube-loki monitoring/svc/loki -notifications-slack-webhook "https://..." -force-notification
 
 # Port 3100 already in use: use -kube-loki-local-port (like -kube-local-port for Postgres)
@@ -508,7 +513,7 @@ pgwd -kube-postgres default/svc/postgres -kube-loki monitoring/svc/loki -kube-lo
 pgwd -kube-postgres mynamespace/svc/postgres -kube-local-port 15432 \
   -kube-loki mynamespace/svc/loki -kube-loki-local-port 13100 \
   -notifications-loki-org-id 1 \
-  -db-url 'postgres://postgres:DISCOVER_MY_PASSWORD@localhost:15432/mydb?sslmode=disable' \
+  -db-url 'postgres://postgres:secret@localhost:15432/mydb?sslmode=disable' \
   -force-notification
 ```
 
@@ -518,7 +523,7 @@ pgwd -kube-postgres mynamespace/svc/postgres -kube-local-port 15432 \
 
 ## Parameters
 
-All parameters can be set via **config file**, **CLI**, or **environment variables** (`PGWD_*`). Precedence: CLI > env > config file.
+All parameters can be set via **config file**, **CLI**, or **environment variables** (`PGWD_*`). **Precedence:** when a config file is loaded, **CLI > file** (`PGWD_*` ignored). When no file is loaded, **CLI > env > defaults**.
 
 | CLI | Env | Description |
 |-----|-----|-------------|
@@ -531,8 +536,8 @@ All parameters can be set via **config file**, **CLI**, or **environment variabl
 | `-kube-loki-remote-port` | `PGWD_KUBE_LOKI_REMOTE_PORT` | Remote port on the Loki service (default 3100). Use when Loki listens on a different port. |
 | `-kube-context` | `PGWD_KUBE_CONTEXT` | Kubectl context to use (empty = current context). Use when you have multiple contexts in kubeconfig and want to target a specific cluster. |
 | `-kube-local-port` | `PGWD_KUBE_LOCAL_PORT` | Local port for port-forward (default 5432). Use different ports to run multiple pgwd against different Postgres in the cluster. |
-| `-kube-password-var` | `PGWD_KUBE_PASSWORD_VAR` | Pod env var name when URL password is `DISCOVER_MY_PASSWORD` (default `POSTGRES_PASSWORD`). |
-| `-kube-password-container` | `PGWD_KUBE_PASSWORD_CONTAINER` | Container name in pod for password discovery (default: primary container). |
+| `-kube-password-var` | `PGWD_KUBE_PASSWORD_VAR` | **Deprecated** (removed 0.9.x). Pod env var when URL password is `DISCOVER_MY_PASSWORD` (default `POSTGRES_PASSWORD`). |
+| `-kube-password-container` | `PGWD_KUBE_PASSWORD_CONTAINER` | **Deprecated** (removed 0.9.x). Container name for legacy password discovery. |
 | `-validate-k8s-access` | `PGWD_VALIDATE_K8S_ACCESS` | Validate cluster connectivity and list pods, then exit. Use `-kube-context` to select context. No DB or notifier required. |
 | `-client` | `PGWD_CLIENT` | **Required.** Custom name for this monitor instance (e.g. prod-db-primary). Identifies which monitor sent the alert when multiple instances run. Cluster name is computed from kubeconfig when using `-kube-postgres`; not configurable. |
 | `-db-threshold-total` | `PGWD_DB_THRESHOLD_TOTAL` | Alert when total connections ≥ N. **Deprecated:** use `-db-threshold-levels`; will be removed in v1.0.0. |
@@ -545,6 +550,23 @@ All parameters can be set via **config file**, **CLI**, or **environment variabl
 | `-notifications-loki-labels` | `PGWD_NOTIFICATIONS_LOKI_LABELS` | Loki labels, e.g. `app=pgwd,env=prod` |
 | `-notifications-loki-org-id` | `PGWD_NOTIFICATIONS_LOKI_ORG_ID` | Loki `X-Scope-OrgID` header (multi-tenancy). Required for 401; **must match Grafana's Loki data source** or logs won't appear (e.g. `1`, `my-tenant`). |
 | `-notifications-loki-bearer-token` | `PGWD_NOTIFICATIONS_LOKI_BEARER_TOKEN` | Loki `Authorization: Bearer` token |
+| `-notifications-pagerduty-enabled` | `PGWD_NOTIFICATIONS_PAGERDUTY_ENABLED` | Enable PagerDuty Events v2 |
+| `-notifications-pagerduty-routing-key` | `PGWD_NOTIFICATIONS_PAGERDUTY_ROUTING_KEY` | PagerDuty routing key |
+| `-notifications-pagerduty-severity` | `PGWD_NOTIFICATIONS_PAGERDUTY_SEVERITY` | PagerDuty default severity (default `warning`) |
+| `-notifications-pagerduty-source` | `PGWD_NOTIFICATIONS_PAGERDUTY_SOURCE` | PagerDuty event source (default `pgwd`) |
+| `-notifications-teams-enabled` | `PGWD_NOTIFICATIONS_TEAMS_ENABLED` | Enable Microsoft Teams webhook |
+| `-notifications-teams-webhook` | `PGWD_NOTIFICATIONS_TEAMS_WEBHOOK` | Microsoft Teams incoming webhook URL |
+| `-notifications-generic-enabled` | `PGWD_NOTIFICATIONS_GENERIC_ENABLED` | Enable generic webhook |
+| `-notifications-generic-webhook-url` | `PGWD_NOTIFICATIONS_GENERIC_WEBHOOK_URL` | Generic webhook target URL |
+| `-notifications-generic-json-key` | `PGWD_NOTIFICATIONS_GENERIC_JSON_KEY` | JSON field for message text (default `text`) |
+| `-notifications-generic-headers` | `PGWD_NOTIFICATIONS_GENERIC_HEADERS` | Custom headers as JSON object string |
+| `-notifications-generic-extra-fields` | `PGWD_NOTIFICATIONS_GENERIC_EXTRA_FIELDS` | Extra JSON fields as JSON object string |
+| `-notifications-generic-body-template` | `PGWD_NOTIFICATIONS_GENERIC_BODY_TEMPLATE` | Go template for custom JSON body |
+| `-notifications-generic-hmac-secret` | `PGWD_NOTIFICATIONS_GENERIC_HMAC_SECRET` | HMAC-SHA256 signing secret |
+| `-notifications-generic-hmac-header` | `PGWD_NOTIFICATIONS_GENERIC_HMAC_HEADER` | HMAC signature header (default `X-Pgwd-Signature`) |
+| `-notifications-retry-max-attempts` | `PGWD_NOTIFICATIONS_RETRY_MAX_ATTEMPTS` | Notifier HTTP retry max attempts (default 3) |
+| `-notifications-retry-initial-backoff` | `PGWD_NOTIFICATIONS_RETRY_INITIAL_BACKOFF` | Initial retry backoff, e.g. `1s` |
+| `-notifications-retry-max-backoff` | `PGWD_NOTIFICATIONS_RETRY_MAX_BACKOFF` | Max retry backoff, e.g. `10s` |
 | `-interval` | `PGWD_INTERVAL` | Run every N seconds; 0 = run once |
 | `-dry-run` | `PGWD_DRY_RUN` | Only print stats, do not send notifications |
 | `-force-notification` | `PGWD_FORCE_NOTIFICATION` | Always send at least one notification: test event when connected (to validate delivery, format, and channel). Requires at least one notifier. (Connection failure is always notified when a notifier is configured, with or without this flag.) |
@@ -733,14 +755,14 @@ Using **127.0.0.1** and host port **5433** avoids hitting a local Postgres on 54
 ## Requirements
 
 - At least one of: a threshold (`-db-threshold-levels` for 3-tier, `-db-threshold-idle`, or `-db-threshold-stale` with `-db-stale-age`), `-dry-run`, or `-force-notification`. If you set only `-db-url` and a notifier, pgwd uses 3-tier levels (75,85,95%) of `max_connections`.
-- If not using `-dry-run`: at least one notifier (`-notifications-slack-webhook`, `-notifications-loki-url`, or `-kube-loki`). For `-force-notification`, a notifier is required.
+- If not using `-dry-run`: at least one notifier (Slack, Loki, `-kube-loki`, PagerDuty, Teams, or generic webhook). For `-force-notification`, a notifier is required.
 - For `threshold-stale`, `stale-age` must be set and greater than 0.
 
 ## Behavior and exit
 
 - **One-shot** (`interval` 0 or unset): runs one check, sends alerts if thresholds are exceeded, then exits. Exit code 0 on success; non-zero on fatal errors (e.g. DB connection failure).
 - **Daemon** (`interval` greater than 0): runs every `interval` seconds until interrupted (Ctrl+C or SIGTERM). Exits with 0 after a clean shutdown.
-- **Dry run**: same as above but no HTTP calls to Slack/Loki; only logs stats to stdout.
+- **Dry run**: same as above but no HTTP calls to notifiers; only logs stats to stdout.
 
 ## Help
 
@@ -791,6 +813,20 @@ Example: `pgwd [cluster=prod] [database=myapp] [client=pgwd-vps-01]: Test notifi
 
 Same placeholders as Slack. Timestamp is the time of the push. You can query in Grafana or LogCLI by label (e.g. `{app="pgwd", threshold="total"}` or `{app="pgwd", level="danger"}`). For Grafana alert rules, see [docs/loki-grafana-alerts.md](docs/loki-grafana-alerts.md) (labels, LogQL examples, payload structure).
 
+## PagerDuty
+
+Set `notifications.pagerduty.routing_key` (or `-notifications-pagerduty-routing-key` / `PGWD_NOTIFICATIONS_PAGERDUTY_ROUTING_KEY`) and enable PagerDuty (`enabled: true` or set routing key via env/CLI). Events POST to PagerDuty Events API v2 with severity derived from pgwd levels (`danger` / connect failures → `critical`, `alert` → `warning`, `attention` / resolution / test → `info`). Optional `severity` and `source` (default `pgwd`).
+
+## Microsoft Teams
+
+Create an [Incoming Webhook](https://learn.microsoft.com/en-us/microsoftteams/platform/webhooks-and-connectors/how-to/add-incoming-webhook) in your Teams channel. Set `notifications.teams.webhook_url` or `-notifications-teams-webhook`. Payload is plain text (`{"text": "..."}`) with the same summary fields as Slack (connections, cluster, database, client).
+
+## Generic webhook
+
+For custom APIs (including JWT bearer auth), set `notifications.generic.webhook_url`. Default JSON: `{"text": "<summary>", ...extra_fields}`. Set `headers` for auth (e.g. `Authorization: Bearer <token>`). Optional `body_template` (Go template, must render valid JSON). Optional `hmac_secret` signs the body as `sha256=<hex>` in `hmac_header` (default `X-Pgwd-Signature`).
+
+All notifiers share HTTP retry settings under `notifications.retry` (or `-notifications-retry-*`).
+
 ---
 
 ## Troubleshooting
@@ -799,9 +835,9 @@ Same placeholders as Slack. Timestamp is the time of the push. You can query in 
 |--------|----------------|
 | **"missing database URL"** | Set `PGWD_DB_URL` or `-db-url`. The URL must be a valid [PostgreSQL connection string](https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING). |
 | **"no thresholds set and could not default from server..."** | pgwd could not read `max_connections` from the server (error or 0). Use `-test-max-connections N` to override, or `-dry-run`, or `-force-notification`. With a normal Postgres, only `-db-url` and a notifier should be enough (defaults to 3-tier levels 75,85,95%). |
-| **"no notifier configured"** | Set `PGWD_NOTIFICATIONS_SLACK_WEBHOOK`, `PGWD_NOTIFICATIONS_LOKI_URL`, or `PGWD_KUBE_LOKI` (or use `-dry-run` to skip notifications). |
-| **"force-notification requires at least one notifier"** | Use `-force-notification` together with `-notifications-slack-webhook` and/or `-notifications-loki-url` or `-kube-loki`. |
-| **"notify-on-connect-failure requires at least one notifier"** | You set `-notify-on-connect-failure` but have no notifier. Add `-notifications-slack-webhook` and/or `-notifications-loki-url` or `-kube-loki`. (Connect failure is always notified when a notifier is configured; the flag is optional.) |
+| **"no notifier configured"** | Set a notification channel: Slack, Loki, `-kube-loki`, PagerDuty, Teams, or generic webhook (or use `-dry-run`). |
+| **"force-notification requires at least one notifier"** | Use `-force-notification` together with at least one configured notifier. |
+| **"notify-on-connect-failure requires at least one notifier"** | You set `-notify-on-connect-failure` but have no notifier. Add a notification channel. (Connect failure is always notified when a notifier is configured; the flag is optional.) |
 | **"load kubeconfig" / cluster unreachable** | When using `-kube-postgres` or `-kube-loki`, ensure a valid kubeconfig exists (`KUBECONFIG` env or `~/.kube/config`). pgwd uses client-go; no kubectl binary required. |
 | **"when using -db-threshold-stale, -db-stale-age must be > 0"** | Set `-db-stale-age N` (e.g. 600) when using `-db-threshold-stale`. |
 | **Slack/Loki not receiving alerts** | Run once with `-force-notification` to send a test message. Check webhook URL, network/firewall, and that the app can reach Slack/Loki. |
@@ -1319,21 +1355,31 @@ See [contrib/solaris/README.md](contrib/solaris/README.md) for details.
 
 ## Roadmap
 
-Target **v1.0.0** by early July. After **0.6.x** (metrics store + security patches), the line is **0.8.0** (supply chain, last **0.x** before **1.0**) → **1.0.0** (breaking stable). **TimescaleDB** for metrics history uses the existing **`metrics_store.driver: postgres`** DSN (no separate backend).
+**Canonical roadmap:** **[ROADMAP.md](ROADMAP.md)** — current release, release bands (0.7 → 1.0), calendar, key decisions, document map.
+
+Summary: **v0.7.0** (notifiers) → **0.8.0** (SBOM + Cosign) → **0.9.x** (polish, DISCOVER removal) → **1.0.0** (breaking stable). Behavior contract: [SPECIFICATIONS.md](SPECIFICATIONS.md). Shipped releases: [CHANGELOG.md](CHANGELOG.md).
+
+| Band | Status | Plan |
+|------|--------|------|
+| **0.7.0** | ✅ Ready Jul 2026 | [plan-0.7.x.md](docs/plan-0.7.x.md) · [CHANGELOG](CHANGELOG.md#070---2026-07-03) |
+| **0.8.0** | 📋 Planned | [plan-0.8.x.md](docs/plan-0.8.x.md) |
+| **0.9.x** | 📋 Planned | [plan-0.9.x.md](docs/plan-0.9.x.md) |
+| **1.0.0** | 📋 Planned | [plan-1.0.x.md](docs/plan-1.0.x.md) |
+
+<details>
+<summary>Shipped history (0.4 – 0.7.0)</summary>
 
 | Version | Target | Scope |
 |---------|--------|-------|
-| **0.4.0** | Mar 2026 ✅ | Loki auth (-notifications-loki-org-id, -notifications-loki-bearer-token), kube-loki, Grafana org ID docs, notification sent log. |
-| **0.5.0** | Mar 2026 ✅ | Loki database/cluster labels and log line, Grafana alert docs, security hardening (zlib, compose, k8s). |
-| **0.6.0** | Apr 2026 ✅ | **CSV export** — dump persisted metrics via `-export-metrics-format csv` / `metricsstore` (SQLite). Plus daemon/multi-DB, SQLite store, HTTP `/metrics`, Helm chart moved to pgwd-selfhosted, pgx security updates, Ansible platform tests, and more (see CHANGELOG). |
-| **0.6.4** | May 2026 ✅ | **PostgreSQL/MySQL metrics store** (`metrics_store.driver` / `dsn`), shared **`MetricsStorer`** interface, CSV export for SQL backends. See CHANGELOG. |
-| **0.6.5** | May 2026 ✅ | **Security patch:** Go 1.26.3, `golang.org/x/net` v0.53+, Alpine 3.22 runtime, EndpointSlice for `-kube-postgres`, `make security`. See CHANGELOG. |
-| **0.6.6** | May 2026 ✅ | **`golang.org/x/net` v0.55.0** (GO-2026-5026), GoReleaser Homebrew fix, README deployment links. See CHANGELOG. |
-| **0.6.7** | May 2026 ✅ | **too_many_clients** locale fix, enriched **Notification sent** daemon log. See CHANGELOG. |
-| **0.6.8** | Jun 2026 ✅ | **Security patch:** Go **1.26.4** (stdlib **GO-2026-5037** / **GO-2026-5039**). Roadmap/docs (Timescale via postgres driver). See CHANGELOG. |
-| **0.6.10** | Jun 2026 ✅ | **Security patch:** Docker runtime **Alpine 3.24.1** (Snyk low cleared; OpenSSL/CVE-2026-2673). See CHANGELOG. |
-| **0.8.0** | Jun–Jul | **Supply chain** — **Syft SBOM** + **Cosign** keyless sign for GHCR images and release artifacts (same release-pipeline pattern as [groot](https://github.com/hrodrig/groot) / [kzero](https://github.com/hrodrig/kzero)); re-enable GoReleaser SBOM/docker signing once buildx supports attestations; document `cosign verify` for operators. **Last 0.x before 1.0.** |
-| **1.0.0** | Early Jul | **Breaking:** remove threshold-total and threshold-active. Stable API. Criteria: 100+ tests, logo, deprecations removed, **0.8.0** supply chain shipped. |
+| **0.4.0** | Mar 2026 ✅ | Loki auth, kube-loki, Grafana org ID docs |
+| **0.5.0** | Mar 2026 ✅ | Loki labels, security hardening |
+| **0.6.0** | Apr 2026 ✅ | CSV export, multi-DB, SQLite, HTTP `/metrics`, Helm → pgwd-selfhosted |
+| **0.6.4** | May 2026 ✅ | PostgreSQL/MySQL metrics store |
+| **0.6.5–0.6.8** | May–Jun 2026 ✅ | Security patches (Go, Alpine, govulncheck) |
+| **0.6.10** | Jun 2026 ✅ | Docker Alpine 3.24.1 |
+| **0.7.0** | Jul 2026 ✅ | PagerDuty, Teams, generic webhook, HTTP retry |
+
+</details>
 
 [↑ Back to top](#top)
 

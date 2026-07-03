@@ -1,7 +1,6 @@
 package notify
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -107,29 +106,18 @@ func slackColor(ev Event) string {
 
 // Send posts a Slack message when a threshold is exceeded.
 func (s *Slack) Send(ctx context.Context, ev Event) error {
-	client := s.Client
-	if client == nil {
-		client = http.DefaultClient
-	}
 	ts := time.Now().Format("2006-01-02 15:04:05")
 	body := map[string]any{
 		"attachments": []map[string]any{
 			{"color": slackColor(ev), "text": slackHeader(ev, ts), "fallback": ev.Message},
 		},
 	}
-	raw, _ := json.Marshal(body)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.WebhookURL, bytes.NewReader(raw))
+	raw, err := json.Marshal(body)
 	if err != nil {
-		return err
+		return fmt.Errorf("slack payload: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("slack webhook returned %s", resp.Status)
+	if err := postJSONWithRetryClient(ctx, s.Client, s.WebhookURL, raw, nil); err != nil {
+		return fmt.Errorf("slack webhook: %w", err)
 	}
 	return nil
 }

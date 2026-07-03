@@ -111,6 +111,10 @@ spec:
 
 When `PGWD_HTTP_LISTEN` is set, default paths are `/api/pgwd/v1/healthz` and `/api/pgwd/v1/metrics`.
 
+## pgwd outside the cluster
+
+When pgwd runs on a VM or cron host, use `-kube-postgres` / `-kube-loki` with client-go port-forward (kubeconfig required; no kubectl binary). **Do not use `DISCOVER_MY_PASSWORD`** in the DSN — it requires `pods/exec` RBAC and will be **removed in 0.9.x**. Rationale and migration: **[docs/kubernetes-passwords.md](../docs/kubernetes-passwords.md)**.
+
 ## Multiple databases
 
 Use a config file (ConfigMap) with `databases:` — env vars do not support multiple URLs. Mount the config and set `PGWD_CONFIG` or `-config`. Template the config with Helm/Kustomize to inject the DB URL(s) from Secrets.

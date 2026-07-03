@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 func setEnv(key, value string) func() {
@@ -160,6 +161,10 @@ func TestHasAnyNotifier(t *testing.T) {
 		{"loki", Config{LokiURL: "http://loki:3100/push"}, true},
 		{"kube-loki", Config{KubeLoki: "monitoring/svc/loki"}, true},
 		{"both", Config{SlackWebhook: "x", LokiURL: "y"}, true},
+		{"pagerduty", Config{PagerDutyRoutingKey: "rk"}, true},
+		{"pagerduty-enabled", Config{PagerDutyEnabled: true, PagerDutyRoutingKey: "rk"}, true},
+		{"teams", Config{TeamsWebhook: "https://teams.example/hook"}, true},
+		{"generic", Config{GenericWebhookURL: "https://api.example/hook"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -329,6 +334,68 @@ func TestApplyEnv_Notifiers(t *testing.T) {
 	}
 	if cfg.LokiBearerToken != "secret-token" {
 		t.Errorf("LokiBearerToken: got %q", cfg.LokiBearerToken)
+	}
+}
+
+func TestApplyEnv_PagerDutyNotifier(t *testing.T) {
+	t.Setenv("PGWD_NOTIFICATIONS_PAGERDUTY_ROUTING_KEY", "pd-rk")
+	t.Setenv("PGWD_NOTIFICATIONS_PAGERDUTY_SEVERITY", "critical")
+	t.Setenv("PGWD_NOTIFICATIONS_PAGERDUTY_SOURCE", "pgwd-test")
+	var cfg Config
+	ApplyEnv(&cfg)
+	ApplyDefaults(&cfg)
+	if !cfg.PagerDutyEnabled || cfg.PagerDutyRoutingKey != "pd-rk" {
+		t.Fatalf("enabled=%v routing_key=%q", cfg.PagerDutyEnabled, cfg.PagerDutyRoutingKey)
+	}
+	if cfg.PagerDutySeverity != "critical" || cfg.PagerDutySource != "pgwd-test" {
+		t.Fatalf("severity/source: %q / %q", cfg.PagerDutySeverity, cfg.PagerDutySource)
+	}
+}
+
+func TestApplyEnv_TeamsNotifier(t *testing.T) {
+	t.Setenv("PGWD_NOTIFICATIONS_TEAMS_WEBHOOK", "https://teams.example/hook")
+	var cfg Config
+	ApplyEnv(&cfg)
+	ApplyDefaults(&cfg)
+	if !cfg.TeamsEnabled || cfg.TeamsWebhook != "https://teams.example/hook" {
+		t.Fatalf("enabled=%v webhook=%q", cfg.TeamsEnabled, cfg.TeamsWebhook)
+	}
+}
+
+func TestApplyEnv_GenericNotifier(t *testing.T) {
+	t.Setenv("PGWD_NOTIFICATIONS_GENERIC_WEBHOOK_URL", "https://api.example/hook")
+	t.Setenv("PGWD_NOTIFICATIONS_GENERIC_JSON_KEY", "message")
+	t.Setenv("PGWD_NOTIFICATIONS_GENERIC_HEADERS", `{"Authorization":"Bearer tok"}`)
+	t.Setenv("PGWD_NOTIFICATIONS_GENERIC_EXTRA_FIELDS", `{"source":"pgwd"}`)
+	var cfg Config
+	ApplyEnv(&cfg)
+	ApplyDefaults(&cfg)
+	if !cfg.GenericEnabled || cfg.GenericWebhookURL != "https://api.example/hook" {
+		t.Fatalf("enabled=%v url=%q", cfg.GenericEnabled, cfg.GenericWebhookURL)
+	}
+	if cfg.GenericJSONKey != "message" {
+		t.Fatalf("json_key=%q", cfg.GenericJSONKey)
+	}
+	if cfg.GenericHeaders["Authorization"] != "Bearer tok" {
+		t.Fatalf("headers=%v", cfg.GenericHeaders)
+	}
+	if cfg.GenericExtraFields["source"] != "pgwd" {
+		t.Fatalf("extra=%v", cfg.GenericExtraFields)
+	}
+}
+
+func TestApplyEnv_NotifyRetry(t *testing.T) {
+	t.Setenv("PGWD_NOTIFICATIONS_RETRY_MAX_ATTEMPTS", "5")
+	t.Setenv("PGWD_NOTIFICATIONS_RETRY_INITIAL_BACKOFF", "2s")
+	t.Setenv("PGWD_NOTIFICATIONS_RETRY_MAX_BACKOFF", "30s")
+	var cfg Config
+	ApplyEnv(&cfg)
+	ApplyDefaults(&cfg)
+	if cfg.RetryMaxAttempts != 5 {
+		t.Fatalf("max_attempts=%d", cfg.RetryMaxAttempts)
+	}
+	if cfg.RetryInitialBackoff != 2*time.Second || cfg.RetryMaxBackoff != 30*time.Second {
+		t.Fatalf("backoff initial=%v max=%v", cfg.RetryInitialBackoff, cfg.RetryMaxBackoff)
 	}
 }
 

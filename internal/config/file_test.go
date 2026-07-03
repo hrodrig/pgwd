@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestFromFile_NotFound(t *testing.T) {
@@ -343,5 +344,90 @@ http:
 	}
 	if cfg.HTTPMetricsPath != "/m" {
 		t.Errorf("HTTPMetricsPath: got %q", cfg.HTTPMetricsPath)
+	}
+}
+
+func TestFromFile_NotificationsExtended(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "pgwd.conf")
+	content := `
+client: monitor
+databases:
+  - url: postgres://localhost/mydb
+notifications:
+  pagerduty:
+    enabled: true
+    routing_key: pd-key
+    severity: critical
+    source: pgwd-prod
+  teams:
+    enabled: true
+    webhook_url: https://teams.example/hook
+  generic:
+    enabled: true
+    webhook_url: https://api.example/hook
+    json_key: message
+    headers:
+      Authorization: Bearer tok
+    extra_fields:
+      source: pgwd
+    hmac_header: X-Signature
+  retry:
+    max_attempts: 5
+    initial_backoff: 2s
+    max_backoff: 30s
+`
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, loaded, err := FromFile(path)
+	if err != nil {
+		t.Fatalf("FromFile: %v", err)
+	}
+	if !loaded {
+		t.Fatal("expected loaded=true")
+	}
+	assertExtendedNotifications(t, cfg)
+}
+
+func assertExtendedNotifications(t *testing.T, cfg Config) {
+	t.Helper()
+	assertPagerDutyConfig(t, cfg)
+	assertTeamsConfig(t, cfg)
+	assertGenericConfig(t, cfg)
+	assertRetryConfig(t, cfg)
+}
+
+func assertPagerDutyConfig(t *testing.T, cfg Config) {
+	t.Helper()
+	if !cfg.PagerDutyEnabled || cfg.PagerDutyRoutingKey != "pd-key" || cfg.PagerDutySeverity != "critical" {
+		t.Errorf("PagerDuty: enabled=%v key=%q severity=%q", cfg.PagerDutyEnabled, cfg.PagerDutyRoutingKey, cfg.PagerDutySeverity)
+	}
+}
+
+func assertTeamsConfig(t *testing.T, cfg Config) {
+	t.Helper()
+	if !cfg.TeamsEnabled || cfg.TeamsWebhook != "https://teams.example/hook" {
+		t.Errorf("Teams: enabled=%v webhook=%q", cfg.TeamsEnabled, cfg.TeamsWebhook)
+	}
+}
+
+func assertGenericConfig(t *testing.T, cfg Config) {
+	t.Helper()
+	if !cfg.GenericEnabled || cfg.GenericWebhookURL != "https://api.example/hook" {
+		t.Errorf("Generic: enabled=%v url=%q", cfg.GenericEnabled, cfg.GenericWebhookURL)
+	}
+	if cfg.GenericJSONKey != "message" || cfg.GenericHeaders["Authorization"] != "Bearer tok" {
+		t.Errorf("Generic json_key/headers: key=%q headers=%v", cfg.GenericJSONKey, cfg.GenericHeaders)
+	}
+	if cfg.GenericExtraFields["source"] != "pgwd" || cfg.GenericHMACHeader != "X-Signature" {
+		t.Errorf("Generic extra/hmac: extra=%v hmac=%q", cfg.GenericExtraFields, cfg.GenericHMACHeader)
+	}
+}
+
+func assertRetryConfig(t *testing.T, cfg Config) {
+	t.Helper()
+	if cfg.RetryMaxAttempts != 5 || cfg.RetryInitialBackoff != 2*time.Second || cfg.RetryMaxBackoff != 30*time.Second {
+		t.Errorf("Retry: attempts=%d initial=%v max=%v", cfg.RetryMaxAttempts, cfg.RetryInitialBackoff, cfg.RetryMaxBackoff)
 	}
 }

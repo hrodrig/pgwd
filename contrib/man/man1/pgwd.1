@@ -1,16 +1,16 @@
 .\" pgwd(1) - Postgres Watch Dog
 .\" Manual page for pgwd
-.TH PGWD 1 "2026-06-17" "pgwd v0.6.10" "User Commands"
+.TH PGWD 1 "2026-07-03" "pgwd v0.7.0" "User Commands"
 .SH NAME
-pgwd \- monitor PostgreSQL connections and notify via Slack/Loki
+pgwd \- monitor PostgreSQL connections and notify via Slack, Loki, PagerDuty, Teams, or generic webhook
 .SH SYNOPSIS
 .B pgwd
 [\fIoptions\fR]
 .SH DESCRIPTION
 .B pgwd
 (Postgres Watch Dog) is a Go CLI that monitors PostgreSQL connection counts
-(total, active, idle, stale) and notifies via Slack and/or Loki when
-configured thresholds are exceeded. It does not terminate connections; it
+(total, active, idle, stale) and notifies via Slack, Loki, PagerDuty,
+Microsoft Teams, and/or a generic webhook when configured thresholds are exceeded. It does not terminate connections; it
 only observes and alerts.
 .PP
 All options can be set via config file, CLI flag, or environment variable
@@ -52,10 +52,10 @@ Kubectl context to use (empty = current). Env: PGWD_KUBE_CONTEXT.
 Local port for Postgres port-forward (default 5432). Env: PGWD_KUBE_LOCAL_PORT.
 .TP
 .BR \-kube\-password\-var " \fIvar\fR"
-Pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD). Env: PGWD_KUBE_PASSWORD_VAR.
+Deprecated (removed in 0.9.x). Pod env var when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD). Prefer Secret-backed DSN. Env: PGWD_KUBE_PASSWORD_VAR.
 .TP
 .BR \-kube\-password\-container " \fIname\fR"
-Container name in pod for password discovery. Env: PGWD_KUBE_PASSWORD_CONTAINER.
+Deprecated (removed in 0.9.x). Container name for legacy password discovery. Env: PGWD_KUBE_PASSWORD_CONTAINER.
 .TP
 .BR \-validate\-k8s\-access
 Validate kubectl connectivity and list pods, then exit. Env: PGWD_VALIDATE_K8S_ACCESS.
@@ -105,6 +105,57 @@ Loki X-Scope-OrgID header (multi-tenancy). Env: PGWD_NOTIFICATIONS_LOKI_ORG_ID.
 .BR \-notifications\-loki\-bearer\-token " \fItoken\fR"
 Loki Authorization: Bearer token. Env: PGWD_NOTIFICATIONS_LOKI_BEARER_TOKEN.
 .TP
+.BR \-notifications\-pagerduty\-enabled
+Enable PagerDuty Events v2. Env: PGWD_NOTIFICATIONS_PAGERDUTY_ENABLED.
+.TP
+.BR \-notifications\-pagerduty\-routing\-key " \fIkey\fR"
+PagerDuty routing key. Env: PGWD_NOTIFICATIONS_PAGERDUTY_ROUTING_KEY.
+.TP
+.BR \-notifications\-pagerduty\-severity " \fIlevel\fR"
+PagerDuty default severity (default warning). Env: PGWD_NOTIFICATIONS_PAGERDUTY_SEVERITY.
+.TP
+.BR \-notifications\-pagerduty\-source " \fIname\fR"
+PagerDuty event source (default pgwd). Env: PGWD_NOTIFICATIONS_PAGERDUTY_SOURCE.
+.TP
+.BR \-notifications\-teams\-enabled
+Enable Microsoft Teams webhook. Env: PGWD_NOTIFICATIONS_TEAMS_ENABLED.
+.TP
+.BR \-notifications\-teams\-webhook " \fIurl\fR"
+Microsoft Teams incoming webhook URL. Env: PGWD_NOTIFICATIONS_TEAMS_WEBHOOK.
+.TP
+.BR \-notifications\-generic\-enabled
+Enable generic webhook notifier. Env: PGWD_NOTIFICATIONS_GENERIC_ENABLED.
+.TP
+.BR \-notifications\-generic\-webhook\-url " \fIurl\fR"
+Generic webhook target URL. Env: PGWD_NOTIFICATIONS_GENERIC_WEBHOOK_URL.
+.TP
+.BR \-notifications\-generic\-json\-key " \fIkey\fR"
+JSON field for message text in default payload (default text). Env: PGWD_NOTIFICATIONS_GENERIC_JSON_KEY.
+.TP
+.BR \-notifications\-generic\-headers " \fIjson\fR"
+Custom HTTP headers as JSON object. Env: PGWD_NOTIFICATIONS_GENERIC_HEADERS.
+.TP
+.BR \-notifications\-generic\-extra\-fields " \fIjson\fR"
+Extra JSON fields for default payload. Env: PGWD_NOTIFICATIONS_GENERIC_EXTRA_FIELDS.
+.TP
+.BR \-notifications\-generic\-body\-template " \fItemplate\fR"
+Go template for custom JSON body. Env: PGWD_NOTIFICATIONS_GENERIC_BODY_TEMPLATE.
+.TP
+.BR \-notifications\-generic\-hmac\-secret " \fIsecret\fR"
+HMAC-SHA256 signing secret for request body. Env: PGWD_NOTIFICATIONS_GENERIC_HMAC_SECRET.
+.TP
+.BR \-notifications\-generic\-hmac\-header " \fIname\fR"
+HMAC signature header (default X-Pgwd-Signature). Env: PGWD_NOTIFICATIONS_GENERIC_HMAC_HEADER.
+.TP
+.BR \-notifications\-retry\-max\-attempts " \fIN\fR"
+Notifier HTTP retry max attempts (default 3). Env: PGWD_NOTIFICATIONS_RETRY_MAX_ATTEMPTS.
+.TP
+.BR \-notifications\-retry\-initial\-backoff " \fIduration\fR"
+Initial retry backoff, e.g. 1s. Env: PGWD_NOTIFICATIONS_RETRY_INITIAL_BACKOFF.
+.TP
+.BR \-notifications\-retry\-max\-backoff " \fIduration\fR"
+Max retry backoff, e.g. 10s. Env: PGWD_NOTIFICATIONS_RETRY_MAX_BACKOFF.
+.TP
 .BR \-interval " \fIN\fR"
 Run every N seconds; 0 = run once. Env: PGWD_INTERVAL.
 .TP
@@ -145,10 +196,10 @@ pgwd \-client my-monitor \-db-url "postgres://..." \-notifications-loki-url "htt
      \-interval 60
 .RE
 .TP
-Postgres and Loki in Kubernetes (cluster from kubeconfig):
+Postgres and Loki in Kubernetes (cluster from kubeconfig; use Secret-backed password in URL — DISCOVER_MY_PASSWORD deprecated, removed 0.9.x):
 .RS
 pgwd \-client my-monitor \-kube-postgres default/svc/postgres \-kube-loki monitoring/svc/loki \e
-     \-db-url "postgres://postgres:DISCOVER_MY_PASSWORD@localhost:5432/mydb" \e
+     \-db-url "postgres://postgres:YOUR_PASSWORD@localhost:5432/mydb" \e
      \-notifications-slack-webhook "https://..."
 .RE
 .TP

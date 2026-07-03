@@ -54,6 +54,7 @@ docker compose -f testing/compose.yaml down
 
 ## Coverage
 
+- **`make cover-check`** — library packages ≥ **80%** (default; requires Docker + Postgres). Excludes `internal/cli` (black-box via `cmd/pgwd`). Gate in **`make release-check`** and CI.
 - **`make cover`** (repo root) — runs **`go test ./...`** with **`-coverprofile=coverage.out`**. Unit tests only: **`internal/postgres`** integration tests are skipped without **`PGWD_TEST_DB_URL`**, and **`cmd/pgwd`** stays near **0%** in-package (black-box tests build a separate binary via **`exec`**).
 
 - **`make cover-integration`** — starts the same **Postgres + Loki** stack as **`make test-integration`**, exports **`PGWD_TEST_DB_URL`** and **`PGWD_TEST_LOKI_URL`**, then **`go test ./... -count=1 -coverprofile=coverage-integration.out`**. Use this profile to see coverage **with** DB and Loki paths. HTML report: **`go tool cover -html=coverage-integration.out`**.
