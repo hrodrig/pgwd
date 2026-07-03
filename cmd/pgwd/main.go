@@ -264,11 +264,7 @@ func runContextStrings(ctx context.Context, cfg *config.Config, dbURL string) (c
 	return cluster, client, namespace, database
 }
 
-// buildSenders constructs the notification backends configured in cfg: Slack when
-// notifications-slack-webhook is set, Loki when notifications-loki-url is set.
-// PagerDuty, Teams, and generic webhook senders are wired in a follow-up stage.
-// Returns nil or a slice with configured senders; an empty slice means no alerts
-// are delivered (dry-run still logs locally).
+// buildSenders constructs notification backends configured in cfg.
 func buildSenders(cfg *config.Config) []notify.Sender {
 	notify.ApplyRetryConfig(notifyRetryFromConfig(cfg))
 	var senders []notify.Sender
@@ -281,6 +277,27 @@ func buildSenders(cfg *config.Config) []notify.Sender {
 			Labels:      notify.ParseLokiLabels(cfg.LokiLabels),
 			OrgID:       cfg.LokiOrgID,
 			BearerToken: cfg.LokiBearerToken,
+		})
+	}
+	if cfg.PagerDutyActive() {
+		senders = append(senders, &notify.PagerDuty{
+			RoutingKey: cfg.PagerDutyRoutingKey,
+			Severity:   cfg.PagerDutySeverity,
+			Source:     cfg.PagerDutySource,
+		})
+	}
+	if cfg.TeamsActive() {
+		senders = append(senders, &notify.Teams{WebhookURL: cfg.TeamsWebhook})
+	}
+	if cfg.GenericActive() {
+		senders = append(senders, &notify.GenericWebhook{
+			WebhookURL:   cfg.GenericWebhookURL,
+			JSONKey:      cfg.GenericJSONKey,
+			Headers:      cfg.GenericHeaders,
+			ExtraFields:  cfg.GenericExtraFields,
+			BodyTemplate: cfg.GenericBodyTemplate,
+			HMACSecret:   cfg.GenericHMACSecret,
+			HMACHeader:   cfg.GenericHMACHeader,
 		})
 	}
 	return senders

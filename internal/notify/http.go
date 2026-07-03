@@ -43,6 +43,13 @@ func ApplyRetryConfig(cfg RetryConfig) {
 }
 
 func postJSONWithRetry(ctx context.Context, url string, body []byte, setHeaders func(*http.Request)) error {
+	return postJSONWithRetryClient(ctx, notifyHTTPCli, url, body, setHeaders)
+}
+
+func postJSONWithRetryClient(ctx context.Context, client *http.Client, url string, body []byte, setHeaders func(*http.Request)) error {
+	if client == nil {
+		client = notifyHTTPCli
+	}
 	var lastErr error
 	backoff := notifyRetry.InitialBackoff
 
@@ -56,7 +63,7 @@ func postJSONWithRetry(ctx context.Context, url string, body []byte, setHeaders 
 			setHeaders(req)
 		}
 
-		resp, err := notifyHTTPCli.Do(req)
+		resp, err := client.Do(req)
 		if err != nil {
 			lastErr = fmt.Errorf("send request: %w", err)
 		} else {

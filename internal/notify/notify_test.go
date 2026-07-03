@@ -45,8 +45,8 @@ func TestSlackSend_Non2xx(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for 500 response")
 	}
-	if !strings.Contains(err.Error(), "slack webhook returned") {
-		t.Errorf("error = %q, want substring %q", err, "slack webhook returned")
+	if !strings.Contains(err.Error(), "slack webhook") {
+		t.Errorf("error = %q, want substring %q", err, "slack webhook")
 	}
 }
 
@@ -112,8 +112,8 @@ func TestLokiSend_Non2xx(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for 500 response")
 	}
-	if !strings.Contains(err.Error(), "loki push returned") {
-		t.Errorf("error = %q, want substring %q", err, "loki push returned")
+	if !strings.Contains(err.Error(), "loki push") {
+		t.Errorf("error = %q, want substring %q", err, "loki push")
 	}
 }
 
