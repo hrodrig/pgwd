@@ -1,6 +1,6 @@
 # pgwd plan 0.7.x — notification channels expansion
 
-**Roadmap index:** [ROADMAP.md](../ROADMAP.md) · **Band:** 0.7.x · **Status:** ✅ ready (v0.7.0 on `develop`)
+**Roadmap index:** [ROADMAP.md](../ROADMAP.md) · **Band:** 0.7.x · **Status:** ✅ shipped (v0.7.0)
 
 **Theme:** Add PagerDuty Events v2, Microsoft Teams, and Generic Webhook + JWT/HMAC notifiers, following the same pattern as [groot](https://github.com/hrodrig/groot). Refactor outbound HTTP with shared retry/backoff.
 
@@ -241,7 +241,7 @@ func buildSenders(cfg *config.Config) []notify.Sender {
 - [x] Update [README.md](../README.md) parameter table
 - [x] Update [contrib/pgwd.conf.example](../contrib/pgwd.conf.example)
 - [x] Update [CHANGELOG.md](../CHANGELOG.md) under `[Unreleased]` (0.7.0 scope)
-- [ ] Update [contrib/man/man1/pgwd.1](../contrib/man/man1/pgwd.1) `.TH` line on VERSION bump
+- [x] Update [contrib/man/man1/pgwd.1](../contrib/man/man1/pgwd.1) `.TH` line on VERSION bump (`2026-07-03`, `pgwd v0.7.0`)
 
 ---
 
@@ -264,6 +264,6 @@ func buildSenders(cfg *config.Config) []notify.Sender {
 
 ## Release checklist
 
-- [ ] Tag `v0.7.0` (or patch releases) from `main` after merge from `develop`
-- [ ] `make release-check` green
-- [ ] SPEC + CHANGELOG updated in same change set as code
+- [x] Tag `v0.7.0` from `main` after merge from `develop` (2026-07-03)
+- [x] `make release-check` green (lint, test, cover-check ≥80%, integration, e2e-kube, docker-scan)
+- [x] SPEC + CHANGELOG updated in same change set as code
