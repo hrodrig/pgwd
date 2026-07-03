@@ -2,9 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
-Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). History below is derived from the project plan (release scope).
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Release bands: [ROADMAP.md](ROADMAP.md). Behavior contract: [SPECIFICATIONS.md](SPECIFICATIONS.md).
 
 ## [Unreleased]
+
+Documentation and deprecation runway on `develop` (no behavior change until 0.9.x code removal). Not yet tagged.
+
+### Documentation
+
+- **[ROADMAP.md](ROADMAP.md)** — canonical release index (0.7 → 1.0, calendar, document map, key decisions).
+- **[SPECIFICATIONS.md](SPECIFICATIONS.md)** — config load order fixed (env ignored when file loads); client-go kube (not kubectl); HTTP `/metrics` = Prometheus text exposition; dry-run bypass for connect failure documented; **`DISCOVER_MY_PASSWORD` deprecated** (removed 0.9.x).
+- **[docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)** — decision record for deprecating `DISCOVER_MY_PASSWORD` (RBAC, exec vs Secret, alternatives, migration).
+- **README / AGENTS / man / contrib** — roadmap links, config precedence, Secret-backed K8s examples, deprecation notes.
+
+### Deprecated (behavior unchanged until 0.9.x)
+
+- **`DISCOVER_MY_PASSWORD`** in `-db-url` / config — requires `pods/exec` RBAC. Decision record: [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md). Removal: [plan-0.9.x.md](docs/plan-0.9.x.md) §10.
 
 ## [0.6.10] - 2026-06-17
 

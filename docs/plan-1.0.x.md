@@ -1,5 +1,7 @@
 # pgwd plan 1.0.x — breaking stable API
 
+**Roadmap index:** [ROADMAP.md](../ROADMAP.md) · **Band:** 1.0.0 (north star)
+
 **Theme:** Remove deprecated surface area; freeze CLI, env, and YAML contract documented in [SPECIFICATIONS.md](../SPECIFICATIONS.md).
 
 **Baseline:** [plan-0.9.x.md](./plan-0.9.x.md) complete (polish, coverage, profiles, **`DISCOVER_MY_PASSWORD` removed in 0.9**)  

@@ -1,8 +1,10 @@
 # pgwd — Documentation
 
-## Roadmap to v1.0
+## Roadmap
 
-Release bands from **v0.6.10** to **v1.0.0** (target early–mid July 2026). Behavior contract: [SPECIFICATIONS.md](../SPECIFICATIONS.md).
+**Canonical index:** **[ROADMAP.md](../ROADMAP.md)** at repo root.
+
+Release bands from **v0.6.10** to **v1.0.0**. Behavior contract: [SPECIFICATIONS.md](../SPECIFICATIONS.md). Release notes: [CHANGELOG.md](../CHANGELOG.md).
 
 | Band | Plan | Theme |
 |------|------|--------|
@@ -14,6 +16,8 @@ Release bands from **v0.6.10** to **v1.0.0** (target early–mid July 2026). Beh
 ## Upgrading
 
 **[Upgrading from 0.5.x to 0.6.x](./UPGRADE-0.5-to-0.6.md)** — Checklist and links for moving from **0.5.10** (or earlier **0.5.x**) to **0.6.x**: config/CLI/env breaks introduced in **0.5.10**, optional **0.6.x** features (metrics store, HTTP, CSV export), and **Helm** moving to [pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted). For the raw rename table, see the [README breaking-changes section](../README.md#breaking-changes-upgrade-from-05x).
+
+**[Kubernetes passwords — deprecating DISCOVER_MY_PASSWORD](./kubernetes-passwords.md)** — Decision record: why the placeholder is removed in 0.9.x, RBAC implications, and Secret-backed alternatives.
 
 ## Loki and Grafana alerts
 

@@ -156,8 +156,8 @@ func exportMetricsAndExit(cfg *config.Config) {
 
 // setupKube configures Kubernetes access when -kube-postgres is set. If KubePostgres
 // is empty, it returns a no-op cleanup and leaves cfg unchanged. Otherwise it
-// verifies kubectl is on PATH, optionally discovers the DB password from the pod
-// (DISCOVER_MY_PASSWORD in -db-url), rewrites cfg.DBURL to localhost, and starts
+// optionally discovers the DB password from the pod when -db-url uses DISCOVER_MY_PASSWORD
+// (deprecated, removed 0.9.x), rewrites cfg.DBURL to localhost, and starts client-go
 // port-forward. Returns a cleanup that stops the forward; defer it from main.
 func setupKube(ctx context.Context, cfg *config.Config) (cleanup func()) {
 	if cfg.KubePostgres == "" {

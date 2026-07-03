@@ -1,5 +1,7 @@
 # pgwd plan 0.8.x — supply chain security
 
+**Roadmap index:** [ROADMAP.md](../ROADMAP.md) · **Band:** 0.8.0
+
 **Theme:** Syft SBOM + Cosign keyless signing for GHCR images and release artifacts. Same pattern as [groot](https://github.com/hrodrig/groot) and [kzero](https://github.com/hrodrig/kzero).
 
 **Baseline:** [SPECIFICATIONS.md](../SPECIFICATIONS.md) updated for 0.7.x notifiers  

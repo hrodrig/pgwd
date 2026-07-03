@@ -52,10 +52,10 @@ Kubectl context to use (empty = current). Env: PGWD_KUBE_CONTEXT.
 Local port for Postgres port-forward (default 5432). Env: PGWD_KUBE_LOCAL_PORT.
 .TP
 .BR \-kube\-password\-var " \fIvar\fR"
-Pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD). Env: PGWD_KUBE_PASSWORD_VAR.
+Deprecated (removed in 0.9.x). Pod env var when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD). Prefer Secret-backed DSN. Env: PGWD_KUBE_PASSWORD_VAR.
 .TP
 .BR \-kube\-password\-container " \fIname\fR"
-Container name in pod for password discovery. Env: PGWD_KUBE_PASSWORD_CONTAINER.
+Deprecated (removed in 0.9.x). Container name for legacy password discovery. Env: PGWD_KUBE_PASSWORD_CONTAINER.
 .TP
 .BR \-validate\-k8s\-access
 Validate kubectl connectivity and list pods, then exit. Env: PGWD_VALIDATE_K8S_ACCESS.
@@ -145,10 +145,10 @@ pgwd \-client my-monitor \-db-url "postgres://..." \-notifications-loki-url "htt
      \-interval 60
 .RE
 .TP
-Postgres and Loki in Kubernetes (cluster from kubeconfig):
+Postgres and Loki in Kubernetes (cluster from kubeconfig; use Secret-backed password in URL — DISCOVER_MY_PASSWORD deprecated, removed 0.9.x):
 .RS
 pgwd \-client my-monitor \-kube-postgres default/svc/postgres \-kube-loki monitoring/svc/loki \e
-     \-db-url "postgres://postgres:DISCOVER_MY_PASSWORD@localhost:5432/mydb" \e
+     \-db-url "postgres://postgres:YOUR_PASSWORD@localhost:5432/mydb" \e
      \-notifications-slack-webhook "https://..."
 .RE
 .TP

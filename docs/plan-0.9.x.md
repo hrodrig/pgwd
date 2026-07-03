@@ -1,8 +1,10 @@
 # pgwd plan 0.9.x — pre-1.0 polish
 
+**Roadmap index:** [ROADMAP.md](../ROADMAP.md) · **Band:** 0.9.x
+
 **Theme:** Stability, coverage, operator ergonomics, and deprecation runway before the breaking **v1.0.0** release.
 
-**Baseline:** [SPECIFICATIONS.md](../SPECIFICATIONS.md) (0.7.x + 0.8.x shipped)  
+**Baseline:** [SPECIFICATIONS.md](../SPECIFICATIONS.md) (v0.6.10 shipped; 0.7.x and 0.8.x planned ahead of this band)  
 **Previous band:** [plan-0.8.x.md](./plan-0.8.x.md)  
 **Next band:** [plan-1.0.x.md](./plan-1.0.x.md) (breaking stable API)  
 **Target window:** Jul 1–7, 2026
@@ -260,7 +262,7 @@ If Postgres is reachable without port-forward: Secret → `PGWD_DB_URL` or `~/.p
 
 | Item | Action |
 |------|--------|
-| `docs/kubernetes-passwords.md` | **Create** — decision tree + all alternatives above |
+| `docs/kubernetes-passwords.md` | **Created** — decision record + migration + alternatives |
 | `contrib/k8s/pgwd-kube-run.sh` | **Create** — wrapper for outside-cluster |
 | `contrib/k8s/rbac-outside-cluster.yaml` | **Create** — SA + Role (port-forward + optional secrets get) |
 | `contrib/profiles/kube-prod.yml` | Secret/wrapper pattern, no placeholder |
@@ -294,7 +296,7 @@ If Postgres is reachable without port-forward: Secret → `PGWD_DB_URL` or `~/.p
 | `internal/kube/` | Remove `DISCOVER_MY_PASSWORD` / exec; add `password_from_secret` (0.9.0) |
 | `contrib/k8s/pgwd-kube-run.sh` | **Create** — outside-cluster wrapper |
 | `contrib/k8s/rbac-outside-cluster.yaml` | **Create** — least-privilege SA |
-| `docs/kubernetes-passwords.md` | **Create** — migration + alternatives |
+| `docs/kubernetes-passwords.md` | **Created** — decision record + migration + alternatives |
 | `testing/scripts/test-e2e-kube.sh` | No DISCOVER; secret-based URL |
 | `contrib/profiles/` | **Create** profile YAML snippets (kube-prod without DISCOVER) |
 | `contrib/pgwd.conf.example` | Remove `kube.password_*`; optional `password_from_secret` block |

@@ -4,7 +4,7 @@
 
 `pgwd` (Postgres Watch Dog) is a Go CLI that **monitors PostgreSQL connection counts** (total, active, idle, stale) and optionally alerts on **long-running queries**. When configured thresholds are exceeded, it notifies via configured channels (Slack, Loki, and/or future PagerDuty, Teams, Generic webhook). It can run as a **one-shot check** (for cron or ad-hoc) or as a **daemon** (recurring interval).
 
-This document is the source of truth for **observable behavior** and test expectations. Planned work: **[docs/plan-0.7.x.md](docs/plan-0.7.x.md)** → **[docs/plan-0.8.x.md](docs/plan-0.8.x.md)** → **[docs/plan-0.9.x.md](docs/plan-0.9.x.md)** → **[docs/plan-1.0.x.md](docs/plan-1.0.x.md)** (index: [docs/README.md#roadmap-to-v100](docs/README.md#roadmap-to-v100)). Shipped releases: **[CHANGELOG.md](CHANGELOG.md)**.
+This document is the source of truth for **observable behavior** and test expectations (**baseline: v0.6.10** shipped code; deprecated and planned items are labeled). **Roadmap:** [ROADMAP.md](ROADMAP.md). Band plans: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md). Shipped releases: **[CHANGELOG.md](CHANGELOG.md)**.
 
 ## 2. Scope
 
@@ -12,7 +12,7 @@ This document is the source of truth for **observable behavior** and test expect
 
 - One binary: **`pgwd`** with CLI flags, environment variables (`PGWD_*`), and YAML config (`pgwd.conf`).
 - Database targets: single-DB (`-db-url`) or multi-DB (`databases:` in config).
-- Kubernetes: optional **port-forward** to Postgres via `-kube-postgres` (client-go) **or** `kubectl port-forward` (svc/pod). Also optional **port-forward to Loki** via `-kube-loki`.
+- Kubernetes: optional **port-forward** to Postgres via `-kube-postgres` (client-go; kubeconfig required, no kubectl binary). Also optional **port-forward to Loki** via `-kube-loki`.
 - Thresholds:
   - **Explicit** — `-db-threshold-total` / `-db-threshold-active` / `-db-threshold-idle` / `-db-threshold-stale`
   - **3-tier level mode** — `-db-threshold-levels` (default `75,85,95`): attention, alert, danger.
@@ -28,14 +28,14 @@ This document is the source of truth for **observable behavior** and test expect
 
 - Mutating Postgres (vacuum, terminate, alter). Read-only monitoring only.
 - Full SQL monitoring (slow query log parsing, index analysis, table bloat).
-- Built-in dashboard/GUI. Metrics are consumed via `/metrics` endpoint (Prometheus) or Loki/Grafana.
+- Built-in dashboard/GUI. Metrics via HTTP `/metrics` (Prometheus text exposition), Loki/Grafana, or CSV export.
 - Multi-cluster monitoring from one process (one pgwd per Postgres target).
 - Arbitrary notifier plugin system (channels are compiled-in).
 - PostgreSQL replication lag monitoring.
 
 ### Design principles
 
-- **Simple config-first:** YAML config file at `/etc/pgwd/pgwd.conf`, overridable by env and CLI. Multi-DB via `databases:` in config only.
+- **Simple config-first:** YAML at `/etc/pgwd/pgwd.conf`; **CLI** overrides file when set; **`PGWD_*` env** applies only when no config file is loaded. Multi-DB via `databases:` in config.
 - **Fail fast on config errors** — validate at startup; exit with a clear message.
 - **Connection failure is always notified** when any notifier is configured (no extra flag needed).
 - **3-tier level mode** by default (75/85/95%) — no mandatory threshold arithmetic.
@@ -55,7 +55,7 @@ This document is the source of truth for **observable behavior** and test expect
 | `pgwd --print-sample-config` | Writes annotated sample YAML to **stdout** and exits 0. |
 | `pgwd -dry-run` | Runs normally but skips all outbound HTTP notifications (Slack, Loki, etc.). Logs every event as `[dry-run] would send: …`. |
 | `pgwd -force-notification` | Sends one test event to all configured notifiers after a successful Postgres connect, regardless of thresholds. |
-| `pgwd -validate-k8s-access` | Validates cluster connectivity (lists pods), then exits. Requires `-kube-postgres`. |
+| `pgwd -validate-k8s-access` | Validates cluster connectivity (lists pods), then exits. Uses `-kube-context` when set. Does not require `-kube-postgres`. |
 | `pgwd -export-metrics-format csv -export-metrics-destination <path>` | Dumps persisted metrics from the configured store to a CSV file, then exits. |
 
 ### Exit codes
@@ -87,11 +87,11 @@ This document is the source of truth for **observable behavior** and test expect
 
 ### Load order
 
-1. **Config file** (`/etc/pgwd/pgwd.conf` by default, or `-config` / `PGWD_CONFIG`). YAML with `databases:` or legacy `db:`. When a file is loaded, env vars are **ignored** (they are only used when no file is loaded); `ApplyDefaults` and `ApplyEnv` then fill remaining fields.
-2. **Environment variables** (`PGWD_*`) — override file values when no file was loaded, or **always** override file values when `ApplyEnv` is called (current behavior: env always overrides after file load).
-3. **CLI flags** — highest precedence; override both file and env.
+1. **Config file** (`/etc/pgwd/pgwd.conf` by default, or `-config` / `PGWD_CONFIG`). If the file exists and loads, YAML is the base config. **`PGWD_*` env vars are not applied** (`ApplyEnv` is skipped; debug log: `ignored (config file is source)`).
+2. **No config file** — `ApplyDefaults`, then **`ApplyEnv`** (`PGWD_*` overrides defaults).
+3. **CLI flags** — parsed last; highest precedence.
 
-`ApplyEnv` runs on every path; `applyEnvNotifiers` overrides from `PGWD_NOTIFICATIONS_*`.
+**Precedence:** when a file is loaded, **CLI > file > defaults** (env ignored). When no file is loaded, **CLI > env > defaults**.
 
 ### `databases:` (multi-DB mode)
 
@@ -120,7 +120,8 @@ When `databases:` is non-empty in the config file, each entry is one Postgres ta
 | `kube.postgres` | string | — | `namespace/type/name` for port-forward. |
 | `kube.context` | string | — | Kubectl context override. |
 | `kube.local_port` | int | `5432` | Local port. |
-| `kube.password_var` | string | `POSTGRES_PASSWORD` | Pod env for `DISCOVER_MY_PASSWORD`. |
+| `kube.password_var` | string | `POSTGRES_PASSWORD` | **Deprecated** (removed in 0.9.x). Pod env for legacy `DISCOVER_MY_PASSWORD`. |
+| `kube.password_container` | string | `""` | **Deprecated** (removed in 0.9.x). Container for legacy password discovery. |
 | `kube.loki` | string | — | `namespace/type/name` for Loki port-forward. |
 | `kube.loki_local_port` | int | `3100` | |
 | `kube.loki_remote_port` | int | `3100` | |
@@ -181,7 +182,7 @@ All config keys map to `PGWD_<UPPER_SNAKE>` equivalents. Notifier env vars:
 - At least one notifier OR `-dry-run` must be configured (or config validation fails).
 - `-force-notification` requires at least one notifier (not compatible with `-dry-run`).
 - `-notify-on-connect-failure` requires at least one notifier.
-- When `-kube-postgres` is set, `kubectl` must be on `PATH` (checked at startup).
+- When `-kube-postgres` or `-kube-loki` is set, a valid **kubeconfig** must be loadable (client-go; no kubectl binary required).
 - Threshold levels: 3 comma-separated percentages, 1-100, ascending.
 - `-test-max-connections` > 0 overrides server value for defaults and display.
 
@@ -189,9 +190,9 @@ All config keys map to `PGWD_<UPPER_SNAKE>` equivalents. Notifier env vars:
 
 ### Startup sequence
 
-1. Load config (file → env → CLI flags)
+1. Load config (file, or defaults + env if no file; then CLI flags)
 2. Validate config
-3. If `-kube-postgres`, start port-forward, discover password if `DISCOVER_MY_PASSWORD`
+3. If `-kube-postgres`, start port-forward; if URL password is `DISCOVER_MY_PASSWORD` (**deprecated**, removed in 0.9.x), read pod env via `pods/exec` — see [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)
 4. If `-kube-loki`, start port-forward, set `LokiURL` to `localhost:port`
 5. Connect to Postgres
 6. Query `max_connections`
@@ -238,10 +239,9 @@ When Postgres connection fails:
 
 ### Dry-run mode
 
-- All threshold evaluation proceeds as normal
-- Events are logged as `[dry-run] would send: …`
-- No outbound HTTP calls to Slack, Loki, or any notifier
-- Connect failure is **not suppressed** in dry-run (infrastructure alert logging)
+- Threshold evaluation proceeds as normal
+- Threshold events are logged as `[dry-run] would send: …` — **no outbound HTTP** for threshold/resolution/long-query alerts
+- **Connect failure and `too_many_clients` are still sent** to notifiers when configured (infrastructure failures bypass dry-run)
 
 ## 6. Notifications
 
@@ -286,10 +286,11 @@ Only the highest breached level fires per check cycle.
 
 ### Connect failure notification
 
-- Always-on when any notifier is configured
+- Always-on when any notifier is configured (no extra flag; `-notify-on-connect-failure` is legacy/no-op)
+- **Not suppressed by `-dry-run`** — real HTTP notifications are sent
 - Maps SQLSTATE 53300 → event type `too_many_clients`
 - Maps any other connection error → `connect_failure`
-- Sent before the monitor exits
+- Sent before the monitor exits (single-target) or before skipping the target (multi-DB)
 
 ## 7. Metrics store
 
@@ -336,24 +337,24 @@ Optional (`http.listen`). Endpoints:
 | Path | Method | Response |
 |------|--------|----------|
 | `{base_path}{health_path}` (default `/api/pgwd/v1/healthz`) | GET | `{"status":"ok"}` — always returns 200 when the server is running |
-| `{base_path}{metrics_path}` (default `/api/pgwd/v1/metrics`) | GET | JSON array of recent metrics rows from the store |
+| `{base_path}{metrics_path}` (default `/api/pgwd/v1/metrics`) | GET | **Prometheus text exposition** (`text/plain; version=0.0.4`) — gauges `pgwd_connections_*`, `pgwd_state`, etc. Empty store returns `# No metrics store configured` or `# No metrics yet` |
 
-Used for Kubernetes liveness/readiness probes and Prometheus scraping (via `/metrics` endpoint).
+Used for Kubernetes liveness/readiness probes and Prometheus scraping.
 
 ## 9. Kubernetes integration
 
 ### Postgres port-forward (`-kube-postgres`)
 
 - Valid formats: `namespace/svc/service-name` or `namespace/pod/pod-name`
-- Uses `kubectl port-forward` subprocess (requires `kubectl` on `PATH`)
-- Rewrites `DBURL` password when `DISCOVER_MY_PASSWORD` is used: reads from the specified pod env var
-- Validates `kubectl` presence at startup; exits with clear error if missing
+- Uses **client-go** port-forward (kubeconfig required; **no kubectl binary**)
+- **Deprecated (0.6.x, removed in 0.9.x):** when the URL password is the literal `DISCOVER_MY_PASSWORD`, pgwd runs `printenv` in the Postgres pod via `pods/exec` (extra RBAC). **Decision record:** [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md). Prefer a Secret-backed DSN or planned `kube.password_from_secret` (0.9.x).
+- `-kube-password-var` / `-kube-password-container` — **deprecated** with `DISCOVER_MY_PASSWORD`
 
 ### Loki port-forward (`-kube-loki`)
 
 - Same format: `namespace/svc/loki-service-name`
 - Mutually exclusive with an explicit `-notifications-loki-url` (port-forward takes precedence when `-kube-loki` is set and LokiURL is empty)
-- Uses `kubectl port-forward` subprocess
+- Uses **client-go** port-forward (same kubeconfig requirements as Postgres)
 
 ### Cluster identity
 
@@ -408,7 +409,7 @@ Requires an active metrics store (sqlite.path or metrics_store.driver+dsn).
 | Unit | `make test` or `go test ./...` passes |
 | Coverage | Unit coverage: `make cover` → `coverage.out`. Integration coverage: `make cover-integration` (Docker Postgres + Loki) → `coverage-integration.out` |
 | Integration | `make test-integration` (Docker compose with Postgres + Loki). Must pass before release. |
-| E2E kube | `make test-e2e-kube` (kind + kubectl). Must pass before release. |
+| E2E kube | `make test-e2e-kube` (kind cluster + kubeconfig). Must pass before release. |
 | Lint | `make lint`: gofmt -s, go vet, gocyclo (≤ 14). CI lint job matches. |
 | Security | `make security`: govulncheck + docker-scan (Grype). CI Security workflow. |
 | Platform | `make test-platforms` (Ansible, Linux + BSD VMs). Manual pre-release gate. |
@@ -439,7 +440,7 @@ internal/
   checker/              — Threshold logic, event collection, state derivation
   config/               — Config load (file, env, CLI)
   httpsrv/              — HTTP server (metrics, health)
-  kube/                 — Kubernetes port-forward, password discovery
+  kube/                 — Kubernetes port-forward (client-go); legacy password discovery via pods/exec (deprecated, 0.9.x)
   metricsexport/        — CSV export
   metricsstore/         — Backend selection for metrics store
   notify/               — Slack, Loki senders (Sender interface)
@@ -509,7 +510,15 @@ notifications:
     webhook_url: "https://hooks.slack.com/services/…"
 ```
 
-### Kubernetes with Loki in-cluster
+### Kubernetes outside cluster (port-forward; Secret-backed password)
+
+Preferred: inject the password from a Kubernetes Secret (no `DISCOVER_MY_PASSWORD`). See [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md).
+
+```bash
+export PGWD_DB_URL="postgres://postgres:${PGPASSWORD}@localhost:5432/mydb?sslmode=disable"
+# PGPASSWORD from: kubectl get secret postgres-credentials -o jsonpath='{.data.password}' | base64 -d
+pgwd -kube-postgres default/svc/postgres -client kube-db -config /etc/pgwd/pgwd.conf
+```
 
 ```yaml
 client: "kube-db"
@@ -517,26 +526,14 @@ kube:
   postgres: "default/svc/postgres"
   loki: "monitoring/svc/loki"
 db:
-  url: "postgres://postgres:DISCOVER_MY_PASSWORD@localhost:5432/mydb?sslmode=disable"
+  url: "postgres://postgres:YOUR_PASSWORD@localhost:5432/mydb?sslmode=disable"
 notifications:
   loki:
     labels: "app=pgwd,env=production"
     org_id: "my-tenant"
 ```
 
-### Kubernetes cron mode (kind)
-
-```yaml
-client: "kind-db"
-kube:
-  postgres: "default/svc/postgres"
-db:
-  url: "postgres://postgres:DISCOVER_MY_PASSWORD@localhost:5432/test?sslmode=disable"
-  threshold_levels: "70,80,90"
-notifications:
-  slack:
-    webhook_url: "https://hooks.slack.com/services/…"
-```
+> **Note:** `DISCOVER_MY_PASSWORD` in the URL is **deprecated** and will be **removed in 0.9.x** (requires `pods/exec` RBAC). Rationale: [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md).
 
 ### Dry-run for testing
 
@@ -548,4 +545,4 @@ db:
 dry_run: true
 ```
 
-When behavior in this document changes, update **SPEC**, **plan**, and **CHANGELOG** in the same change set or release.
+When behavior in this document changes, update **ROADMAP**, **SPEC**, band **plan**, and **CHANGELOG** in the same change set or release.

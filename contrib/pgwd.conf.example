@@ -141,8 +141,8 @@ kube:
   loki: ""
   loki_local_port: 3100
   loki_remote_port: 3100
-  password_container: ""
-  password_var: POSTGRES_PASSWORD
+  password_container: ""   # deprecated with DISCOVER_MY_PASSWORD (removed 0.9.x)
+  password_var: POSTGRES_PASSWORD   # deprecated with DISCOVER_MY_PASSWORD (removed 0.9.x)
   postgres: ""
 
 # -----------------------------------------------------------------------------
