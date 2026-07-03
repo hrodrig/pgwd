@@ -6,7 +6,7 @@
   <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.6.10-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.7.0-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![CI](https://github.com/hrodrig/pgwd/actions/workflows/ci.yml/badge.svg)](https://github.com/hrodrig/pgwd/actions)
 [![codecov](https://codecov.io/gh/hrodrig/pgwd/graph/badge.svg)](https://codecov.io/gh/hrodrig/pgwd)
@@ -1357,18 +1357,17 @@ See [contrib/solaris/README.md](contrib/solaris/README.md) for details.
 
 **Canonical roadmap:** **[ROADMAP.md](ROADMAP.md)** — current release, release bands (0.7 → 1.0), calendar, key decisions, document map.
 
-Summary: from **v0.6.10** → **0.7.x** (notifiers) → **0.8.0** (SBOM + Cosign) → **0.9.x** (polish, DISCOVER removal) → **1.0.0** (breaking stable). Behavior contract: [SPECIFICATIONS.md](SPECIFICATIONS.md). Shipped releases: [CHANGELOG.md](CHANGELOG.md).
+Summary: **v0.7.0** (notifiers) → **0.8.0** (SBOM + Cosign) → **0.9.x** (polish, DISCOVER removal) → **1.0.0** (breaking stable). Behavior contract: [SPECIFICATIONS.md](SPECIFICATIONS.md). Shipped releases: [CHANGELOG.md](CHANGELOG.md).
 
 | Band | Status | Plan |
 |------|--------|------|
-| **0.6.10** | ✅ Shipped Jun 2026 | [CHANGELOG](CHANGELOG.md) |
-| **0.7.x** | 🚧 In progress | [plan-0.7.x.md](docs/plan-0.7.x.md) |
+| **0.7.0** | ✅ Ready Jul 2026 | [plan-0.7.x.md](docs/plan-0.7.x.md) · [CHANGELOG](CHANGELOG.md#070---2026-07-03) |
 | **0.8.0** | 📋 Planned | [plan-0.8.x.md](docs/plan-0.8.x.md) |
 | **0.9.x** | 📋 Planned | [plan-0.9.x.md](docs/plan-0.9.x.md) |
 | **1.0.0** | 📋 Planned | [plan-1.0.x.md](docs/plan-1.0.x.md) |
 
 <details>
-<summary>Shipped history (0.4 – 0.6.10)</summary>
+<summary>Shipped history (0.4 – 0.7.0)</summary>
 
 | Version | Target | Scope |
 |---------|--------|-------|
@@ -1378,6 +1377,7 @@ Summary: from **v0.6.10** → **0.7.x** (notifiers) → **0.8.0** (SBOM + Cosign
 | **0.6.4** | May 2026 ✅ | PostgreSQL/MySQL metrics store |
 | **0.6.5–0.6.8** | May–Jun 2026 ✅ | Security patches (Go, Alpine, govulncheck) |
 | **0.6.10** | Jun 2026 ✅ | Docker Alpine 3.24.1 |
+| **0.7.0** | Jul 2026 ✅ | PagerDuty, Teams, generic webhook, HTTP retry |
 
 </details>
 

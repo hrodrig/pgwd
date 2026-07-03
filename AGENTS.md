@@ -20,12 +20,12 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 
 ## Test commands
 
-- Run all tests: `make test` or `go test ./...`. Optional: **`make cover`** (unit tests only → `coverage.out`), **`make cover-integration`** (Docker Postgres + Loki → `coverage-integration.out`; same stack as **`make test-integration`**), **`make tools`** (install `govulncheck` and `gocyclo` to `$GOBIN`).
+- Run all tests: `make test` or `go test ./...`. Optional: **`make cover`** (unit tests only → `coverage.out`), **`make cover-check`** (≥80% on library packages; requires Docker), **`make cover-integration`** (Docker Postgres + Loki → `coverage-integration.out`; same stack as **`make test-integration`**), **`make tools`** (install `govulncheck` and `gocyclo` to `$GOBIN`).
 - **Integration tests:** `make test-integration` (requires Docker). Starts Postgres and Loki via `testing/compose.yaml` and `testing/compose-loki.yaml`, runs integration tests, then stops. Must pass before release (see `.cursor/rules/release-tests.mdc`).
 - Tests exist in `internal/config`, `internal/notify` (unit + Loki integration), `internal/checker`, `internal/validator`, `internal/store`, `internal/httpsrv`, `internal/kube`, and `internal/postgres` (integration, requires `PGWD_TEST_DB_URL`). `cmd/pgwd` has black-box tests (version, help, validation exits).
 - **Platform tests:** `make test-platforms` (requires Ansible + VMs). Ansible playbooks under `testing/platforms/` automate install, daemon, notification (Loki+Slack mock), timer, and uninstall validation across Linux and BSD. See `testing/platforms/README.md`. Target one platform: `make test-platforms PLATFORM=pgwd-ubuntu`. Quick connectivity check: `make test-platforms-ping` runs `playbooks/ping.yml` using Ansible's **`ping`** module (not ICMP); a healthy host responds with **`pong`**.
 - **Lint:** `make lint` runs **gofmt -s**, **`go vet ./...`**, and **gocyclo** (complexity ≤ 14); the CI **lint** job does the same.
-- Before committing or proposing changes, ensure `go test ./...` passes. Before release, also run `make test-integration`.
+- Before committing or proposing changes, ensure `go test ./...` passes. Before release, run **`make release-check`** (includes **`make cover-check`** and **`make test-integration`**).
 - **Before a release:** run `make test-platforms` (or at minimum the platforms affected by the change) to validate install, daemon, notifications, and uninstall on real OS targets. This is not automated in CI (requires VMs) but is a manual pre-release gate.
 
 ## Code style and conventions
@@ -38,7 +38,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 
 - **Branches:** Work on `develop`. `main` is production and is only updated from `develop` at release time (see `.cursor/rules/git-flow.mdc`).
 - **Commits:** Always show the proposed commit message and wait for user approval before running `git commit`. See `.cursor/rules/commit-message-review.mdc`.
-- **Releases:** Before releasing: run **`make release-check`** (validates **`VERSION`** semver, then lint, test, test-integration, test-e2e-kube, **`make docker-scan`**). All must pass — they are MANDATORY. **`docker-scan`** uses Grype on PATH if present, otherwise the **anchore/grype** Docker image (`GRYPE_FAIL_ON` defaults to `high`). Then merge `develop` → `main`, and on `main`: create annotated tag (e.g. `git tag -a v0.2.0 -m "Release 0.2.0"`), push tag, run `make release` (requires goreleaser). `make release` runs `release-check` first. Do not commit features directly to `main`. See `.cursor/rules/release-tests.mdc`.
+- **Releases:** Before releasing: run **`make release-check`** (validates **`VERSION`** semver, then lint, test, **cover-check**, test-integration, test-e2e-kube, **`make docker-scan`**). All must pass — they are MANDATORY.
 - **Versioning:** Semantic versioning (MAJOR.MINOR.PATCH) for tags.
 
 ## Docker

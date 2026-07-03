@@ -6,7 +6,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ## [Unreleased]
 
-On `develop` ahead of **v0.7.0** tag. `VERSION` file remains **0.6.10** until release.
+### Added
+
+- **`make cover-check`** — statement coverage gate (default **≥ 80%** on library packages; `internal/cli` excluded, exercised via `cmd/pgwd` black-box tests). Part of **`make release-check`** and CI.
+
+## [0.7.0] - 2026-07-03
 
 ### Added
 
@@ -433,7 +437,8 @@ On `develop` ahead of **v0.7.0** tag. `VERSION` file remains **0.6.10** until re
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.6.10...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/hrodrig/pgwd/compare/v0.6.10...v0.7.0
 [0.6.10]: https://github.com/hrodrig/pgwd/compare/v0.6.9...v0.6.10
 [0.6.9]: https://github.com/hrodrig/pgwd/compare/v0.6.8...v0.6.9
 [0.6.8]: https://github.com/hrodrig/pgwd/compare/v0.6.7...v0.6.8

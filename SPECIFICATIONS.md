@@ -4,7 +4,7 @@
 
 `pgwd` (Postgres Watch Dog) is a Go CLI that **monitors PostgreSQL connection counts** (total, active, idle, stale) and optionally alerts on **long-running queries**. When configured thresholds are exceeded, it notifies via configured channels (Slack, Loki, PagerDuty, Microsoft Teams, and/or generic webhook). It can run as a **one-shot check** (for cron or ad-hoc) or as a **daemon** (recurring interval).
 
-This document is the source of truth for **observable behavior** and test expectations (**baseline: v0.6.10** shipped code; deprecated and planned items are labeled). **Roadmap:** [ROADMAP.md](ROADMAP.md). Band plans: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md). Shipped releases: **[CHANGELOG.md](CHANGELOG.md)**.
+This document is the source of truth for **observable behavior** and test expectations (**baseline: v0.7.0** shipped code; deprecated and planned items are labeled). **Roadmap:** [ROADMAP.md](ROADMAP.md). Band plans: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md). Shipped releases: **[CHANGELOG.md](CHANGELOG.md)**.
 
 ## 2. Scope
 
@@ -445,7 +445,7 @@ Requires an active metrics store (sqlite.path or metrics_store.driver+dsn).
 ### Build
 
 - Go module: `github.com/hrodrig/pgwd`
-- Minimum Go: 1.26.4 (as of 0.6.10)
+- Minimum Go: 1.26.4 (as of 0.7.0)
 - `make build`: reads `VERSION`, injects `Version`/`Commit`/`BuildDate`/`Branch` via ldflags
 - `make install`: installs to `$GOBIN`
 - Cross-compile: `make build-linux`, `make build-darwin`, `make build-windows`, `make build-all` (output in `dist/`)

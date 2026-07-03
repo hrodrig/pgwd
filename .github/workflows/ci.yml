@@ -32,6 +32,20 @@ jobs:
           files: coverage.out
           fail_ci_if_error: false
 
+  cover-check:
+    name: Coverage gate (≥80%)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run cover-check
+        run: make cover-check
+
   test-integration:
     name: Integration (Postgres + Loki)
     runs-on: ubuntu-latest
