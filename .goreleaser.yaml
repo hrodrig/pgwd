@@ -75,6 +75,35 @@ archives:
 checksum:
   name_template: "checksums.txt"
 
+# Cosign keyless signing (GitHub Actions OIDC). Requires id-token: write in release.yml
+# and sigstore/cosign-installer. Signs checksums.txt and container images on ghcr.io.
+signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--output-signature=${signature}"
+      - "--output-certificate=${certificate}"
+      - "${artifact}"
+      - --yes
+    artifacts: checksum
+
+# SBOM via syft (GoReleaser invokes syft; install in release.yml).
+# Source-tree catalog per release. Container image SBOM attestation deferred (buildx driver limit).
+sboms:
+  - id: pgwd-sbom-spdx
+    artifacts: source
+    documents:
+      - "pgwd_{{ .Version }}_sbom.spdx.json"
+    args: ["$artifact", "--output", "spdx-json=$document"]
+  - id: pgwd-sbom-cdx
+    artifacts: source
+    documents:
+      - "pgwd_{{ .Version }}_sbom.cyclonedx.json"
+    args: ["$artifact", "--output", "cyclonedx-json=$document"]
+
 nfpms:
   - id: default
     package_name: pgwd
@@ -143,8 +172,20 @@ dockers_v2:
       org.opencontainers.image.description: "Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki"
       org.opencontainers.image.source: "https://github.com/hrodrig/pgwd"
       org.opencontainers.image.version: "{{ .Version }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.created: "{{ .Date }}"
     # No `annotations:` (OCI index-level): GoReleaser passes `--annotation index:…`; the default
     # GitHub Actions docker buildx driver fails with "index annotations not supported for single platform export".
+
+# Cosign keyless signing for container manifests built by dockers_v2.
+docker_signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    args:
+      - sign
+      - "${artifact}@${digest}"
+      - --yes
 
 # Homebrew: publish cask to https://github.com/hrodrig/homebrew-pgwd (brew install hrodrig/pgwd/pgwd).
 # CI: set repo secret HOMEBREW_TAP_TOKEN (PAT with contents:write on the tap repo; GITHUB_TOKEN cannot push there).

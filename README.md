@@ -6,12 +6,12 @@
   <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.7.0-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-0.8.0-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![CI](https://github.com/hrodrig/pgwd/actions/workflows/ci.yml/badge.svg)](https://github.com/hrodrig/pgwd/actions)
 [![codecov](https://codecov.io/gh/hrodrig/pgwd/graph/badge.svg)](https://codecov.io/gh/hrodrig/pgwd)
 [![gghstats clones](https://gghstats.hermesrodriguez.com/api/v1/badge/hrodrig/pgwd?metric=clones)](https://gghstats.hermesrodriguez.com/hrodrig/pgwd)
-[![Go 1.26.4](https://img.shields.io/badge/go-1.26.4-00ADD8?logo=go)](https://go.dev/)
+[![Go 1.26.5](https://img.shields.io/badge/go-1.26.5-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![pkg.go.dev](https://pkg.go.dev/badge/github.com/hrodrig/pgwd)](https://pkg.go.dev/github.com/hrodrig/pgwd)
 [![Go Report Card](https://goreportcard.com/badge/github.com/hrodrig/pgwd)](https://goreportcard.com/report/github.com/hrodrig/pgwd)
@@ -20,6 +20,8 @@
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/hrodrig/pgwd)
 
 **Repo:** [github.com/hrodrig/pgwd](https://github.com/hrodrig/pgwd) · **Releases:** [Releases](https://github.com/hrodrig/pgwd/releases)
+
+**Supply chain (from v0.8.0):** each release attaches **SPDX** and **CycloneDX** SBOMs plus **Cosign** signatures for **`checksums.txt`** and **`ghcr.io/hrodrig/pgwd`** images — see [Supply chain verification](#supply-chain-verification).
 
 Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via **Slack** and/or **Loki** when configured thresholds are exceeded. It can also alert on **stale connections** (connections that stay open and never close).
 
@@ -641,6 +643,7 @@ Example: releasing **v1.0.0**. Copy, adjust the version and token, then run.
 
 ```bash
 brew install goreleaser grype
+# Optional (verify release signatures): brew install cosign
 # Docker: required for test-integration, docker-scan, and E2E tests (kind, test-e2e-kube)
 ```
 
@@ -702,6 +705,31 @@ make release
 Use a [Personal Access Token](https://github.com/settings/tokens). Before releasing, verify **expiration** and **scopes** at [github.com/settings/tokens](https://github.com/settings/tokens).
 
 **Snapshot (no publish):** `make snapshot` — outputs to `dist/` without pushing (no Docker; install [goreleaser](https://goreleaser.com) on `PATH`).
+
+### Supply chain verification
+
+From **v0.8.0**, GitHub Releases include **SPDX** and **CycloneDX** SBOMs and **Cosign** signatures for **`checksums.txt`** and the **`ghcr.io/hrodrig/pgwd`** image. Signing runs in the [Release workflow](.github/workflows/release.yml) (keyless OIDC via GitHub Actions).
+
+**Verify the container image** (replace the tag):
+
+```bash
+cosign verify ghcr.io/hrodrig/pgwd:v0.8.0 \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github\.com/hrodrig/pgwd/\.github/workflows/release\.yml@refs/tags/v'
+```
+
+**Verify release checksums** (download `checksums.txt`, `checksums.txt.sig`, and `checksums.txt.pem` from the release assets):
+
+```bash
+cosign verify-blob \
+  --certificate checksums.txt.pem \
+  --signature checksums.txt.sig \
+  checksums.txt
+```
+
+**Inspect SBOMs:** download `pgwd_<version>_sbom.spdx.json` or `pgwd_<version>_sbom.cyclonedx.json` from the release page, or scan with Grype: `grype sbom:pgwd_v0.8.0_sbom.spdx.json`.
+
+Local `make release` does not sign artifacts — use the tag-push CI workflow for signed releases.
 
 ## Testing
 
@@ -915,7 +943,7 @@ docker pull ghcr.io/hrodrig/pgwd:v0.6.4
 docker pull ghcr.io/hrodrig/pgwd:latest
 ```
 
-**Build from source:** The repo includes a multi-stage **Dockerfile** (Go 1.26.4 build stage; **Alpine 3.24.1** runtime): build stage compiles the binary with version/commit/build date injected via build args; runtime stage is minimal and runs as non-root. Use `make docker-build` to build locally with version info.
+**Build from source:** Multi-stage **Dockerfile** (Go 1.26.5 build; **distroless/static-debian13:nonroot** runtime): static binary, non-root, no Alpine OS packages. Use `make docker-build` locally; release images via GoReleaser + **`Dockerfile.release`** (same distroless base).
 
 **Image details**
 
@@ -1355,19 +1383,20 @@ See [contrib/solaris/README.md](contrib/solaris/README.md) for details.
 
 ## Roadmap
 
-**Canonical roadmap:** **[ROADMAP.md](ROADMAP.md)** — current release, release bands (0.7 → 1.0), calendar, key decisions, document map.
+**Canonical roadmap:** **[ROADMAP.md](ROADMAP.md)** — current release, release bands (0.8 → 1.0), calendar, key decisions, document map.
 
-Summary: **v0.7.0** (notifiers) → **0.8.0** (SBOM + Cosign) → **0.9.x** (polish, DISCOVER removal) → **1.0.0** (breaking stable). Behavior contract: [SPECIFICATIONS.md](SPECIFICATIONS.md). Shipped releases: [CHANGELOG.md](CHANGELOG.md).
+Summary: **v0.8.0** (supply chain) → **0.9.x** (polish, DISCOVER removal) → **1.0.0** (breaking stable). Behavior contract: [SPECIFICATIONS.md](SPECIFICATIONS.md). Shipped releases: [CHANGELOG.md](CHANGELOG.md).
 
 | Band | Status | Plan |
 |------|--------|------|
-| **0.7.0** | ✅ Ready Jul 2026 | [plan-0.7.x.md](docs/plan-0.7.x.md) · [CHANGELOG](CHANGELOG.md#070---2026-07-03) |
-| **0.8.0** | 📋 Planned | [plan-0.8.x.md](docs/plan-0.8.x.md) |
+| **0.8.0** | ✅ Ready Jul 2026 | [plan-0.8.x.md](docs/plan-0.8.x.md) · [CHANGELOG](CHANGELOG.md#080---2026-07-11) |
+| **0.9.x** | 📋 Planned Jul 2026 | [plan-0.9.x.md](docs/plan-0.9.x.md) |
+| **1.0.0** | 📋 Planned | [plan-1.0.x.md](docs/plan-1.0.x.md) |
 | **0.9.x** | 📋 Planned | [plan-0.9.x.md](docs/plan-0.9.x.md) |
 | **1.0.0** | 📋 Planned | [plan-1.0.x.md](docs/plan-1.0.x.md) |
 
 <details>
-<summary>Shipped history (0.4 – 0.7.0)</summary>
+<summary>Shipped history (0.4 – 0.8.0)</summary>
 
 | Version | Target | Scope |
 |---------|--------|-------|
@@ -1378,6 +1407,7 @@ Summary: **v0.7.0** (notifiers) → **0.8.0** (SBOM + Cosign) → **0.9.x** (pol
 | **0.6.5–0.6.8** | May–Jun 2026 ✅ | Security patches (Go, Alpine, govulncheck) |
 | **0.6.10** | Jun 2026 ✅ | Docker Alpine 3.24.1 |
 | **0.7.0** | Jul 2026 ✅ | PagerDuty, Teams, generic webhook, HTTP retry |
+| **0.8.0** | Jul 2026 ✅ | Syft SBOM, Cosign signing, supply chain docs |
 
 </details>
 

@@ -6,9 +6,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ## [Unreleased]
 
+### Security
+
+- **Go 1.26.5** — stdlib fixes **CVE-2026-39822** (`os` Root symlink escape) and **CVE-2026-42505** (`crypto/tls` ECH privacy leak). Rebuild binaries and images; relevant for HTTPS notifiers and TLS Postgres URLs.
+
+### Changed
+
+- **Docker runtime:** **`Dockerfile`** and **`Dockerfile.release`** use **`gcr.io/distroless/static-debian13:nonroot`** instead of Alpine 3.24.1 (same pattern as [groot](https://github.com/hrodrig/groot) / [kzero](https://github.com/hrodrig/kzero)). Static binary + bundled CA certs; no BusyBox/apk OS packages. Entrypoint path **`/home/pgwd/pgwd`** unchanged for Compose/Helm compatibility.
+
+## [0.8.0] - 2026-07-11
+
 ### Added
 
 - **`make cover-check`** — statement coverage gate (default **≥ 80%** on library packages; `internal/cli` excluded, exercised via `cmd/pgwd` black-box tests). Part of **`make release-check`** and CI.
+- **Supply chain:** GoReleaser **Syft** SBOMs (SPDX + CycloneDX), **Cosign** keyless signing for `checksums.txt` and `ghcr.io/hrodrig/pgwd` images; release workflow installs cosign/syft and verifies image signature post-publish. See README [Supply chain verification](README.md#supply-chain-verification) and SPEC §11.
 
 ### Changed
 
@@ -441,7 +452,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/hrodrig/pgwd/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/hrodrig/pgwd/compare/v0.6.10...v0.7.0
 [0.6.10]: https://github.com/hrodrig/pgwd/compare/v0.6.9...v0.6.10
 [0.6.9]: https://github.com/hrodrig/pgwd/compare/v0.6.8...v0.6.9

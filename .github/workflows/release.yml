@@ -1,9 +1,9 @@
 # Release: runs on tag push (v*). Publishes binaries and Docker image to ghcr.io.
-# Trigger: git tag v0.6.4 && git push origin v0.6.4  (any v* semver tag)
+# Trigger: git tag v0.8.0 && git push origin v0.8.0  (any v* semver tag)
 # Requires: release-check passed before tagging (make release-check).
 #
-# QEMU + Buildx + GHCR login: same pattern as gghstats (.github/workflows/release.yml).
-# Without Buildx, dockers_v2 fails on ubuntu-latest: "Multi-platform build is not supported for the docker driver".
+# QEMU + Buildx + GHCR login: same pattern as kzero (.github/workflows/release.yml).
+# Cosign + Syft: keyless signing and SBOMs via GoReleaser (signs, sboms, docker_signs in .goreleaser.yaml).
 name: Release
 
 on:
@@ -14,9 +14,14 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 jobs:
   release:
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,6 +32,13 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+
+      - name: Install GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          install-only: true
 
       - name: Run release checks
         run: make release-check
@@ -43,6 +55,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      # GoReleaser sboms: invokes syft; not bundled by goreleaser-action.
+      - name: Install syft (SBOM)
+        uses: anchore/sbom-action/download-syft@v0
 
       - name: Require Homebrew tap token
         env:
@@ -61,5 +80,12 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # PAT with contents:write on hrodrig/homebrew-pgwd (GITHUB_TOKEN cannot push to another repo).
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Verify container image signature
+        env:
+          IMAGE: ghcr.io/hrodrig/pgwd:${{ github.ref_name }}
+        run: |
+          cosign verify "$IMAGE" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity-regexp '^https://github\.com/hrodrig/pgwd/\.github/workflows/release\.yml@refs/tags/v'

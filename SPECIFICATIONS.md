@@ -4,7 +4,7 @@
 
 `pgwd` (Postgres Watch Dog) is a Go CLI that **monitors PostgreSQL connection counts** (total, active, idle, stale) and optionally alerts on **long-running queries**. When configured thresholds are exceeded, it notifies via configured channels (Slack, Loki, PagerDuty, Microsoft Teams, and/or generic webhook). It can run as a **one-shot check** (for cron or ad-hoc) or as a **daemon** (recurring interval).
 
-This document is the source of truth for **observable behavior** and test expectations (**baseline: v0.7.0** shipped code; deprecated and planned items are labeled). **Roadmap:** [ROADMAP.md](ROADMAP.md). Band plans: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md). Shipped releases: **[CHANGELOG.md](CHANGELOG.md)**.
+This document is the source of truth for **observable behavior** and test expectations (**baseline: v0.8.0** shipped code; deprecated and planned items are labeled). **Roadmap:** [ROADMAP.md](ROADMAP.md). Band plans: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md). Shipped releases: **[CHANGELOG.md](CHANGELOG.md)**.
 
 ## 2. Scope
 
@@ -469,16 +469,18 @@ Requires an active metrics store (sqlite.path or metrics_store.driver+dsn).
 ### Build
 
 - Go module: `github.com/hrodrig/pgwd`
-- Minimum Go: 1.26.4 (as of 0.7.0)
+- Minimum Go: 1.26.5 (as of 0.8.0)
 - `make build`: reads `VERSION`, injects `Version`/`Commit`/`BuildDate`/`Branch` via ldflags
 - `make install`: installs to `$GOBIN`
 - Cross-compile: `make build-linux`, `make build-darwin`, `make build-windows`, `make build-all` (output in `dist/`)
 
 ### Docker
 
-- Multi-stage build: `golang:1.26.4-alpine` → `alpine:3.24.1`
-- Non-root user `pgwd` (UID/GID 1000)
-- Minimal runtime: `ca-certificates` only
+- Multi-stage build: `golang:1.26.5-alpine` → `gcr.io/distroless/static-debian13:nonroot`
+- **Static binary** (`CGO_ENABLED=0`); runtime image has **no shell, kubectl, or OS packages**
+- **HTTPS notifiers** (Slack, Loki, PagerDuty, etc.): CA bundle included in distroless/static
+- **Kubernetes in-container:** `-kube-postgres` / `-kube-loki` use **client-go** (port-forward, API calls). **No `kubectl` binary** — mount kubeconfig or use in-cluster ServiceAccount + RBAC (same as pre-distroless). Legacy `DISCOVER_MY_PASSWORD` uses `pods/exec` via API (deprecated 0.9.x), not a local kubectl.
+- Non-root (`nonroot` user); entrypoint **`/home/pgwd/pgwd`**
 - Image scanning via `make docker-scan` (Grype)
 
 ### Release
@@ -488,11 +490,15 @@ Requires an active metrics store (sqlite.path or metrics_store.driver+dsn).
 - Platform tests: Ansible playbooks against Linux and BSD VMs (manual pre-release gate)
 - Semantic versioning (MAJOR.MINOR.PATCH)
 
-### Supply chain (planned, 0.8.0)
+### Supply chain (from 0.8.0)
 
-- Syft SBOM for GHCR images and release artifacts
-- Cosign keyless signing (OIDC)
-- `cosign verify` documentation for operators
+- **SBOM:** SPDX and CycloneDX JSON attached to each GitHub Release (`pgwd_<version>_sbom.spdx.json`, `pgwd_<version>_sbom.cyclonedx.json`) — source-tree catalog via Syft in GoReleaser.
+- **Signing:** Cosign keyless (GitHub Actions OIDC) for `checksums.txt` (`.sig` + `.pem` on the release) and `ghcr.io/hrodrig/pgwd:<tag>` container manifests.
+- **Verification (operators):**
+  - Image: `cosign verify ghcr.io/hrodrig/pgwd:v0.8.0 --certificate-oidc-issuer https://token.actions.githubusercontent.com --certificate-identity-regexp '^https://github\.com/hrodrig/pgwd/\.github/workflows/release\.yml@refs/tags/v'`
+  - Checksums: `cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig checksums.txt` (download assets from the release page).
+- **CI:** Release workflow installs cosign + syft; post-release `cosign verify` on the published image. `make docker-scan` (Grype) remains mandatory in `release-check`.
+- Container image SBOM OCI attestation deferred (GitHub Actions buildx driver limit; same as kzero/groot).
 
 ## 12. Testing baseline
 
