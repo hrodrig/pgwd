@@ -33,6 +33,20 @@ This document is the source of truth for **observable behavior** and test expect
 - Arbitrary notifier plugin system (channels are compiled-in).
 - PostgreSQL replication lag monitoring.
 
+### Known limitations (v0.7.0)
+
+Documented operator-facing gaps; planned hardening is in [ROADMAP.md](ROADMAP.md) band **0.9.x** unless noted.
+
+| Topic | Current behavior | Planned |
+|-------|------------------|---------|
+| HTTP `/metrics` and `/healthz` auth | No authentication or authorization | Optional token or basic auth (0.9.x) |
+| Prometheus label escaping | Backslash and double-quote only | Full label-value sanitization (0.9.x) |
+| Notifier transport TLS | Operator-supplied URLs; `http://` allowed for Slack, Loki, Teams, generic webhook | Startup warning for non-HTTPS URLs (0.9.x) |
+| Postgres query timeout | Uses caller `context`; no dedicated query timeout | Nice-to-have (0.9.x) |
+| Structured logging | `log.Printf` only | Post-1.0 |
+| Alert cooldown | `long_query` only (metrics store) | Per-threshold cooldown not planned (hysteresis covers threshold repeats) |
+| CSV formula injection | String fields written as-is | Prefix sanitization for spreadsheet tools (0.9.x) |
+
 ### Design principles
 
 - **Simple config-first:** YAML at `/etc/pgwd/pgwd.conf`; **CLI** overrides file when set; **`PGWD_*` env** applies only when no config file is loaded. Multi-DB via `databases:` in config.
@@ -315,6 +329,7 @@ All notifier senders (Slack, Loki, PagerDuty, Teams, generic webhook) use shared
 - Retry on **5xx** and network errors only (4xx fails immediately)
 - Defaults: `max_attempts=3`, `initial_backoff=1s`, `max_backoff=10s` (configurable via `notifications.retry` or CLI/env)
 - Non-2xx final response logs an error but does not fail the check
+- **TLS:** pgwd does not enforce HTTPS on operator-configured webhook URLs (Slack, Loki, Teams, generic). Use `https://` endpoints in production. PagerDuty is hardcoded to `https://events.pagerduty.com/v2/enqueue`.
 
 ### Slack
 
@@ -404,10 +419,17 @@ Optional (`http.listen`). Endpoints:
 
 | Path | Method | Response |
 |------|--------|----------|
-| `{base_path}{health_path}` (default `/api/pgwd/v1/healthz`) | GET | `{"status":"ok"}` — always returns 200 when the server is running |
+| `{base_path}{health_path}` (default `/api/pgwd/v1/healthz`) | GET | Plain text `ok` (HTTP 200). When a metrics store is configured, returns 503 if `Ping` fails. |
 | `{base_path}{metrics_path}` (default `/api/pgwd/v1/metrics`) | GET | **Prometheus text exposition** (`text/plain; version=0.0.4`) — gauges `pgwd_connections_*`, `pgwd_state`, etc. Empty store returns `# No metrics store configured` or `# No metrics yet` |
 
 Used for Kubernetes liveness/readiness probes and Prometheus scraping.
+
+### Operator security (v0.7.0)
+
+- **No authentication** on `/healthz` or `/metrics` — any client that can reach `http.listen` can read them.
+- `/metrics` exposes **topology labels** (`client`, `cluster`, `database`) and connection counts. Bind to loopback (e.g. `127.0.0.1:8080`) or restrict with firewall / NetworkPolicy when the port is not cluster-internal only.
+- **Prometheus label values** are escaped for `\` and `"` only. Values containing newlines or other control characters may break scraping; sanitize `client` / `cluster` / `database` in config.
+- Optional token or basic auth for the HTTP server is **planned for 0.9.x** (see [ROADMAP.md](ROADMAP.md)).
 
 ## 9. Kubernetes integration
 
@@ -435,10 +457,12 @@ One-shot mode (`-export-metrics-format csv -export-metrics-destination <path>`):
 
 1. Opens the configured metrics store (SQLite or SQL)
 2. Calls `ExportRows()` to retrieve all rows
-3. Writes CSV with header: `timestamp,client,cluster,database,total,active,idle,max_connections,threshold,level,state`
+3. Writes CSV (RFC 4180) with header: `id,ts_ms,ts_utc,client,cluster,namespace,database,total,active,idle,stale,max_connections,state,threshold`
 4. Logs row count and exits 0
 
 Requires an active metrics store (sqlite.path or metrics_store.driver+dsn).
+
+**Spreadsheet safety (v0.7.0):** string fields (`client`, `cluster`, `database`, `state`, `threshold`) are written without prefix sanitization. Values starting with `=`, `+`, `-`, or `@` may be interpreted as formulas when opened in Excel or Google Sheets. Treat exports as untrusted input or import as plain text. Prefix sanitization is **planned for 0.9.x**.
 
 ## 11. Build and release
 

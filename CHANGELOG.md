@@ -10,6 +10,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 - **`make cover-check`** — statement coverage gate (default **≥ 80%** on library packages; `internal/cli` excluded, exercised via `cmd/pgwd` black-box tests). Part of **`make release-check`** and CI.
 
+### Changed
+
+- **Docs:** [SPECIFICATIONS.md](SPECIFICATIONS.md) — known limitations (v0.7.0), HTTP operator security, corrected `/healthz` and CSV columns, notifier TLS note. [ROADMAP.md](ROADMAP.md) and [docs/plan-0.9.x.md](docs/plan-0.9.x.md) — 0.9.x security/doc checklist from external audit review.
+
 ## [0.7.0] - 2026-07-03
 
 ### Added

@@ -2,7 +2,7 @@
 
 **Current release:** [v0.7.0](VERSION) (on `develop`; tag pending on `main`) · **Branch:** `develop` · **Target:** [v1.0.0](docs/plan-1.0.x.md) stable API (early–mid July 2026)
 
-**Status (2026-07-03):** **v0.7.0** ready on `develop` (notifiers + retry). **Active band: 0.8.0 📋 next** (supply chain). Calendar below is aspirational — adjust if bands slip.
+**Status (2026-07-11):** **v0.7.0** ready on `develop` (notifiers + retry; tag on `main` pending). **Active band: 0.8.0 📋 next** (supply chain). Calendar below is aspirational — adjust if bands slip.
 
 This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md) (v0.7.0). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md).
 
@@ -77,7 +77,11 @@ Each band: design → implement → test → `make release-check` → docs → t
 | **Coverage** | **`make cover-check`** ≥ 80% (library packages; homologated with kzero) |
 | **Collector** | Opt-in anonymous daemon telemetry + opt-out update check (gghstats model) |
 | **Deprecation runway** | Stronger warnings for legacy `db:` config |
-| **SPEC audit** | [SPECIFICATIONS.md](SPECIFICATIONS.md) matches shipped 0.9 code |
+| **HTTP metrics privacy** | Operator bind guidance; optional `/metrics` token or basic auth |
+| **Prometheus label escape** | Full label-value sanitization in `/metrics` exporter |
+| **CSV export safety** | Prefix sanitization for spreadsheet formula injection |
+| **Notifier TLS warning** | Log when Slack/Loki/Teams/generic URLs use `http://` |
+| **SPEC audit** | [SPECIFICATIONS.md](SPECIFICATIONS.md) matches shipped 0.9 code (§8 HTTP, §10 CSV, notifications TLS, collector privacy) |
 
 → [plan-0.9.x.md](docs/plan-0.9.x.md)
 
@@ -124,6 +128,7 @@ Full detail: [CHANGELOG.md](CHANGELOG.md).
 | **K8s passwords** | Deprecate `DISCOVER_MY_PASSWORD` (exec) → Secret-backed DSN — [kubernetes-passwords.md](docs/kubernetes-passwords.md) |
 | **Multi-DB + kube** | `-kube-postgres` not supported with `databases:` until per-db kube exists (post-1.0) |
 | **Connect failure alerts** | Always sent when notifiers configured (no extra flag) |
+| **HTTP `/metrics` privacy** | No auth in 0.7.x — operator controls bind and network exposure; hardening in 0.9.x |
 
 ---
 
