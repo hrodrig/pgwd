@@ -1,23 +1,12 @@
-# Runtime image for GoReleaser dockers_v2. Binary is under linux/<arch>/pgwd per platform.
-# We COPY the whole linux/ tree then pick the right binary so we work with both
-# single-platform (snapshot) and multi-platform (release) contexts.
-ARG TARGETPLATFORM
-# Runtime Alpine 3.24.1 — same as Dockerfile (OpenSSL fixes incl. CVE-2026-2673).
-FROM alpine:3.24.1
+# syntax=docker/dockerfile:1
+# GoReleaser dockers_v2: copy pre-built linux binary into distroless (no BusyBox/Alpine OS packages).
+# TARGETARCH is set by Docker Buildx per platform (amd64, arm64).
+FROM gcr.io/distroless/static-debian13:nonroot
+ARG TARGETARCH
 LABEL org.opencontainers.image.title="pgwd"
 LABEL org.opencontainers.image.description="Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki"
 LABEL org.opencontainers.image.source="https://github.com/hrodrig/pgwd"
 LABEL org.opencontainers.image.authors="Hermes Rodríguez https://github.com/hrodrig/pgwd"
-RUN apk update && apk upgrade && apk --no-cache add ca-certificates \
-	&& rm -f /usr/bin/wget /usr/bin/nc
-RUN adduser -D -g "" pgwd
-COPY linux/ /tmp/linux/
-ARG TARGETPLATFORM
-RUN case "$TARGETPLATFORM" in \
-	linux/amd64) cp /tmp/linux/amd64/pgwd /home/pgwd/pgwd ;; \
-	linux/arm64) cp /tmp/linux/arm64/pgwd /home/pgwd/pgwd ;; \
-	*) cp /tmp/linux/amd64/pgwd /home/pgwd/pgwd ;; \
-	esac && chown pgwd:pgwd /home/pgwd/pgwd
-USER pgwd
-WORKDIR /home/pgwd
+COPY linux/${TARGETARCH}/pgwd /home/pgwd/pgwd
+USER nonroot:nonroot
 ENTRYPOINT ["/home/pgwd/pgwd"]

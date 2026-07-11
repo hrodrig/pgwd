@@ -1,6 +1,6 @@
 # pgwd plan 0.8.x — supply chain security
 
-**Roadmap index:** [ROADMAP.md](../ROADMAP.md) · **Band:** 0.8.0
+**Roadmap index:** [ROADMAP.md](../ROADMAP.md) · **Band:** 0.8.x · **Status:** ✅ shipped (v0.8.0)
 
 **Theme:** Syft SBOM + Cosign keyless signing for GHCR images and release artifacts. Same pattern as [groot](https://github.com/hrodrig/groot) and [kzero](https://github.com/hrodrig/kzero).
 
@@ -58,6 +58,18 @@ Sign with OIDC (GitHub OIDC provider):
 | `SPECIFICATIONS.md` | §11 Build and release (SBOM, signing) |
 | `CHANGELOG.md` | 0.8.x release notes |
 
+Status on `develop`:
+
+| File | Status |
+|------|--------|
+| `.goreleaser.yaml` | ✅ `signs`, `sboms`, `docker_signs` |
+| `.github/workflows/release.yml` | ✅ cosign + syft + post-release verify |
+| `README.md` | ✅ Supply chain verification section |
+| `SPECIFICATIONS.md` | ✅ §11 supply chain |
+| `CHANGELOG.md` | ✅ [Unreleased] entry |
+| `.github/workflows/security.yml` | ⏸️ cosign verify deferred (release workflow verifies) |
+| `Makefile` | ⏸️ GHA-only via GoReleaser (documented in README) |
+
 ---
 
 ## Testing
@@ -81,5 +93,6 @@ Sign with OIDC (GitHub OIDC provider):
 
 - [ ] Tag `v0.8.0` from `main`
 - [ ] Published image and release artifacts signed; SBOM attached or documented
-- [ ] README verification section complete
-- [ ] SPEC §11 updated
+- [x] README verification section complete
+- [x] SPEC §11 updated
+- [x] GoReleaser + release workflow (cosign, syft, verify)

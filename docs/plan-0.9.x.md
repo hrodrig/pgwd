@@ -280,8 +280,15 @@ If Postgres is reachable without port-forward: Secret → `PGWD_DB_URL` or `~/.p
 
 ### 11. Documentation and SPEC audit
 
-- Finish [SPECIFICATIONS.md](../SPECIFICATIONS.md) audit against **0.9.x** code (K8s client-go, HTTP `/healthz`/`/metrics`, metrics store interface, CSV columns, config load order, **collector privacy**)
-- Sequence diagrams in [docs/sequence/](./sequence/) re-audit if behavior changed
+Finish [SPECIFICATIONS.md](../SPECIFICATIONS.md) audit against **0.9.x** code. Checklist:
+
+- [ ] §8 HTTP: `healthz` body is plain `ok`; operator security notes current
+- [ ] §8 HTTP: Prometheus label escaping spec matches implementation (or document fix shipped in 0.9.x)
+- [ ] §10 CSV: column list matches `internal/metricsexport/csv.go`; formula-injection note current
+- [ ] §6 Notifications: TLS operator responsibility documented
+- [ ] K8s client-go, metrics store interface, CSV columns, config load order
+- [ ] Collector privacy (§3 / dedicated subsection when collector ships)
+- [ ] Sequence diagrams in [docs/sequence/](./sequence/) re-audit if behavior changed
 
 ---
 

@@ -94,7 +94,7 @@ grype pgwd:scan --fail-on high
 
 CI does the same: builds the image and runs `grype pgwd:scan --fail-on high` (see `.github/workflows/security.yml`).
 
-**What you’ll see in practice:** A scan of the image often reports vulnerabilities in the **base image and OS packages** (Alpine: e.g. busybox, zlib, libc). Grype prints a table: package name, installed version, CVE ID, severity (Critical/High/Medium/Low), and sometimes EPSS. It’s normal to have some **Medium** (or Low) findings in base layers. CI uses `--fail-on high` so the job only fails on High/Critical; Medium findings are still visible in the log so you can track them. To reduce findings over time: pin a **newer Alpine base** in the Dockerfile (e.g. `FROM golang:1.26-alpine` or a newer `alpine:3.x` when the Go image allows it), rebuild and re-scan. Let the base image maintainers ship fixed versions; **do not** try to remove or upgrade individual base packages (e.g. zlib) in Alpine — that often breaks the image. Accept or document any remaining medium/low risk if they are not exploitable in our use case.
+**What you’ll see in practice:** Release images use **distroless/static** (no Alpine BusyBox/apk). Local **`make docker-scan`** still builds via **`Dockerfile`** (same distroless runtime). Grype may report fewer OS-package findings than the former Alpine base; rebuild and re-scan after base or Go bumps.
 
 ## CI
 

@@ -1,10 +1,10 @@
 # pgwd roadmap
 
-**Current release:** [v0.7.0](VERSION) (on `develop`; tag pending on `main`) · **Branch:** `develop` · **Target:** [v1.0.0](docs/plan-1.0.x.md) stable API (early–mid July 2026)
+**Current release:** [v0.8.0](VERSION) (on `develop`; tag on `main` pending) · **Branch:** `develop` · **Target:** [v1.0.0](docs/plan-1.0.x.md) stable API (early–mid July 2026)
 
-**Status (2026-07-03):** **v0.7.0** ready on `develop` (notifiers + retry). **Active band: 0.8.0 📋 next** (supply chain). Calendar below is aspirational — adjust if bands slip.
+**Status (2026-07-11):** **v0.8.0** ready on `develop` (supply chain + audit docs). **Active band: 0.9.x 📋 next** (pre-1.0 polish). Calendar below is aspirational — adjust if bands slip.
 
-This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md) (v0.7.0). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md).
+This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md) (v0.8.0). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md).
 
 ---
 
@@ -18,8 +18,8 @@ This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md]
 
 ```mermaid
 flowchart LR
-  A["0.6.10 ✅"] --> B["0.7.0 ✅ ready"]
-  B --> C["0.8.0 supply chain"]
+  A["0.6.10 ✅"] --> B["0.7.0 ✅"]
+  B --> C["0.8.0 ✅ ready"]
   C --> D["0.9.x polish + security"]
   D --> E["1.0.0 breaking stable"]
 ```
@@ -28,7 +28,7 @@ flowchart LR
 |------|--------|--------|-------|------|
 | **0.6.x** | ✅ Shipped | Jun 2026 | Metrics store, multi-DB, HTTP `/metrics`, CSV export, security patches | [CHANGELOG](CHANGELOG.md) |
 | **0.7.x** | ✅ Ready (v0.7.0) | Jul 2026 | PagerDuty, Teams, generic webhook + JWT/HMAC, shared HTTP retry | [plan-0.7.x.md](docs/plan-0.7.x.md) · [CHANGELOG](CHANGELOG.md#070---2026-07-03) |
-| **0.8.0** | 📋 Planned | Jun–Jul 2026 | Syft SBOM + Cosign keyless signing (GHCR + release artifacts) | [plan-0.8.x.md](docs/plan-0.8.x.md) |
+| **0.8.0** | ✅ Ready (v0.8.0) | Jul 2026 | Syft SBOM + Cosign keyless signing (GHCR + release artifacts) | [plan-0.8.x.md](docs/plan-0.8.x.md) · [CHANGELOG](CHANGELOG.md#080---2026-07-11) |
 | **0.9.x** | 📋 Planned | Jul 2026 | Pre-1.0 polish, **remove `DISCOVER_MY_PASSWORD`**, profiles, `--strict`, SPEC audit | [plan-0.9.x.md](docs/plan-0.9.x.md) |
 | **1.0.0** | 📋 Planned | Early–mid Jul 2026 | Breaking stable API, deprecations removed | [plan-1.0.x.md](docs/plan-1.0.x.md) |
 
@@ -37,9 +37,9 @@ flowchart LR
 | Window | Milestone |
 |--------|-----------|
 | Jun 17 | v0.6.10 ✅ |
-| Jul 3 | v0.7.0 ✅ (develop; tag on `main`) |
-| Jun 25–30 | 0.8.0 |
-| Jul 1–7 | 0.9.x |
+| Jul 3 | v0.7.0 ✅ |
+| Jul 11 | v0.8.0 ✅ (develop; tag on `main`) |
+| Jul 12–18 | 0.9.x |
 | Jul 8–14 | 1.0.0 |
 
 Each band: design → implement → test → `make release-check` → docs → tag from `main`.
@@ -77,7 +77,11 @@ Each band: design → implement → test → `make release-check` → docs → t
 | **Coverage** | **`make cover-check`** ≥ 80% (library packages; homologated with kzero) |
 | **Collector** | Opt-in anonymous daemon telemetry + opt-out update check (gghstats model) |
 | **Deprecation runway** | Stronger warnings for legacy `db:` config |
-| **SPEC audit** | [SPECIFICATIONS.md](SPECIFICATIONS.md) matches shipped 0.9 code |
+| **HTTP metrics privacy** | Operator bind guidance; optional `/metrics` token or basic auth |
+| **Prometheus label escape** | Full label-value sanitization in `/metrics` exporter |
+| **CSV export safety** | Prefix sanitization for spreadsheet formula injection |
+| **Notifier TLS warning** | Log when Slack/Loki/Teams/generic URLs use `http://` |
+| **SPEC audit** | [SPECIFICATIONS.md](SPECIFICATIONS.md) matches shipped 0.9 code (§8 HTTP, §10 CSV, notifications TLS, collector privacy) |
 
 → [plan-0.9.x.md](docs/plan-0.9.x.md)
 
@@ -110,6 +114,7 @@ Each band: design → implement → test → `make release-check` → docs → t
 | 0.6.9 | Jun 2026 | `--print-sample-config` |
 | 0.6.10 | Jun 2026 | Docker Alpine 3.24.1 (CVE-2026-2673) |
 | 0.7.0 | Jul 2026 | PagerDuty, Teams, generic webhook, HTTP retry |
+| 0.8.0 | Jul 2026 | Syft SBOM, Cosign signing, supply chain docs |
 
 Full detail: [CHANGELOG.md](CHANGELOG.md).
 
@@ -124,6 +129,7 @@ Full detail: [CHANGELOG.md](CHANGELOG.md).
 | **K8s passwords** | Deprecate `DISCOVER_MY_PASSWORD` (exec) → Secret-backed DSN — [kubernetes-passwords.md](docs/kubernetes-passwords.md) |
 | **Multi-DB + kube** | `-kube-postgres` not supported with `databases:` until per-db kube exists (post-1.0) |
 | **Connect failure alerts** | Always sent when notifiers configured (no extra flag) |
+| **HTTP `/metrics` privacy** | No auth in 0.7.x — operator controls bind and network exposure; hardening in 0.9.x |
 
 ---
 
@@ -154,7 +160,7 @@ Track via GitHub issues after 1.0.0.
 | Document | Role |
 |----------|------|
 | **ROADMAP.md** (this file) | Where we are, where we go, band index |
-| **[SPECIFICATIONS.md](SPECIFICATIONS.md)** | Observable behavior contract for **shipped** code (v0.7.0); planned bands noted as deprecated/future only |
+| **[SPECIFICATIONS.md](SPECIFICATIONS.md)** | Observable behavior contract for **shipped** code (v0.8.0); planned bands noted as deprecated/future only |
 | **[CHANGELOG.md](CHANGELOG.md)** | What actually shipped per version |
 | **[docs/plan-0.7.x.md](docs/plan-0.7.x.md) … [plan-1.0.x.md](docs/plan-1.0.x.md)** | Implementation checklists per band |
 | **[docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)** | Security decision: DISCOVER deprecation |
