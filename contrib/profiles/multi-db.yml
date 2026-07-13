@@ -1,0 +1,21 @@
+# Multi-database daemon. Set explicit client per entry when the same DB name exists on different hosts.
+client: "CHANGE_ME"
+interval: 60
+dry_run: false
+
+databases:
+  - url: postgres://USER:PASS@host1:5432/prod?sslmode=disable
+    client: "CHANGE_ME-prod"
+    threshold:
+      levels: "75,85,95"
+  - url: postgres://USER:PASS@host2:5432/analytics?sslmode=disable
+    client: "CHANGE_ME-analytics"
+    threshold:
+      levels: "80,90,98"
+
+sqlite:
+  path: /var/lib/pgwd/pgwd.db
+
+notifications:
+  slack:
+    webhook: "https://hooks.slack.com/services/CHANGE_ME"

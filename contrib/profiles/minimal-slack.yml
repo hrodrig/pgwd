@@ -1,0 +1,13 @@
+# One-shot Slack alert (cron every 5 min). No SQLite, no /metrics.
+client: "CHANGE_ME"
+interval: 0
+dry_run: false
+
+databases:
+  - url: postgres://USER:PASS@HOST:5432/DBNAME?sslmode=disable
+    threshold:
+      levels: "75,85,95"
+
+notifications:
+  slack:
+    webhook: "https://hooks.slack.com/services/CHANGE_ME"

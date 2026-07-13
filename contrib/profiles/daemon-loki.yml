@@ -1,0 +1,23 @@
+# Daemon: Loki + SQLite history + HTTP /metrics (in-cluster scrape; leave metrics_token empty).
+client: "CHANGE_ME"
+interval: 60
+dry_run: false
+log_level: info
+
+databases:
+  - url: postgres://USER:PASS@HOST:5432/DBNAME?sslmode=disable
+    threshold:
+      levels: "75,85,95"
+
+sqlite:
+  path: /var/lib/pgwd/pgwd.db
+  max_metrics: 10000
+
+notifications:
+  loki:
+    url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+    labels: job=pgwd,env=prod
+
+http:
+  listen: ":8080"
+  # metrics_token: ""   # opt-in; empty = anonymous Prometheus/Alloy scrape
