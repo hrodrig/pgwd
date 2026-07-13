@@ -6,6 +6,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ## [Unreleased]
 
+### Added
+
+- **Brand mark:** [`docs/logo.svg`](docs/logo.svg) (and `docs/logo.png`) — cyan **`pg`** monogram + green live status dot; README header uses the SVG.
+
 ## [0.9.0] - 2026-07-13
 
 Pre-1.0 security and operator polish: removes insecure Kubernetes password discovery (`pods/exec`), hardens `/metrics` and CSV export, adds ready-to-use config profiles and optional daemon telemetry, and documents single- and multi-database deployment patterns.

@@ -3,7 +3,11 @@
 <a id="top"></a>
 
 <p align="center">
-  <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
+  <img src="docs/logo.svg" alt="pgwd" width="96" height="96">
+</p>
+
+<p align="center">
+  <em>Watch your PostgreSQL connections</em>
 </p>
 
 [![Version](https://img.shields.io/badge/version-0.9.0-blue)](https://github.com/hrodrig/pgwd/releases)

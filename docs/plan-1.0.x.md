@@ -41,7 +41,7 @@
 ## Milestones (release gate)
 
 - [ ] **100+ tests** total (`go test ./...`)
-- [ ] Logo/branding (simple pgwd icon) — optional but targeted for 1.0 announcement
+- [x] Logo/branding (simple pgwd icon) — optional but targeted for 1.0 announcement (`docs/logo.svg`)
 - [ ] [SPECIFICATIONS.md](../SPECIFICATIONS.md) fully audited against 1.0 code
 - [ ] All deprecations removed (grep for `Deprecated`, v1.0 warnings)
 - [ ] [plan-0.8.x.md](./plan-0.8.x.md) supply chain shipped (SBOM + cosign)

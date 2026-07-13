@@ -4,6 +4,8 @@
 
 **Canonical index:** **[ROADMAP.md](../ROADMAP.md)** at repo root.
 
+**Brand:** [`logo.svg`](./logo.svg) / [`logo.png`](./logo.png) — hybrid **`pg`** + live status dot (landing favicon uses the same mark).
+
 Release bands from **v0.7.0** to **v1.0.0**. Behavior contract: [SPECIFICATIONS.md](../SPECIFICATIONS.md). Release notes: [CHANGELOG.md](../CHANGELOG.md).
 
 | Band | Plan | Theme |
