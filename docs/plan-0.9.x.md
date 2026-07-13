@@ -334,8 +334,8 @@ Finish [SPECIFICATIONS.md](../SPECIFICATIONS.md) audit against **0.9.x** code. C
 
 ## Release checklist
 
-- [ ] Tag `v0.9.0` from `main`
+- [ ] Tag `v0.9.0` from `main` (after `make release-check` + merge `develop` → `main`)
 - [x] SPEC audited for 0.9.x
 - [x] Profiles shipped under `contrib/profiles/`
 - [x] `DISCOVER_MY_PASSWORD` removed; `docs/kubernetes-passwords.md` + wrapper/RBAC shipped; e2e kube updated
-- [ ] CHANGELOG [Unreleased] → 0.9.x section
+- [x] CHANGELOG [Unreleased] → 0.9.0 section

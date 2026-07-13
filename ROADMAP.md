@@ -1,10 +1,10 @@
 # pgwd roadmap
 
-**Current release:** [v0.8.0](VERSION) (tagged on `main`) · **Branch:** `develop` · **Target:** [v1.0.0](docs/plan-1.0.x.md) stable API (early–mid July 2026)
+**Current release:** [v0.9.0](VERSION) (ready on `develop`; tag on `main`) · **Branch:** `develop` · **Target:** [v1.0.0](docs/plan-1.0.x.md) stable API
 
-**Status (2026-07-11):** **v0.8.0** ready on `develop` (supply chain + audit docs). **Active band: 0.9.x 📋 next** (pre-1.0 polish). Calendar below is aspirational — adjust if bands slip.
+**Status (2026-07-13):** **v0.9.0** ready on `develop` (pre-1.0 polish + security). **Active band: 1.0.x 📋 next** (breaking stable API).
 
-This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md) (v0.8.0). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md).
+This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md) (v0.9.0). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md).
 
 ---
 
@@ -20,7 +20,7 @@ This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md]
 flowchart LR
   A["0.6.10 ✅"] --> B["0.7.0 ✅"]
   B --> C["0.8.0 ✅ ready"]
-  C --> D["0.9.x polish + security"]
+  C --> D["0.9.0 ✅ ready"]
   D --> E["1.0.0 breaking stable"]
 ```
 
@@ -29,8 +29,8 @@ flowchart LR
 | **0.6.x** | ✅ Shipped | Jun 2026 | Metrics store, multi-DB, HTTP `/metrics`, CSV export, security patches | [CHANGELOG](CHANGELOG.md) |
 | **0.7.x** | ✅ Ready (v0.7.0) | Jul 2026 | PagerDuty, Teams, generic webhook + JWT/HMAC, shared HTTP retry | [plan-0.7.x.md](docs/plan-0.7.x.md) · [CHANGELOG](CHANGELOG.md#070---2026-07-03) |
 | **0.8.0** | ✅ Ready (v0.8.0) | Jul 2026 | Syft SBOM + Cosign keyless signing (GHCR + release artifacts) | [plan-0.8.x.md](docs/plan-0.8.x.md) · [CHANGELOG](CHANGELOG.md#080---2026-07-11) |
-| **0.9.x** | 📋 **Active** | Jul 2026 | Pre-1.0 polish, **remove `DISCOVER_MY_PASSWORD`**, profiles, `--strict`, SPEC audit | [plan-0.9.x.md](docs/plan-0.9.x.md) |
-| **1.0.0** | 📋 Planned | Early–mid Jul 2026 | Breaking stable API, deprecations removed | [plan-1.0.x.md](docs/plan-1.0.x.md) |
+| **0.9.x** | ✅ Ready (v0.9.0) | Jul 2026 | Pre-1.0 polish, DISCOVER removal, profiles, `--strict`, collector, SPEC audit | [plan-0.9.x.md](docs/plan-0.9.x.md) · [CHANGELOG](CHANGELOG.md#090---2026-07-13) |
+| **1.0.0** | 📋 **Active** | Jul 2026 | Breaking stable API, deprecations removed | [plan-1.0.x.md](docs/plan-1.0.x.md) |
 
 **Suggested calendar** (from band plans — **slip OK**; 0.7.x started 2026-07-02):
 
@@ -38,9 +38,9 @@ flowchart LR
 |--------|-----------|
 | Jun 17 | v0.6.10 ✅ |
 | Jul 3 | v0.7.0 ✅ |
-| Jul 11 | v0.8.0 ✅ (develop; tag on `main`) |
-| Jul 12–18 | 0.9.x |
-| Jul 8–14 | 1.0.0 |
+| Jul 11 | v0.8.0 ✅ |
+| Jul 13 | v0.9.0 ✅ (develop; tag on `main`) |
+| Jul 14+ | 1.0.0 |
 
 Each band: design → implement → test → `make release-check` → docs → tag from `main`.
 
@@ -67,7 +67,7 @@ Each band: design → implement → test → `make release-check` → docs → t
 
 → [plan-0.8.x.md](docs/plan-0.8.x.md)
 
-### 0.9.x — pre-1.0 polish and security ✅ (on `develop`; tag pending)
+### 0.9.x — pre-1.0 polish and security ✅ (v0.9.0)
 
 | Item | Notes |
 |------|--------|
@@ -115,7 +115,7 @@ Each band: design → implement → test → `make release-check` → docs → t
 | 0.6.10 | Jun 2026 | Docker Alpine 3.24.1 (CVE-2026-2673) |
 | 0.7.0 | Jul 2026 | PagerDuty, Teams, generic webhook, HTTP retry |
 | 0.8.0 | Jul 2026 | Syft SBOM, Cosign signing, supply chain docs |
-| 0.9.0 | (pending tag) | DISCOVER removed, profiles, strict, collector, metrics/CSV hardening |
+| 0.9.0 | Jul 2026 | DISCOVER removed, profiles, strict, collector, metrics/CSV hardening, operator docs |
 
 Full detail: [CHANGELOG.md](CHANGELOG.md).
 
