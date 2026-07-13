@@ -1,6 +1,6 @@
 # Sequence diagrams — audit vs code
 
-Last audit: checked each diagram against `cmd/pgwd/main.go` and `internal/notify`, `internal/postgres`.
+Last audit: 2026-07-13 (0.9.x: DISCOVER removed, `password_from_secret`, collector daemon startup, TLS warnings, strict exit 4).
 
 ## 01 — Startup and config validation
 
@@ -18,7 +18,9 @@ Last audit: checked each diagram against `cmd/pgwd/main.go` and `internal/notify
 | validate at least one notifier (or dry-run) | `validateNotifiers()` 124–133 |
 | validate force-notification / notify-on-connect-failure require notifier | `validateNotifiers()` |
 | signal.NotifyContext(SIGINT, SIGTERM) | 590 |
-| opt -kube-postgres: resolve pod, get password, port-forward, replace DB URL | 594 `setupKube()` |
+| opt -kube-postgres: password_from_secret or DSN, port-forward | `setupKube()` — no `pods/exec`; DISCOVER fails fast |
+| opt interval > 0: collector / update check | `startCollector()` after `validateConfig()` |
+| stderr deprecation / TLS warnings | `WarnDeprecationStartup()`, `WarnNotifierTLS()` in `validator.Validate()` |
 | opt -kube-loki: port-forward to Loki, set Loki URL | 596 `setupKubeLoki()` |
 | compute run context (cluster, client, namespace, database) | 601 `runContextStrings()` |
 | build senders (Slack, Loki) | 602 `buildSenders()` |

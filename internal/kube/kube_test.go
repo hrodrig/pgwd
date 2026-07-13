@@ -2,6 +2,7 @@ package kube
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"strings"
 	"testing"
@@ -59,23 +60,15 @@ func TestParseKubePostgres(t *testing.T) {
 	}
 }
 
-func TestURLContainsDiscoverPassword(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  bool
-	}{
-		{"URL with placeholder", "postgres://user:DISCOVER_MY_PASSWORD@host/db", true},
-		{"URL with real password", "postgres://user:password@host/db", false},
-		{"empty string", "", false},
-		{"bare placeholder", "DISCOVER_MY_PASSWORD", true},
+func TestResolveKubeDBURL_RejectDiscover(t *testing.T) {
+	ctx := context.Background()
+	secret := PasswordFromSecret{}
+	_, err := ResolveKubeDBURL(ctx, "", "postgres://user:DISCOVER_MY_PASSWORD@host/db", secret, 15432)
+	if err == nil {
+		t.Fatal("expected error for DISCOVER_MY_PASSWORD")
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := URLContainsDiscoverPassword(tt.input); got != tt.want {
-				t.Errorf("URLContainsDiscoverPassword(%q) = %v, want %v", tt.input, got, tt.want)
-			}
-		})
+	if !errors.Is(err, errDiscoverPasswordRemoved) {
+		t.Errorf("error = %v, want errDiscoverPasswordRemoved", err)
 	}
 }
 
@@ -148,12 +141,6 @@ func TestReplaceDBURLForKube(t *testing.T) {
 				t.Errorf("query: got %q, want %q", u.RawQuery, tt.wantQuery)
 			}
 		})
-	}
-}
-
-func TestDiscoverPasswordPlaceholder(t *testing.T) {
-	if got := DiscoverPasswordPlaceholder(); got != discoverPasswordPlaceholder {
-		t.Errorf("got %q, want %q", got, discoverPasswordPlaceholder)
 	}
 }
 

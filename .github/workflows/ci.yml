@@ -110,3 +110,18 @@ jobs:
 
       - name: Run gocyclo
         run: gocyclo -over 14 .
+
+  bench:
+    name: Benchmarks (non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run benchmarks
+        run: make bench

@@ -282,13 +282,13 @@ If Postgres is reachable without port-forward: Secret → `PGWD_DB_URL` or `~/.p
 
 Finish [SPECIFICATIONS.md](../SPECIFICATIONS.md) audit against **0.9.x** code. Checklist:
 
-- [ ] §8 HTTP: `healthz` body is plain `ok`; operator security notes current
-- [ ] §8 HTTP: Prometheus label escaping spec matches implementation (or document fix shipped in 0.9.x)
-- [ ] §10 CSV: column list matches `internal/metricsexport/csv.go`; formula-injection note current
-- [ ] §6 Notifications: TLS operator responsibility documented
-- [ ] K8s client-go, metrics store interface, CSV columns, config load order
-- [ ] Collector privacy (§3 / dedicated subsection when collector ships)
-- [ ] Sequence diagrams in [docs/sequence/](./sequence/) re-audit if behavior changed
+- [x] §8 HTTP: `healthz` body is plain `ok`; operator security notes current
+- [x] §8 HTTP: Prometheus label escaping spec matches implementation (or document fix shipped in 0.9.x)
+- [x] §10 CSV: column list matches `internal/metricsexport/csv.go`; formula-injection note current
+- [x] §6 Notifications: TLS operator responsibility documented
+- [x] K8s client-go, metrics store interface, CSV columns, config load order
+- [x] Collector privacy (§3 / dedicated subsection when collector ships)
+- [x] Sequence diagrams in [docs/sequence/](./sequence/) re-audit if behavior changed
 
 ---
 
@@ -327,15 +327,15 @@ Finish [SPECIFICATIONS.md](../SPECIFICATIONS.md) audit against **0.9.x** code. C
 |---|----------|--------|
 | 1 | Logo/branding for 1.0? | Wait for user input on design direction. |
 | 2 | Implement distinct exit codes 2–3 (connect vs query) or only 4 in strict? | Defer granular 2/3 to 1.0 or post-1.0 unless needed for cron. |
-| 3 | Collector endpoint: dedicated `collect.pgwd…` vs shared backend with `product: pgwd`? | Decide before coding `internal/collector`. |
+| 3 | Collector endpoint: dedicated `collect.pgwd…` vs shared backend with `product: pgwd`? | **Shared** — `https://collect.gghstats.com/a1b2c3d4e5f6a7b8` → `project: pgwd` (see collect-gghstats-com.Infrastructure). |
 | 4 | Ship `kube.password_from_secret` in 0.9.0 or 0.9.1? | **0.9.0** — with wrapper script as alternate path. |
 
 ---
 
 ## Release checklist
 
-- [ ] Tag `v0.9.0` from `main`
-- [ ] SPEC audited for 0.9.x
-- [ ] Profiles shipped under `contrib/profiles/`
-- [ ] `DISCOVER_MY_PASSWORD` removed; `docs/kubernetes-passwords.md` + wrapper/RBAC shipped; e2e kube updated
-- [ ] CHANGELOG [Unreleased] → 0.9.x section
+- [ ] Tag `v0.9.0` from `main` (after `make release-check` + merge `develop` → `main`)
+- [x] SPEC audited for 0.9.x
+- [x] Profiles shipped under `contrib/profiles/`
+- [x] `DISCOVER_MY_PASSWORD` removed; `docs/kubernetes-passwords.md` + wrapper/RBAC shipped; e2e kube updated
+- [x] CHANGELOG [Unreleased] → 0.9.0 section

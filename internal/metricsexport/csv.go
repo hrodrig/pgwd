@@ -5,10 +5,28 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hrodrig/pgwd/internal/store"
 )
+
+// sanitizeCSVField prefixes spreadsheet formula triggers (=, +, -, @, tab) per OWASP CSV guidance.
+func sanitizeCSVField(s string) string {
+	if s == "" {
+		return s
+	}
+	trimmed := strings.TrimLeft(s, " \t")
+	if trimmed == "" {
+		return s
+	}
+	switch trimmed[0] {
+	case '=', '+', '-', '@', '\t', '\r':
+		return "'" + s
+	default:
+		return s
+	}
+}
 
 // writeCSV writes rows to path (truncates). RFC4180. Uses ts from each stored row.
 func writeCSV(path string, rows []store.ExportRow) error {
@@ -37,17 +55,17 @@ func writeCSV(path string, rows []store.ExportRow) error {
 			strconv.FormatInt(r.ID, 10),
 			strconv.FormatInt(r.TSMillis, 10),
 			tsUTC,
-			r.Client,
-			r.Cluster,
-			r.Namespace,
-			r.Database,
+			sanitizeCSVField(r.Client),
+			sanitizeCSVField(r.Cluster),
+			sanitizeCSVField(r.Namespace),
+			sanitizeCSVField(r.Database),
 			strconv.Itoa(r.Total),
 			strconv.Itoa(r.Active),
 			strconv.Itoa(r.Idle),
 			strconv.Itoa(r.Stale),
 			strconv.Itoa(r.MaxConnections),
-			r.State,
-			r.Threshold,
+			sanitizeCSVField(r.State),
+			sanitizeCSVField(r.Threshold),
 		}
 		if err := w.Write(row); err != nil {
 			return err

@@ -145,7 +145,7 @@ func TestNotificationSentLine(t *testing.T) {
 func TestSendEvents_dryRun(t *testing.T) {
 	cfg := &config.Config{DryRun: true}
 	s := &fakeSender{}
-	sent := SendEvents(context.Background(), []notify.Sender{s}, cfg, []notify.Event{{Message: "x", Threshold: "test"}})
+	sent, _ := SendEvents(context.Background(), []notify.Sender{s}, cfg, []notify.Event{{Message: "x", Threshold: "test"}})
 	if len(sent) != 0 || s.n != 0 {
 		t.Fatalf("dry-run sent=%v sender.n=%d", sent, s.n)
 	}
@@ -154,7 +154,7 @@ func TestSendEvents_dryRun(t *testing.T) {
 func TestSendEvents_delivers(t *testing.T) {
 	cfg := &config.Config{}
 	s := &fakeSender{}
-	sent := SendEvents(context.Background(), []notify.Sender{s}, cfg, []notify.Event{
+	sent, _ := SendEvents(context.Background(), []notify.Sender{s}, cfg, []notify.Event{
 		{Message: "alert", Threshold: "idle", Stats: postgres.ConnectionStats{Total: 1}},
 	})
 	if !sent["idle"] || s.n != 1 {

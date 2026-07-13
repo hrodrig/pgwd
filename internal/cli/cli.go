@@ -27,6 +27,9 @@ import (
 	"github.com/hrodrig/pgwd/internal/validator"
 )
 
+// ExitStrictNotify is returned when -strict is set and notifier delivery failed.
+const ExitStrictNotify = 4
+
 func init() {
 	run.SetKubeHelpers(kube.ClusterName, kube.ParseKubePostgres)
 }
@@ -120,6 +123,9 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	retryMaxBackoff := flag.String("notifications-retry-max-backoff", "", "Notifier HTTP retry max backoff, e.g. 10s (PGWD_NOTIFICATIONS_RETRY_MAX_BACKOFF; default 10s)")
 	flag.IntVar(&cfg.Interval, "interval", cfg.Interval, "Run every N seconds; 0 = run once (PGWD_INTERVAL)")
 	flag.BoolVar(&cfg.DryRun, "dry-run", cfg.DryRun, "Only print, do not send notifications (PGWD_DRY_RUN)")
+	flag.BoolVar(&cfg.Strict, "strict", cfg.Strict, "Exit 4 when notifier delivery fails for a threshold event (PGWD_STRICT)")
+	flag.BoolVar(&cfg.EnableCollector, "enable-collector", cfg.EnableCollector, "Send anonymous usage telemetry on daemon startup (PGWD_ENABLE_COLLECTOR; default false)")
+	flag.BoolVar(&cfg.EnableUpdateCheck, "enable-update-check", cfg.EnableUpdateCheck, "Check GitHub for newer pgwd releases on daemon startup (PGWD_ENABLE_UPDATE_CHECK; default true)")
 	flag.BoolVar(&cfg.ForceNotification, "force-notification", cfg.ForceNotification, "Always send a test notification to validate delivery/format (PGWD_FORCE_NOTIFICATION)")
 	flag.IntVar(&cfg.DefaultThresholdPercent, "db-default-threshold-percent", cfg.DefaultThresholdPercent, "When one of total/active is 0, set it to this % of max_connections (1-100, default 80) (PGWD_DB_DEFAULT_THRESHOLD_PERCENT)")
 	flag.StringVar(&cfg.ThresholdLevels, "db-threshold-levels", cfg.ThresholdLevels, "When both total and active are 0: comma-separated percentages for 3-tier alerts, e.g. 75,85,95 (attention/alert/danger). Only highest level fires. (PGWD_DB_THRESHOLD_LEVELS)")
@@ -129,8 +135,6 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.IntVar(&cfg.KubeLocalPort, "kube-local-port", cfg.KubeLocalPort, "Local port for kube port-forward (default 5432) (PGWD_KUBE_LOCAL_PORT)")
 	flag.IntVar(&cfg.KubeLokiLocalPort, "kube-loki-local-port", cfg.KubeLokiLocalPort, "Local port for Loki port-forward (default 3100) (PGWD_KUBE_LOKI_LOCAL_PORT)")
 	flag.IntVar(&cfg.KubeLokiRemotePort, "kube-loki-remote-port", cfg.KubeLokiRemotePort, "Remote port on the Loki service (default 3100) (PGWD_KUBE_LOKI_REMOTE_PORT)")
-	flag.StringVar(&cfg.KubePasswordVar, "kube-password-var", cfg.KubePasswordVar, "Pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD) (PGWD_KUBE_PASSWORD_VAR)")
-	flag.StringVar(&cfg.KubePasswordContainer, "kube-password-container", cfg.KubePasswordContainer, "Container name in pod for password discovery (PGWD_KUBE_PASSWORD_CONTAINER)")
 	flag.StringVar(&cfg.Client, "client", cfg.Client, "Client name for this monitor instance — REQUIRED (PGWD_CLIENT); identifies which monitor sent the alert")
 	flag.BoolVar(&cfg.NotifyOnConnectFailure, "notify-on-connect-failure", cfg.NotifyOnConnectFailure, "Send an alert to notifiers when Postgres connection fails (infrastructure alert) (PGWD_NOTIFY_ON_CONNECT_FAILURE)")
 	flag.IntVar(&cfg.TestMaxConnections, "test-max-connections", cfg.TestMaxConnections, "Override server max_connections for defaults and display (for testing alerts; 0 = use server) (PGWD_TEST_MAX_CONNECTIONS)")
@@ -182,9 +186,10 @@ func exportMetricsAndExit(cfg *config.Config) {
 
 // setupKube configures Kubernetes access when -kube-postgres is set. If KubePostgres
 // is empty, it returns a no-op cleanup and leaves cfg unchanged. Otherwise it
-// optionally discovers the DB password from the pod when -db-url uses DISCOVER_MY_PASSWORD
-// (deprecated, removed 0.9.x), rewrites cfg.DBURL to localhost, and starts client-go
-// port-forward. Returns a cleanup that stops the forward; defer it from main.
+// optionally loads the DB password from a Secret (kube.password_from_secret),
+// rejects the removed DISCOVER_MY_PASSWORD placeholder, rewrites cfg.DBURL to
+// localhost, and starts client-go port-forward. Returns a cleanup that stops the
+// forward; defer it from main.
 func setupKube(ctx context.Context, cfg *config.Config) (cleanup func()) {
 	if cfg.KubePostgres == "" {
 		return func() {}
@@ -199,20 +204,17 @@ func setupKube(ctx context.Context, cfg *config.Config) (cleanup func()) {
 	if cfg.KubeLocalPort < 1 || cfg.KubeLocalPort > 65535 {
 		log.Fatal("kube-local-port must be between 1 and 65535")
 	}
-	password := ""
-	if kube.URLContainsDiscoverPassword(cfg.DBURL) {
-		podName, err := kube.ResolvePod(ctx, cfg.KubeContext, namespace, resource)
-		if err != nil {
-			log.Fatalf("kube resolve pod: %v", err)
-		}
-		password, err = kube.GetPasswordFromPod(ctx, cfg.KubeContext, namespace, podName, cfg.KubePasswordContainer, cfg.KubePasswordVar)
-		if err != nil {
-			log.Fatal("kube: could not get password from pod (check namespace, pod name, container, and env var)")
-		}
+	secret := kube.PasswordFromSecret{
+		Namespace: cfg.KubePasswordFromSecret.Namespace,
+		Name:      cfg.KubePasswordFromSecret.Name,
+		Key:       cfg.KubePasswordFromSecret.Key,
 	}
-	finalURL, err := kube.ReplaceDBURLForKube(cfg.DBURL, password, cfg.KubeLocalPort)
+	if secret.Namespace == "" && secret.Name != "" {
+		secret.Namespace = namespace
+	}
+	finalURL, err := kube.ResolveKubeDBURL(ctx, cfg.KubeContext, cfg.DBURL, secret, cfg.KubeLocalPort)
 	if err != nil {
-		log.Fatal("kube: failed to build DB URL (check -db-url format)")
+		log.Fatalf("kube-postgres: %v", err)
 	}
 	cfg.DBURL = finalURL
 	cleanup, err = kube.StartPortForward(ctx, cfg.KubeContext, namespace, resource, cfg.KubeLocalPort)
@@ -321,6 +323,10 @@ func Run() {
 		os.Exit(0)
 	}
 	validateConfig(&cfg)
+
+	if cfg.Interval > 0 {
+		startCollector(&cfg)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -443,6 +449,14 @@ func setupHTTPIfConfigured(cfg *config.Config, st store.MetricsStorer) func() {
 	}
 }
 
+// exitStrictIf exits with ExitStrictNotify when -strict is set and delivery failed.
+func exitStrictIf(cfg *config.Config, deliveryFailed bool) {
+	if cfg.Strict && deliveryFailed {
+		log.Printf("pgwd: strict mode: notifier delivery failed")
+		os.Exit(ExitStrictNotify)
+	}
+}
+
 // runOneTarget connects to one database target, applies threshold defaults, and
 // runs the first check. On connect or threshold errors it notifies (if configured)
 // and returns; single-target mode exits the process on connect failure.
@@ -452,7 +466,7 @@ func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Conf
 
 	pool, err := postgres.Pool(ctx, t.URL)
 	if err != nil {
-		run.NotifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err)
+		exitStrictIf(targetCfg, run.NotifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err))
 		if len(targets) == 1 {
 			log.Fatal("postgres connect failed (check database URL, connectivity, and credentials)")
 		}
@@ -462,12 +476,12 @@ func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Conf
 	defer pool.Close()
 
 	if err := run.ApplyThresholdDefaults(ctx, pool, targetCfg); err != nil {
-		run.NotifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err)
+		exitStrictIf(targetCfg, run.NotifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err))
 		log.Printf("threshold config error [%s]: %v", t.Client, err)
 		return
 	}
 	runFn := run.MakeRunFunc(ctx, pool, targetCfg, senders, st, runCluster, runClient, runNamespace, runDatabase)
-	runFn()
+	exitStrictIf(targetCfg, runFn())
 }
 
 // runTickerLoop repeats runOneTarget for every target every cfg.Interval seconds

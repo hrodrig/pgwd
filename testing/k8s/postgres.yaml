@@ -6,6 +6,15 @@ kind: Namespace
 metadata:
   name: pgwd-e2e
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-credentials
+  namespace: pgwd-e2e
+type: Opaque
+stringData:
+  password: pgwd
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

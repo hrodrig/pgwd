@@ -27,6 +27,13 @@ type DatabaseTarget struct {
 	LongQueryMinCount        int
 }
 
+// KubePasswordFromSecret loads the DB password or full DSN from a Kubernetes Secret (read-only API; no pods/exec).
+type KubePasswordFromSecret struct {
+	Namespace string
+	Name      string
+	Key       string // default "password"; use "url" for a full postgres:// DSN in the Secret
+}
+
 // Config holds all pgwd settings from CLI and env (PGWD_*).
 type Config struct {
 	// Database (single-DB mode; used when Databases is empty)
@@ -35,11 +42,10 @@ type Config struct {
 	Databases []DatabaseTarget
 
 	// Kubernetes: connect to Postgres via port-forward (client-go, optional)
-	KubePostgres          string // e.g. "default/svc/postgres" or "default/pod/postgres-0"
-	KubeContext           string // kubeconfig context to use (empty = current context)
-	KubeLocalPort         int    // local port for port-forward (default 5432)
-	KubePasswordVar       string // pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD)
-	KubePasswordContainer string // container name in pod if not default
+	KubePostgres           string                 // e.g. "default/svc/postgres" or "default/pod/postgres-0"
+	KubeContext            string                 // kubeconfig context to use (empty = current context)
+	KubeLocalPort          int                    // local port for port-forward (default 5432)
+	KubePasswordFromSecret KubePasswordFromSecret // optional: read password or full URL from Secret (no pods/exec)
 	// Kubernetes: connect to Loki via port-forward when Loki is inside the cluster (optional)
 	KubeLoki           string // e.g. "monitoring/svc/loki" — same format as kube-postgres
 	KubeLokiLocalPort  int    // local port for Loki port-forward (default 3100)
@@ -94,6 +100,7 @@ type Config struct {
 	Interval                int    // seconds; 0 = run once
 	LogLevel                string // "info" (default) or "debug"; debug = verbose dry-run stats
 	DryRun                  bool
+	Strict                  bool   // exit 4 when notifier delivery fails for a threshold event
 	ForceNotification       bool   // send a test notification regardless of thresholds (to validate delivery/format)
 	NotifyOnConnectFailure  bool   // when Postgres connection fails, send an alert to notifiers (infrastructure alert)
 	DefaultThresholdPercent int    // when threshold-total/active are set, used for the one left at 0 (1-100, default 80)
@@ -120,11 +127,17 @@ type Config struct {
 	ConfirmAlert int // consecutive "bad" checks before sending alert (default 1)
 	ConfirmOk    int // consecutive "ok" checks before resolution notification (default 1)
 
-	// HTTP: metrics and health endpoint for Kubernetes probes. Optional.
-	HTTPListen      string // e.g. ":8080"; empty = disabled
-	HTTPBasePath    string // e.g. "/api/pgwd/v1"; paths relative to this
-	HTTPHealthPath  string // e.g. "/healthz" → base_path + health_path
-	HTTPMetricsPath string // e.g. "/metrics" → base_path + metrics_path
+	LoadedLegacyDBConfig     bool   // set when YAML used deprecated top-level db: (not databases:)
+	LoadedFromFile           bool   // set when config was loaded from YAML file
+	EnableCollector          bool   // opt-in anonymous daemon telemetry (default false)
+	EnableUpdateCheck        bool   // opt-out GitHub release check (default true when unset)
+	HTTPListen               string // e.g. ":8080"; empty = disabled
+	HTTPBasePath             string // e.g. "/api/pgwd/v1"; paths relative to this
+	HTTPHealthPath           string // e.g. "/healthz" → base_path + health_path
+	HTTPMetricsPath          string // e.g. "/metrics" → base_path + metrics_path
+	HTTPMetricsToken         string // optional; when set, /metrics requires Bearer token or ?token=
+	HTTPMetricsBasicUser     string // optional basic auth user for /metrics only
+	HTTPMetricsBasicPassword string // optional basic auth password for /metrics only
 }
 
 // ConfigPath returns the config file path: -config flag, PGWD_CONFIG, or DefaultConfigPath.
@@ -217,6 +230,10 @@ func applyEnvSqliteAndHTTP(cfg *Config) {
 	if v := envInt("CONFIRM_OK", -1); v >= 0 {
 		cfg.ConfirmOk = v
 	}
+	applyEnvHTTP(cfg)
+}
+
+func applyEnvHTTP(cfg *Config) {
 	if v := env("HTTP_LISTEN", ""); v != "" {
 		cfg.HTTPListen = v
 		// Apply defaults for paths when only HTTP_LISTEN is set
@@ -238,6 +255,15 @@ func applyEnvSqliteAndHTTP(cfg *Config) {
 	}
 	if v := env("HTTP_METRICS_PATH", ""); v != "" {
 		cfg.HTTPMetricsPath = v
+	}
+	if v := env("HTTP_METRICS_TOKEN", ""); v != "" {
+		cfg.HTTPMetricsToken = v
+	}
+	if v := env("HTTP_METRICS_BASIC_USER", ""); v != "" {
+		cfg.HTTPMetricsBasicUser = v
+	}
+	if v := env("HTTP_METRICS_BASIC_PASSWORD", ""); v != "" {
+		cfg.HTTPMetricsBasicPassword = v
 	}
 }
 
@@ -274,12 +300,6 @@ func applyEnvKube(cfg *Config) {
 	}
 	if v := envInt("KUBE_LOCAL_PORT", -1); v >= 0 {
 		cfg.KubeLocalPort = v
-	}
-	if v := env("KUBE_PASSWORD_VAR", ""); v != "" {
-		cfg.KubePasswordVar = v
-	}
-	if v := env("KUBE_PASSWORD_CONTAINER", ""); v != "" {
-		cfg.KubePasswordContainer = v
 	}
 	if v := env("KUBE_LOKI", ""); v != "" {
 		cfg.KubeLoki = v
@@ -342,6 +362,9 @@ func applyEnvBehaviour(cfg *Config) {
 	if _, ok := os.LookupEnv("PGWD_DRY_RUN"); ok {
 		cfg.DryRun = envBool("DRY_RUN", false)
 	}
+	if _, ok := os.LookupEnv("PGWD_STRICT"); ok {
+		cfg.Strict = envBool("STRICT", false)
+	}
 	if _, ok := os.LookupEnv("PGWD_FORCE_NOTIFICATION"); ok {
 		cfg.ForceNotification = envBool("FORCE_NOTIFICATION", false)
 	}
@@ -353,6 +376,12 @@ func applyEnvBehaviour(cfg *Config) {
 	}
 	if _, ok := os.LookupEnv("PGWD_VALIDATE_K8S_ACCESS"); ok {
 		cfg.ValidateK8sAccess = envBool("VALIDATE_K8S_ACCESS", false)
+	}
+	if _, ok := os.LookupEnv("PGWD_ENABLE_COLLECTOR"); ok {
+		cfg.EnableCollector = envBool("ENABLE_COLLECTOR", false)
+	}
+	if _, ok := os.LookupEnv("PGWD_ENABLE_UPDATE_CHECK"); ok {
+		cfg.EnableUpdateCheck = envBool("ENABLE_UPDATE_CHECK", true)
 	}
 	if v := env("LOG_LEVEL", ""); v != "" {
 		cfg.LogLevel = v
@@ -369,8 +398,6 @@ func FromEnv() Config {
 		KubePostgres:             env("KUBE_POSTGRES", ""),
 		KubeContext:              env("KUBE_CONTEXT", ""),
 		KubeLocalPort:            envInt("KUBE_LOCAL_PORT", 5432),
-		KubePasswordVar:          env("KUBE_PASSWORD_VAR", "POSTGRES_PASSWORD"),
-		KubePasswordContainer:    env("KUBE_PASSWORD_CONTAINER", ""),
 		KubeLoki:                 env("KUBE_LOKI", ""),
 		KubeLokiLocalPort:        envInt("KUBE_LOKI_LOCAL_PORT", 3100),
 		KubeLokiRemotePort:       envInt("KUBE_LOKI_REMOTE_PORT", 3100),

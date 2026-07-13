@@ -1,0 +1,23 @@
+# Outside Kubernetes: port-forward to Postgres + password from Secret (read-only API).
+# RBAC sample: contrib/k8s/rbac-outside-cluster.yaml
+# Alternative: contrib/k8s/pgwd-kube-run.sh (kubectl reads Secret, no pgwd secrets get).
+client: "CHANGE_ME"
+interval: 60
+dry_run: false
+
+kube:
+  postgres: default/svc/postgres
+  local_port: 5432
+  password_from_secret:
+    namespace: default
+    name: postgres-credentials
+    key: password
+
+db:
+  url: postgres://postgres@127.0.0.1:5432/mydb?sslmode=disable
+  threshold:
+    levels: "75,85,95"
+
+notifications:
+  slack:
+    webhook: "https://hooks.slack.com/services/CHANGE_ME"
