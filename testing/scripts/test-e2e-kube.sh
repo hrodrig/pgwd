@@ -60,26 +60,31 @@ make build
 echo "Running pgwd -validate-k8s-access..."
 ./pgwd -validate-k8s-access
 
-echo "Running pgwd -kube-postgres with -dry-run (DISCOVER_MY_PASSWORD)..."
-# SPDY exec for password discovery can be flaky on freshly-created Kind clusters;
-# retry up to 3 times with a short pause between attempts.
-DISCOVER_OK=0
-for attempt in 1 2 3; do
-  if ./pgwd -client pgwd-e2e-test \
-    -kube-postgres pgwd-e2e/svc/postgres \
-    -kube-local-port 15432 \
-    -db-url 'postgres://pgwd:DISCOVER_MY_PASSWORD@localhost:15432/pgwd?sslmode=disable' \
-    -dry-run; then
-    DISCOVER_OK=1
-    break
-  fi
-  echo "  password discovery attempt $attempt/3 failed, retrying in 3s..."
-  sleep 3
-done
-if [ "$DISCOVER_OK" -ne 1 ]; then
-  echo "ERROR: DISCOVER_MY_PASSWORD dry-run failed after 3 attempts"
-  exit 1
-fi
+echo "Running pgwd -kube-postgres with -dry-run (inline password)..."
+./pgwd -client pgwd-e2e-test \
+  -kube-postgres pgwd-e2e/svc/postgres \
+  -kube-local-port 15432 \
+  -db-url 'postgres://pgwd:pgwd@localhost:15432/pgwd?sslmode=disable' \
+  -dry-run
+
+echo "Running pgwd -kube-postgres with kube.password_from_secret..."
+SECRET_CONF=$(mktemp)
+cat > "$SECRET_CONF" << 'SECRETCONF'
+client: pgwd-e2e-secret
+interval: 0
+dry_run: true
+kube:
+  postgres: pgwd-e2e/svc/postgres
+  local_port: 15432
+  password_from_secret:
+    namespace: pgwd-e2e
+    name: postgres-credentials
+    key: password
+db:
+  url: "postgres://pgwd@localhost:15432/pgwd?sslmode=disable"
+SECRETCONF
+./pgwd -config "$SECRET_CONF"
+rm -f "$SECRET_CONF"
 
 echo "Running pgwd multi-database (databases: 3 Postgres via port-forward)..."
 kubectl port-forward -n pgwd-e2e svc/postgres 15432:5432 &

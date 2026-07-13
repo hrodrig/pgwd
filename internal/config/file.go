@@ -58,14 +58,17 @@ type fileConfig struct {
 		MetricsPath string `yaml:"metrics_path"`
 	} `yaml:"http"`
 	Kube struct {
-		Context           string `yaml:"context"`
-		LocalPort         int    `yaml:"local_port"`
-		Loki              string `yaml:"loki"`
-		LokiLocalPort     int    `yaml:"loki_local_port"`
-		LokiRemotePort    int    `yaml:"loki_remote_port"`
-		PasswordContainer string `yaml:"password_container"`
-		PasswordVar       string `yaml:"password_var"`
-		Postgres          string `yaml:"postgres"`
+		Context            string `yaml:"context"`
+		LocalPort          int    `yaml:"local_port"`
+		Loki               string `yaml:"loki"`
+		LokiLocalPort      int    `yaml:"loki_local_port"`
+		LokiRemotePort     int    `yaml:"loki_remote_port"`
+		PasswordFromSecret struct {
+			Namespace string `yaml:"namespace"`
+			Name      string `yaml:"name"`
+			Key       string `yaml:"key"`
+		} `yaml:"password_from_secret"`
+		Postgres string `yaml:"postgres"`
 	} `yaml:"kube"`
 	Notifications struct {
 		Loki struct {
@@ -130,20 +133,23 @@ func FromFile(path string) (Config, bool, error) {
 
 func fileConfigToConfig(fc fileConfig) Config {
 	c := Config{
-		DBURL:                    fc.DB.URL,
-		Client:                   fc.Client,
-		DefaultThresholdPercent:  fc.DB.DefaultThresholdPercent,
-		DryRun:                   fc.DryRun,
-		LogLevel:                 fc.LogLevel,
-		Interval:                 fc.Interval,
-		KubePostgres:             fc.Kube.Postgres,
-		KubeContext:              fc.Kube.Context,
-		KubeLocalPort:            fc.Kube.LocalPort,
-		KubeLoki:                 fc.Kube.Loki,
-		KubeLokiLocalPort:        fc.Kube.LokiLocalPort,
-		KubeLokiRemotePort:       fc.Kube.LokiRemotePort,
-		KubePasswordContainer:    fc.Kube.PasswordContainer,
-		KubePasswordVar:          fc.Kube.PasswordVar,
+		DBURL:                   fc.DB.URL,
+		Client:                  fc.Client,
+		DefaultThresholdPercent: fc.DB.DefaultThresholdPercent,
+		DryRun:                  fc.DryRun,
+		LogLevel:                fc.LogLevel,
+		Interval:                fc.Interval,
+		KubePostgres:            fc.Kube.Postgres,
+		KubeContext:             fc.Kube.Context,
+		KubeLocalPort:           fc.Kube.LocalPort,
+		KubeLoki:                fc.Kube.Loki,
+		KubeLokiLocalPort:       fc.Kube.LokiLocalPort,
+		KubeLokiRemotePort:      fc.Kube.LokiRemotePort,
+		KubePasswordFromSecret: KubePasswordFromSecret{
+			Namespace: fc.Kube.PasswordFromSecret.Namespace,
+			Name:      fc.Kube.PasswordFromSecret.Name,
+			Key:       fc.Kube.PasswordFromSecret.Key,
+		},
 		LokiURL:                  fc.Notifications.Loki.URL,
 		LokiLabels:               fc.Notifications.Loki.Labels,
 		LokiOrgID:                fc.Notifications.Loki.OrgID,
@@ -274,8 +280,8 @@ func ApplyDefaults(c *Config) {
 }
 
 func applyKubeDefaults(c *Config) {
-	if c.KubePasswordVar == "" {
-		c.KubePasswordVar = "POSTGRES_PASSWORD"
+	if c.KubePasswordFromSecret.Key == "" && c.KubePasswordFromSecret.Name != "" {
+		c.KubePasswordFromSecret.Key = "password"
 	}
 	if c.KubeLocalPort == 0 {
 		c.KubeLocalPort = 5432

@@ -27,6 +27,13 @@ type DatabaseTarget struct {
 	LongQueryMinCount        int
 }
 
+// KubePasswordFromSecret loads the DB password or full DSN from a Kubernetes Secret (read-only API; no pods/exec).
+type KubePasswordFromSecret struct {
+	Namespace string
+	Name      string
+	Key       string // default "password"; use "url" for a full postgres:// DSN in the Secret
+}
+
 // Config holds all pgwd settings from CLI and env (PGWD_*).
 type Config struct {
 	// Database (single-DB mode; used when Databases is empty)
@@ -35,11 +42,10 @@ type Config struct {
 	Databases []DatabaseTarget
 
 	// Kubernetes: connect to Postgres via port-forward (client-go, optional)
-	KubePostgres          string // e.g. "default/svc/postgres" or "default/pod/postgres-0"
-	KubeContext           string // kubeconfig context to use (empty = current context)
-	KubeLocalPort         int    // local port for port-forward (default 5432)
-	KubePasswordVar       string // pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD)
-	KubePasswordContainer string // container name in pod if not default
+	KubePostgres           string                 // e.g. "default/svc/postgres" or "default/pod/postgres-0"
+	KubeContext            string                 // kubeconfig context to use (empty = current context)
+	KubeLocalPort          int                    // local port for port-forward (default 5432)
+	KubePasswordFromSecret KubePasswordFromSecret // optional: read password or full URL from Secret (no pods/exec)
 	// Kubernetes: connect to Loki via port-forward when Loki is inside the cluster (optional)
 	KubeLoki           string // e.g. "monitoring/svc/loki" — same format as kube-postgres
 	KubeLokiLocalPort  int    // local port for Loki port-forward (default 3100)
@@ -275,12 +281,6 @@ func applyEnvKube(cfg *Config) {
 	if v := envInt("KUBE_LOCAL_PORT", -1); v >= 0 {
 		cfg.KubeLocalPort = v
 	}
-	if v := env("KUBE_PASSWORD_VAR", ""); v != "" {
-		cfg.KubePasswordVar = v
-	}
-	if v := env("KUBE_PASSWORD_CONTAINER", ""); v != "" {
-		cfg.KubePasswordContainer = v
-	}
 	if v := env("KUBE_LOKI", ""); v != "" {
 		cfg.KubeLoki = v
 	}
@@ -369,8 +369,6 @@ func FromEnv() Config {
 		KubePostgres:             env("KUBE_POSTGRES", ""),
 		KubeContext:              env("KUBE_CONTEXT", ""),
 		KubeLocalPort:            envInt("KUBE_LOCAL_PORT", 5432),
-		KubePasswordVar:          env("KUBE_PASSWORD_VAR", "POSTGRES_PASSWORD"),
-		KubePasswordContainer:    env("KUBE_PASSWORD_CONTAINER", ""),
 		KubeLoki:                 env("KUBE_LOKI", ""),
 		KubeLokiLocalPort:        envInt("KUBE_LOKI_LOCAL_PORT", 3100),
 		KubeLokiRemotePort:       envInt("KUBE_LOKI_REMOTE_PORT", 3100),

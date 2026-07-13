@@ -8,6 +8,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ### Security
 
+- **Kubernetes:** removed **`DISCOVER_MY_PASSWORD`** / `pods/exec` password discovery. Use Secret-backed DSN, **`contrib/k8s/pgwd-kube-run.sh`**, or **`kube.password_from_secret`** — [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md). Sample RBAC: **`contrib/k8s/rbac-outside-cluster.yaml`**.
+
+### Changed
+
 - **Go 1.26.5** — stdlib fixes **CVE-2026-39822** (`os` Root symlink escape) and **CVE-2026-42505** (`crypto/tls` ECH privacy leak). Rebuild binaries and images; relevant for HTTPS notifiers and TLS Postgres URLs.
 
 ### Changed

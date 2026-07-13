@@ -240,8 +240,6 @@ func TestApplyEnv_Kube(t *testing.T) {
 	t.Setenv("PGWD_KUBE_POSTGRES", "ns/svc/pg")
 	t.Setenv("PGWD_KUBE_CONTEXT", "staging")
 	t.Setenv("PGWD_KUBE_LOCAL_PORT", "6543")
-	t.Setenv("PGWD_KUBE_PASSWORD_VAR", "MY_PW")
-	t.Setenv("PGWD_KUBE_PASSWORD_CONTAINER", "pgcontainer")
 	t.Setenv("PGWD_KUBE_LOKI", "monitoring/svc/loki")
 	t.Setenv("PGWD_KUBE_LOKI_LOCAL_PORT", "3200")
 	t.Setenv("PGWD_KUBE_LOKI_REMOTE_PORT", "3201")
@@ -257,12 +255,6 @@ func TestApplyEnv_Kube(t *testing.T) {
 	}
 	if cfg.KubeLocalPort != 6543 {
 		t.Errorf("KubeLocalPort: got %d", cfg.KubeLocalPort)
-	}
-	if cfg.KubePasswordVar != "MY_PW" {
-		t.Errorf("KubePasswordVar: got %q", cfg.KubePasswordVar)
-	}
-	if cfg.KubePasswordContainer != "pgcontainer" {
-		t.Errorf("KubePasswordContainer: got %q", cfg.KubePasswordContainer)
 	}
 	if cfg.KubeLoki != "monitoring/svc/loki" {
 		t.Errorf("KubeLoki: got %q", cfg.KubeLoki)
@@ -535,7 +527,6 @@ func TestApplyDefaults_ZeroValue(t *testing.T) {
 		got  interface{}
 		want interface{}
 	}{
-		{"KubePasswordVar", cfg.KubePasswordVar, "POSTGRES_PASSWORD"},
 		{"KubeLocalPort", cfg.KubeLocalPort, 5432},
 		{"KubeLokiLocalPort", cfg.KubeLokiLocalPort, 3100},
 		{"KubeLokiRemotePort", cfg.KubeLokiRemotePort, 3100},
@@ -554,7 +545,7 @@ func TestApplyDefaults_ZeroValue(t *testing.T) {
 
 func TestApplyDefaults_PreservesNonZero(t *testing.T) {
 	cfg := Config{
-		KubePasswordVar:         "CUSTOM_VAR",
+		KubePasswordFromSecret:  KubePasswordFromSecret{Name: "pg-secret"},
 		KubeLocalPort:           9999,
 		KubeLokiLocalPort:       4000,
 		KubeLokiRemotePort:      4001,
@@ -566,8 +557,8 @@ func TestApplyDefaults_PreservesNonZero(t *testing.T) {
 	}
 	ApplyDefaults(&cfg)
 
-	if cfg.KubePasswordVar != "CUSTOM_VAR" {
-		t.Errorf("KubePasswordVar should be preserved: got %q", cfg.KubePasswordVar)
+	if cfg.KubePasswordFromSecret.Key != "password" {
+		t.Errorf("KubePasswordFromSecret.Key default: got %q", cfg.KubePasswordFromSecret.Key)
 	}
 	if cfg.KubeLocalPort != 9999 {
 		t.Errorf("KubeLocalPort should be preserved: got %d", cfg.KubeLocalPort)

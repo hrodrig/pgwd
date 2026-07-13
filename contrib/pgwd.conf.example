@@ -141,8 +141,11 @@ kube:
   loki: ""
   loki_local_port: 3100
   loki_remote_port: 3100
-  password_container: ""   # deprecated with DISCOVER_MY_PASSWORD (removed 0.9.x)
-  password_var: POSTGRES_PASSWORD   # deprecated with DISCOVER_MY_PASSWORD (removed 0.9.x)
+  # Outside cluster: read password or full DSN from Secret (no pods/exec). See docs/kubernetes-passwords.md
+  password_from_secret:
+    namespace: ""
+    name: ""
+    key: password   # or "url" for a full postgres:// DSN in the Secret
   postgres: ""
 
 # -----------------------------------------------------------------------------

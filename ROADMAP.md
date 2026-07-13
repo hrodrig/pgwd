@@ -1,6 +1,6 @@
 # pgwd roadmap
 
-**Current release:** [v0.8.0](VERSION) (on `develop`; tag on `main` pending) · **Branch:** `develop` · **Target:** [v1.0.0](docs/plan-1.0.x.md) stable API (early–mid July 2026)
+**Current release:** [v0.8.0](VERSION) (tagged on `main`) · **Branch:** `develop` · **Target:** [v1.0.0](docs/plan-1.0.x.md) stable API (early–mid July 2026)
 
 **Status (2026-07-11):** **v0.8.0** ready on `develop` (supply chain + audit docs). **Active band: 0.9.x 📋 next** (pre-1.0 polish). Calendar below is aspirational — adjust if bands slip.
 
@@ -29,7 +29,7 @@ flowchart LR
 | **0.6.x** | ✅ Shipped | Jun 2026 | Metrics store, multi-DB, HTTP `/metrics`, CSV export, security patches | [CHANGELOG](CHANGELOG.md) |
 | **0.7.x** | ✅ Ready (v0.7.0) | Jul 2026 | PagerDuty, Teams, generic webhook + JWT/HMAC, shared HTTP retry | [plan-0.7.x.md](docs/plan-0.7.x.md) · [CHANGELOG](CHANGELOG.md#070---2026-07-03) |
 | **0.8.0** | ✅ Ready (v0.8.0) | Jul 2026 | Syft SBOM + Cosign keyless signing (GHCR + release artifacts) | [plan-0.8.x.md](docs/plan-0.8.x.md) · [CHANGELOG](CHANGELOG.md#080---2026-07-11) |
-| **0.9.x** | 📋 Planned | Jul 2026 | Pre-1.0 polish, **remove `DISCOVER_MY_PASSWORD`**, profiles, `--strict`, SPEC audit | [plan-0.9.x.md](docs/plan-0.9.x.md) |
+| **0.9.x** | 📋 **Active** | Jul 2026 | Pre-1.0 polish, **remove `DISCOVER_MY_PASSWORD`**, profiles, `--strict`, SPEC audit | [plan-0.9.x.md](docs/plan-0.9.x.md) |
 | **1.0.0** | 📋 Planned | Early–mid Jul 2026 | Breaking stable API, deprecations removed | [plan-1.0.x.md](docs/plan-1.0.x.md) |
 
 **Suggested calendar** (from band plans — **slip OK**; 0.7.x started 2026-07-02):

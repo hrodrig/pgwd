@@ -129,8 +129,6 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.IntVar(&cfg.KubeLocalPort, "kube-local-port", cfg.KubeLocalPort, "Local port for kube port-forward (default 5432) (PGWD_KUBE_LOCAL_PORT)")
 	flag.IntVar(&cfg.KubeLokiLocalPort, "kube-loki-local-port", cfg.KubeLokiLocalPort, "Local port for Loki port-forward (default 3100) (PGWD_KUBE_LOKI_LOCAL_PORT)")
 	flag.IntVar(&cfg.KubeLokiRemotePort, "kube-loki-remote-port", cfg.KubeLokiRemotePort, "Remote port on the Loki service (default 3100) (PGWD_KUBE_LOKI_REMOTE_PORT)")
-	flag.StringVar(&cfg.KubePasswordVar, "kube-password-var", cfg.KubePasswordVar, "Pod env var for password when URL has DISCOVER_MY_PASSWORD (default POSTGRES_PASSWORD) (PGWD_KUBE_PASSWORD_VAR)")
-	flag.StringVar(&cfg.KubePasswordContainer, "kube-password-container", cfg.KubePasswordContainer, "Container name in pod for password discovery (PGWD_KUBE_PASSWORD_CONTAINER)")
 	flag.StringVar(&cfg.Client, "client", cfg.Client, "Client name for this monitor instance — REQUIRED (PGWD_CLIENT); identifies which monitor sent the alert")
 	flag.BoolVar(&cfg.NotifyOnConnectFailure, "notify-on-connect-failure", cfg.NotifyOnConnectFailure, "Send an alert to notifiers when Postgres connection fails (infrastructure alert) (PGWD_NOTIFY_ON_CONNECT_FAILURE)")
 	flag.IntVar(&cfg.TestMaxConnections, "test-max-connections", cfg.TestMaxConnections, "Override server max_connections for defaults and display (for testing alerts; 0 = use server) (PGWD_TEST_MAX_CONNECTIONS)")
@@ -182,9 +180,10 @@ func exportMetricsAndExit(cfg *config.Config) {
 
 // setupKube configures Kubernetes access when -kube-postgres is set. If KubePostgres
 // is empty, it returns a no-op cleanup and leaves cfg unchanged. Otherwise it
-// optionally discovers the DB password from the pod when -db-url uses DISCOVER_MY_PASSWORD
-// (deprecated, removed 0.9.x), rewrites cfg.DBURL to localhost, and starts client-go
-// port-forward. Returns a cleanup that stops the forward; defer it from main.
+// optionally loads the DB password from a Secret (kube.password_from_secret),
+// rejects the removed DISCOVER_MY_PASSWORD placeholder, rewrites cfg.DBURL to
+// localhost, and starts client-go port-forward. Returns a cleanup that stops the
+// forward; defer it from main.
 func setupKube(ctx context.Context, cfg *config.Config) (cleanup func()) {
 	if cfg.KubePostgres == "" {
 		return func() {}
@@ -199,20 +198,17 @@ func setupKube(ctx context.Context, cfg *config.Config) (cleanup func()) {
 	if cfg.KubeLocalPort < 1 || cfg.KubeLocalPort > 65535 {
 		log.Fatal("kube-local-port must be between 1 and 65535")
 	}
-	password := ""
-	if kube.URLContainsDiscoverPassword(cfg.DBURL) {
-		podName, err := kube.ResolvePod(ctx, cfg.KubeContext, namespace, resource)
-		if err != nil {
-			log.Fatalf("kube resolve pod: %v", err)
-		}
-		password, err = kube.GetPasswordFromPod(ctx, cfg.KubeContext, namespace, podName, cfg.KubePasswordContainer, cfg.KubePasswordVar)
-		if err != nil {
-			log.Fatal("kube: could not get password from pod (check namespace, pod name, container, and env var)")
-		}
+	secret := kube.PasswordFromSecret{
+		Namespace: cfg.KubePasswordFromSecret.Namespace,
+		Name:      cfg.KubePasswordFromSecret.Name,
+		Key:       cfg.KubePasswordFromSecret.Key,
 	}
-	finalURL, err := kube.ReplaceDBURLForKube(cfg.DBURL, password, cfg.KubeLocalPort)
+	if secret.Namespace == "" && secret.Name != "" {
+		secret.Namespace = namespace
+	}
+	finalURL, err := kube.ResolveKubeDBURL(ctx, cfg.KubeContext, cfg.DBURL, secret, cfg.KubeLocalPort)
 	if err != nil {
-		log.Fatal("kube: failed to build DB URL (check -db-url format)")
+		log.Fatalf("kube-postgres: %v", err)
 	}
 	cfg.DBURL = finalURL
 	cleanup, err = kube.StartPortForward(ctx, cfg.KubeContext, namespace, resource, cfg.KubeLocalPort)
