@@ -15,6 +15,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ### Changed
 
+- **Config profiles:** ready-to-use YAML under **`contrib/profiles/`** (minimal-slack, daemon-loki, kube-prod, multi-db).
+- **Deprecation runway:** stronger stderr warnings for legacy **`db:`** and ignored **`-notify-on-connect-failure`** (always-on when notifiers exist; removal in v1.0).
+- **`-strict`:** optional exit **4** when notifier delivery fails for a threshold event (cron/CI gate); default unchanged.
+
 - **Docker runtime:** **`Dockerfile`** and **`Dockerfile.release`** use **`gcr.io/distroless/static-debian13:nonroot`** instead of Alpine 3.24.1 (same pattern as [groot](https://github.com/hrodrig/groot) / [kzero](https://github.com/hrodrig/kzero)). Static binary + bundled CA certs; no BusyBox/apk OS packages. Entrypoint path **`/home/pgwd/pgwd`** unchanged for Compose/Helm compatibility.
 
 ## [0.8.0] - 2026-07-11

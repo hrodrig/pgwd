@@ -120,7 +120,7 @@ func TestValidateNotifiers(t *testing.T) {
 		{"has pagerduty", &config.Config{PagerDutyRoutingKey: "rk"}, false, ""},
 		{"no notifier no dry-run", &config.Config{}, true, "no notifier"},
 		{"force-notification no notifier", &config.Config{ForceNotification: true, DryRun: true}, true, "force-notification requires"},
-		{"notify-on-connect-failure no notifier", &config.Config{NotifyOnConnectFailure: true, DryRun: true}, true, "notify-on-connect-failure requires"},
+		{"notify-on-connect-failure no notifier", &config.Config{NotifyOnConnectFailure: true, DryRun: true}, false, ""},
 		{"pagerduty enabled missing key", &config.Config{PagerDutyEnabled: true, DryRun: true}, true, "routing_key is required"},
 		{"teams enabled missing webhook", &config.Config{TeamsEnabled: true, DryRun: true}, true, "webhook_url is required"},
 		{"generic enabled missing url", &config.Config{GenericEnabled: true, DryRun: true}, true, "webhook_url is required"},

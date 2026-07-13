@@ -100,6 +100,7 @@ type Config struct {
 	Interval                int    // seconds; 0 = run once
 	LogLevel                string // "info" (default) or "debug"; debug = verbose dry-run stats
 	DryRun                  bool
+	Strict                  bool   // exit 4 when notifier delivery fails for a threshold event
 	ForceNotification       bool   // send a test notification regardless of thresholds (to validate delivery/format)
 	NotifyOnConnectFailure  bool   // when Postgres connection fails, send an alert to notifiers (infrastructure alert)
 	DefaultThresholdPercent int    // when threshold-total/active are set, used for the one left at 0 (1-100, default 80)
@@ -126,7 +127,7 @@ type Config struct {
 	ConfirmAlert int // consecutive "bad" checks before sending alert (default 1)
 	ConfirmOk    int // consecutive "ok" checks before resolution notification (default 1)
 
-	// HTTP: metrics and health endpoint for Kubernetes probes. Optional.
+	LoadedLegacyDBConfig     bool   // set when YAML used deprecated top-level db: (not databases:)
 	HTTPListen               string // e.g. ":8080"; empty = disabled
 	HTTPBasePath             string // e.g. "/api/pgwd/v1"; paths relative to this
 	HTTPHealthPath           string // e.g. "/healthz" → base_path + health_path
@@ -357,6 +358,9 @@ func applyEnvBehaviour(cfg *Config) {
 	}
 	if _, ok := os.LookupEnv("PGWD_DRY_RUN"); ok {
 		cfg.DryRun = envBool("DRY_RUN", false)
+	}
+	if _, ok := os.LookupEnv("PGWD_STRICT"); ok {
+		cfg.Strict = envBool("STRICT", false)
 	}
 	if _, ok := os.LookupEnv("PGWD_FORCE_NOTIFICATION"); ok {
 		cfg.ForceNotification = envBool("FORCE_NOTIFICATION", false)

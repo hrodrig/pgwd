@@ -25,7 +25,7 @@ func Validate(cfg *config.Config) error {
 	if err := ValidateClient(cfg); err != nil {
 		return err
 	}
-	WarnDeprecatedThresholds(cfg)
+	WarnDeprecationStartup(cfg)
 	if err := ValidateStale(cfg); err != nil {
 		return err
 	}
@@ -48,6 +48,17 @@ func Validate(cfg *config.Config) error {
 		return err
 	}
 	return nil
+}
+
+// WarnDeprecationStartup prints stderr warnings for deprecated config surfaces.
+func WarnDeprecationStartup(cfg *config.Config) {
+	WarnDeprecatedThresholds(cfg)
+	if cfg.LoadedLegacyDBConfig {
+		fmt.Fprintln(os.Stderr, "pgwd: migrate legacy 'db:' to 'databases:' with one entry before v1.0 — see contrib/profiles/ and contrib/pgwd.conf.example")
+	}
+	if cfg.NotifyOnConnectFailure {
+		fmt.Fprintln(os.Stderr, "pgwd: -notify-on-connect-failure is ignored; connect failure notifications are always enabled when notifiers are configured (removal in v1.0)")
+	}
 }
 
 // WarnDeprecatedThresholds prints a deprecation warning when legacy thresholds are used.
@@ -116,9 +127,6 @@ func ValidateNotifiers(cfg *config.Config) error {
 	}
 	if cfg.ForceNotification && !cfg.HasAnyNotifier() {
 		return fmt.Errorf("pgwd: force-notification requires at least one notifier")
-	}
-	if cfg.NotifyOnConnectFailure && !cfg.HasAnyNotifier() {
-		return fmt.Errorf("pgwd: notify-on-connect-failure requires at least one notifier")
 	}
 	return nil
 }

@@ -37,6 +37,7 @@ type fileConfig struct {
 	DryRun                 bool           `yaml:"dry_run"`
 	LogLevel               string         `yaml:"log_level"`
 	Interval               int            `yaml:"interval"`
+	Strict                 bool           `yaml:"strict"`
 	NotifyOnConnectFailure bool           `yaml:"notify_on_connect_failure"`
 	Databases              []fileConfigDB `yaml:"databases"`
 	DB                     fileConfigDB   `yaml:"db"`
@@ -142,6 +143,7 @@ func fileConfigToConfig(fc fileConfig) Config {
 		DryRun:                  fc.DryRun,
 		LogLevel:                fc.LogLevel,
 		Interval:                fc.Interval,
+		Strict:                  fc.Strict,
 		KubePostgres:            fc.Kube.Postgres,
 		KubeContext:             fc.Kube.Context,
 		KubeLocalPort:           fc.Kube.LocalPort,
@@ -209,6 +211,7 @@ func fileConfigToConfig(fc fileConfig) Config {
 			c.Databases = append(c.Databases, t)
 		}
 	} else if fc.DB.URL != "" {
+		c.LoadedLegacyDBConfig = true
 		log.Printf("pgwd: config key 'db' is deprecated; use 'databases: [{ url: ... }]' instead. Support will be removed in v1.0.")
 		t := mergeDBTarget(fc.Client, fc.DB, fc.DB)
 		c.Databases = []DatabaseTarget{t}

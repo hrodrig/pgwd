@@ -27,6 +27,9 @@ import (
 	"github.com/hrodrig/pgwd/internal/validator"
 )
 
+// ExitStrictNotify is returned when -strict is set and notifier delivery failed.
+const ExitStrictNotify = 4
+
 func init() {
 	run.SetKubeHelpers(kube.ClusterName, kube.ParseKubePostgres)
 }
@@ -120,6 +123,7 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	retryMaxBackoff := flag.String("notifications-retry-max-backoff", "", "Notifier HTTP retry max backoff, e.g. 10s (PGWD_NOTIFICATIONS_RETRY_MAX_BACKOFF; default 10s)")
 	flag.IntVar(&cfg.Interval, "interval", cfg.Interval, "Run every N seconds; 0 = run once (PGWD_INTERVAL)")
 	flag.BoolVar(&cfg.DryRun, "dry-run", cfg.DryRun, "Only print, do not send notifications (PGWD_DRY_RUN)")
+	flag.BoolVar(&cfg.Strict, "strict", cfg.Strict, "Exit 4 when notifier delivery fails for a threshold event (PGWD_STRICT)")
 	flag.BoolVar(&cfg.ForceNotification, "force-notification", cfg.ForceNotification, "Always send a test notification to validate delivery/format (PGWD_FORCE_NOTIFICATION)")
 	flag.IntVar(&cfg.DefaultThresholdPercent, "db-default-threshold-percent", cfg.DefaultThresholdPercent, "When one of total/active is 0, set it to this % of max_connections (1-100, default 80) (PGWD_DB_DEFAULT_THRESHOLD_PERCENT)")
 	flag.StringVar(&cfg.ThresholdLevels, "db-threshold-levels", cfg.ThresholdLevels, "When both total and active are 0: comma-separated percentages for 3-tier alerts, e.g. 75,85,95 (attention/alert/danger). Only highest level fires. (PGWD_DB_THRESHOLD_LEVELS)")
@@ -439,6 +443,14 @@ func setupHTTPIfConfigured(cfg *config.Config, st store.MetricsStorer) func() {
 	}
 }
 
+// exitStrictIf exits with ExitStrictNotify when -strict is set and delivery failed.
+func exitStrictIf(cfg *config.Config, deliveryFailed bool) {
+	if cfg.Strict && deliveryFailed {
+		log.Printf("pgwd: strict mode: notifier delivery failed")
+		os.Exit(ExitStrictNotify)
+	}
+}
+
 // runOneTarget connects to one database target, applies threshold defaults, and
 // runs the first check. On connect or threshold errors it notifies (if configured)
 // and returns; single-target mode exits the process on connect failure.
@@ -448,7 +460,7 @@ func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Conf
 
 	pool, err := postgres.Pool(ctx, t.URL)
 	if err != nil {
-		run.NotifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err)
+		exitStrictIf(targetCfg, run.NotifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err))
 		if len(targets) == 1 {
 			log.Fatal("postgres connect failed (check database URL, connectivity, and credentials)")
 		}
@@ -458,12 +470,12 @@ func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Conf
 	defer pool.Close()
 
 	if err := run.ApplyThresholdDefaults(ctx, pool, targetCfg); err != nil {
-		run.NotifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err)
+		exitStrictIf(targetCfg, run.NotifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err))
 		log.Printf("threshold config error [%s]: %v", t.Client, err)
 		return
 	}
 	runFn := run.MakeRunFunc(ctx, pool, targetCfg, senders, st, runCluster, runClient, runNamespace, runDatabase)
-	runFn()
+	exitStrictIf(targetCfg, runFn())
 }
 
 // runTickerLoop repeats runOneTarget for every target every cfg.Interval seconds
