@@ -8,7 +8,7 @@ These tests validate that pgwd installs, runs as a daemon, sends notifications, 
 
 Kubernetes and container deployments are **not** in scope here — they are covered by:
 
-- `make test-e2e-kube` — Kind cluster with `pgwd -kube-postgres`, Loki verification (`DISCOVER_MY_PASSWORD` still used in e2e until 0.9.x migration).
+- `make test-e2e-kube` — Kind cluster with `pgwd -kube-postgres`, Loki verification (`kube.password_from_secret` + inline password).
 - `make docker-scan` — Container image security scan (Grype).
 
 | Test suite | What it validates |

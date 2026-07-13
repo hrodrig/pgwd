@@ -29,7 +29,7 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 
 **GitHub repo traffic (history beyond 14 days):** sibling tool **[gghstats](https://github.com/hrodrig/gghstats)** — [live stats for pgwd](https://gghstats.hermesrodriguez.com/hrodrig/pgwd) (clone badge above).
 
-**Documentation:** [ROADMAP.md](ROADMAP.md), [SPECIFICATIONS.md](SPECIFICATIONS.md) (behavior contract), [Kubernetes passwords / DISCOVER deprecation](docs/kubernetes-passwords.md), [docs/](docs/README.md) (band plans, sequence diagrams, upgrades), `man pgwd`. **Scanning:** [tools/README.md](tools/README.md).
+**Documentation:** [ROADMAP.md](ROADMAP.md), [Operator use cases](docs/use-cases.md), [SPECIFICATIONS.md](SPECIFICATIONS.md) (behavior contract), [Kubernetes passwords / DISCOVER migration](docs/kubernetes-passwords.md), [docs/](docs/README.md) (band plans, sequence diagrams, upgrades), `man pgwd`. **Scanning:** [tools/README.md](tools/README.md).
 
 ![Terminal demo](docs/demo.gif)
 
@@ -146,8 +146,11 @@ PGWD_CONFIG=/path/to/pgwd.conf pgwd
 
 ### Multi-database limitations
 
-- **`-kube-postgres` / `kube.postgres` and `databases:` are mutually exclusive.** Validation rejects that combination. Multi-DB mode expects **direct** Postgres URLs (e.g. in-cluster DNS, VPN, or plain TCP). To use port-forward from **outside** the cluster, use **single-DB** config (`db:` or one URL) with `-kube-postgres`, or run **one pgwd process per** forwarded instance.
+- **`-kube-postgres` / `kube.postgres` and `databases:` are mutually exclusive.** Validation rejects that combination. Multi-DB mode expects **direct** Postgres URLs (e.g. in-cluster DNS, VPN, or `localhost` after manual port-forward). For port-forward from **outside** the cluster, use **N port-forwards + one `databases:` config**, or **one pgwd process per** forwarded instance — see **[docs/use-cases.md](docs/use-cases.md)** (UC-5, UC-6, UC-7).
 - **Persisted history and hysteresis** (SQLite) are keyed by **`(client, cluster, database)`**. The **host from the URL is not part of that key**. If several targets share the same database name and the same **derived** client (`base client` + `-` + name from the URL path), they **collide** in the store and resolution/hysteresis will be wrong. Give each `databases:` entry a **unique `client`** when monitoring the same logical DB name on different hosts.
+- **Different credentials per database:** put the full DSN (user + password) in each `databases[].url`. pgwd does not read multiple K8s Secrets in one process — inject URLs at deploy (Helm/Kustomize) or use [kubernetes-passwords.md](docs/kubernetes-passwords.md) for single-DB kube patterns.
+
+**Operator guide (all scenarios):** **[docs/use-cases.md](docs/use-cases.md)**.
 
 **Ready-to-use profiles:** [`contrib/profiles/`](contrib/profiles/) — `minimal-slack`, `daemon-loki`, `kube-prod`, `multi-db`.
 
@@ -465,7 +468,7 @@ PATH=/usr/bin:/bin
 0 */2 * * * /bin/bash -l -c '~/bin/pgwd-heartbeat.sh >> ~/log/pgwd.log 2>&1'
 ```
 
-Adjust `KUBECONFIG`, webhook URL, namespace, service names, database names, and `PGWD` path to your environment. If a pod uses a different env var for the password, add **`-kube-password-var VARNAME`** (and **`-kube-password-container`** if the var is in another container). The `echo` lines in the check script make it easy to see which service produced an error in the log.
+Adjust `KUBECONFIG`, webhook URL, namespace, service names, database names, and `PGWD` path to your environment. For passwords, use `kubectl get secret` (as in the script) or **`kube.password_from_secret`** in a config file — see **[docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)** and **`contrib/k8s/pgwd-kube-run.sh`**. The `echo` lines in the check script make it easy to see which service produced an error in the log.
 
 [↑ Back to top](#top)
 
@@ -525,7 +528,7 @@ When pgwd runs on a host (VM, cron) and Postgres/Loki are inside the cluster, us
 **Format:** `-kube-postgres <namespace>/<type>/<name>` with `type` = `svc` or `pod`, e.g. `default/svc/postgres` or `default/pod/postgres-0`.
 
 - Set **`PGWD_DB_URL`** with host **`localhost`** and the same port as **`-kube-local-port`** (default 5432). Example: `postgres://user:pass@localhost:5432/mydb`.
-- **Password:** Prefer a Secret-backed URL in env or config. **`DISCOVER_MY_PASSWORD`** is **deprecated** (requires `pods/exec`; removed **0.9.x**) — full rationale and migration: **[docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)**.
+- **Password:** Use a Secret-backed URL, **`kube.password_from_secret`** in config, or **`contrib/k8s/pgwd-kube-run.sh`**. **`DISCOVER_MY_PASSWORD` removed in 0.9.x** — step-by-step migration: **[docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)** (profile: **`contrib/profiles/kube-prod.yml`**).
 - **Requires:** A valid kubeconfig (file or `KUBECONFIG` env). **When running from cron**, ensure `KUBECONFIG` is set or `~/.kube/config` exists and is readable.
 - **Multiple contexts:** Use **`-kube-context`** (or `PGWD_KUBE_CONTEXT`) to select context.
 - **Validate connectivity:** Use **`-validate-k8s-access`** to check cluster access before a real run.
@@ -778,6 +781,11 @@ cosign verify-blob \
 Local `make release` does not sign artifacts — use the tag-push CI workflow for signed releases.
 
 ## Testing
+
+```bash
+make test          # all packages
+make bench         # go test -bench=. ./internal/... (optional; CI non-blocking, not in release-check)
+```
 
 Unit tests for config (env, defaults, overrides) and notify (Loki label parsing):
 

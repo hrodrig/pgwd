@@ -1,14 +1,17 @@
-# Multi-database daemon. Set explicit client per entry when the same DB name exists on different hosts.
+# Multi-database daemon — UC-5 (in-cluster) or UC-6 (outside: use 127.0.0.1 + port-forward ports).
+# Each entry: full DSN with its own user/password. Unique client per entry when same DB name on different hosts.
+# Guide: docs/use-cases.md
+# Do NOT combine databases: with kube.postgres in one process (validation error in 0.9.x).
 client: "CHANGE_ME"
 interval: 60
 dry_run: false
 
 databases:
-  - url: postgres://USER:PASS@host1:5432/prod?sslmode=disable
+  - url: postgres://USER_A:PASS_A@host1:5432/prod?sslmode=disable
     client: "CHANGE_ME-prod"
     threshold:
       levels: "75,85,95"
-  - url: postgres://USER:PASS@host2:5432/analytics?sslmode=disable
+  - url: postgres://USER_B:PASS_B@host2:5432/analytics?sslmode=disable
     client: "CHANGE_ME-analytics"
     threshold:
       levels: "80,90,98"

@@ -196,8 +196,14 @@ pgwd \-client my-monitor \-db-url "postgres://..." \-notifications-loki-url "htt
      \-interval 60
 .RE
 .TP
-Postgres and Loki in Kubernetes (cluster from kubeconfig; use Secret-backed password in URL — DISCOVER_MY_PASSWORD deprecated, removed 0.9.x):
+Postgres in Kubernetes from outside the cluster (port-forward; password from Secret — see docs/kubernetes-passwords.md):
 .RS
+# Config file with kube.password_from_secret (recommended) — contrib/profiles/kube-prod.yml
+pgwd \-config /etc/pgwd/pgwd.conf \-client my-monitor \e
+     \-notifications-slack-webhook "https://..."
+.RE
+.RS
+# Or inline URL after reading Secret with kubectl
 pgwd \-client my-monitor \-kube-postgres default/svc/postgres \-kube-loki monitoring/svc/loki \e
      \-db-url "postgres://postgres:YOUR_PASSWORD@localhost:5432/mydb" \e
      \-notifications-slack-webhook "https://..."

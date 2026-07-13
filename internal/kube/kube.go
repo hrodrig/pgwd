@@ -24,7 +24,7 @@ import (
 	"k8s.io/client-go/transport/spdy"
 )
 
-const discoverPasswordRemovedMsg = "DISCOVER_MY_PASSWORD was removed in pgwd 0.9.x (security). Use a Secret-backed URL — see docs/kubernetes-passwords.md"
+const discoverPasswordRemovedMsg = "DISCOVER_MY_PASSWORD was removed in pgwd 0.9.x. Migration: docs/kubernetes-passwords.md — use kube.password_from_secret (contrib/profiles/kube-prod.yml), contrib/k8s/pgwd-kube-run.sh, or PGWD_DB_URL from kubectl get secret"
 
 var errDiscoverPasswordRemoved = errors.New(discoverPasswordRemovedMsg)
 

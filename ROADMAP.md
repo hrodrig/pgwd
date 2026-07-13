@@ -164,7 +164,8 @@ Track via GitHub issues after 1.0.0.
 | **[SPECIFICATIONS.md](SPECIFICATIONS.md)** | Observable behavior contract for **shipped** code (v0.9.0) |
 | **[CHANGELOG.md](CHANGELOG.md)** | What actually shipped per version |
 | **[docs/plan-0.7.x.md](docs/plan-0.7.x.md) … [plan-1.0.x.md](docs/plan-1.0.x.md)** | Implementation checklists per band |
-| **[docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)** | Security decision: DISCOVER deprecation |
+| **[docs/use-cases.md](docs/use-cases.md)** | Operator scenario matrix (single/multi DB, K8s, credentials) |
+| **[docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)** | K8s credentials + DISCOVER migration |
 | **[docs/UPGRADE-0.5-to-0.6.md](docs/UPGRADE-0.5-to-0.6.md)** | Operator upgrade guide (0.5 → 0.6) |
 
 When planning work: start here → open the band plan → update SPEC + CHANGELOG when behavior ships (docs-only changes stay in `[Unreleased]` until the band is tagged).

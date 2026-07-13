@@ -17,7 +17,9 @@ Release bands from **v0.7.0** to **v1.0.0**. Behavior contract: [SPECIFICATIONS.
 
 **[Upgrading from 0.5.x to 0.6.x](./UPGRADE-0.5-to-0.6.md)** — Checklist and links for moving from **0.5.10** (or earlier **0.5.x**) to **0.6.x**: config/CLI/env breaks introduced in **0.5.10**, optional **0.6.x** features (metrics store, HTTP, CSV export), and **Helm** moving to [pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted). For the raw rename table, see the [README breaking-changes section](../README.md#breaking-changes-upgrade-from-05x).
 
-**[Kubernetes passwords — deprecating DISCOVER_MY_PASSWORD](./kubernetes-passwords.md)** — Decision record: why the placeholder is removed in 0.9.x, RBAC implications, and Secret-backed alternatives.
+**[Operator use cases](./use-cases.md)** — Scenario matrix: single/multi database, in/out of Kubernetes, cron vs daemon, different credentials per target. Profiles under `contrib/profiles/`.
+
+**[Kubernetes passwords — migration from DISCOVER_MY_PASSWORD](./kubernetes-passwords.md)** — Single-DB outside-cluster credentials (`password_from_secret`, wrapper, RBAC). Multi-DB: [use-cases.md](./use-cases.md).
 
 ## Loki and Grafana alerts
 

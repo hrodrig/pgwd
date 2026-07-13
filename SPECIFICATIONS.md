@@ -563,6 +563,7 @@ Requires an active metrics store (sqlite.path or metrics_store.driver+dsn).
 | Integration | `make test-integration` (Docker compose with Postgres + Loki). Must pass before release. |
 | E2E kube | `make test-e2e-kube` (kind cluster + kubeconfig). Must pass before release. |
 | Lint | `make lint`: gofmt -s, go vet, gocyclo (≤ 14). CI lint job matches. |
+| Benchmarks | `make bench`: `go test -bench=. -benchmem ./internal/...` (dev/CI only). CI **bench** job is **non-blocking** (`continue-on-error`). **Not** part of `make release-check`. |
 | Security | `make security`: govulncheck + docker-scan (Grype). CI Security workflow. |
 | Platform | `make test-platforms` (Ansible, Linux + BSD VMs). Manual pre-release gate. |
 

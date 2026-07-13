@@ -135,11 +135,103 @@ Env equivalents: `PGWD_HTTP_METRICS_TOKEN`, `PGWD_HTTP_METRICS_BASIC_USER`, `PGW
 
 ## pgwd outside the cluster
 
-When pgwd runs on a VM or cron host, use `-kube-postgres` / `-kube-loki` with client-go port-forward (kubeconfig required; no kubectl binary). **Do not use `DISCOVER_MY_PASSWORD`** in the DSN — it requires `pods/exec` RBAC and will be **removed in 0.9.x**. Rationale and migration: **[docs/kubernetes-passwords.md](../docs/kubernetes-passwords.md)**.
+When pgwd runs on a **VM, bare metal, or cron** and Postgres/Loki are **inside** Kubernetes, use **`-kube-postgres`** / **`-kube-loki`** with client-go port-forward (kubeconfig required; **no kubectl binary inside pgwd**).
 
-## Multiple databases
+**`DISCOVER_MY_PASSWORD` was removed in 0.9.x.** Do not put it in the DSN. Use one of the supported paths below.
 
-Use a config file (ConfigMap) with `databases:` — env vars do not support multiple URLs. Mount the config and set `PGWD_CONFIG` or `-config`. Template the config with Helm/Kustomize to inject the DB URL(s) from Secrets.
+**Full migration guide (copy-paste recipes, RBAC, troubleshooting):** **[docs/kubernetes-passwords.md](../docs/kubernetes-passwords.md)**
+
+### Quick start — `kube.password_from_secret` (recommended daemon)
+
+1. Copy profile **[contrib/profiles/kube-prod.yml](../profiles/kube-prod.yml)** and edit Secret name, `kube.postgres`, `db.url`.
+2. Apply RBAC: **`kubectl apply -f contrib/k8s/rbac-outside-cluster.yaml`** (edit `resourceNames` first).
+3. Run: `pgwd -config /etc/pgwd/pgwd.conf -dry-run`
+
+```yaml
+# excerpt — see kube-prod.yml for full example
+kube:
+  postgres: default/svc/postgres
+  local_port: 5432
+  password_from_secret:
+    namespace: default
+    name: postgres-credentials
+    key: password
+db:
+  url: postgres://postgres@127.0.0.1:5432/mydb?sslmode=disable
+```
+
+### Quick start — wrapper script (cron / no pgwd Secrets RBAC)
+
+```bash
+SECRET_NS=default SECRET_NAME=postgres-credentials SECRET_KEY=password \
+  DB_USER=postgres DB_NAME=mydb \
+  ./contrib/k8s/pgwd-kube-run.sh \
+    -kube-postgres default/svc/postgres -client prod -interval 60 \
+    -notifications-slack-webhook "$WEBHOOK"
+```
+
+Requires **kubectl** on the host for the script only.
+
+### Quick start — manual Secret read (one-shot)
+
+```bash
+PGPASSWORD="$(kubectl get secret postgres-credentials -n default -o jsonpath='{.data.password}' | base64 -d)"
+PGWD_DB_URL="postgres://postgres:${PGPASSWORD}@localhost:5432/mydb?sslmode=disable" \
+  pgwd -kube-postgres default/svc/postgres -client prod -dry-run
+```
+
+### RBAC summary
+
+| Path | pgwd ServiceAccount needs |
+|------|---------------------------|
+| `password_from_secret` | `secrets/get` on **one** named Secret — [rbac-outside-cluster.yaml](rbac-outside-cluster.yaml) |
+| Wrapper / manual kubectl | Nothing on pgwd; operator kubeconfig reads Secret |
+| In-cluster Deployment | `secretKeyRef` in Pod spec — no `-kube-postgres` |
+
+**Do not grant `pods/exec`** for password retrieval — that was the removed DISCOVER path.
+
+Validate before cutover: `pgwd -validate-k8s-access` and `pgwd -config … -dry-run`.
+
+## Multiple databases (in-cluster)
+
+**Use case:** one pgwd Deployment monitors **N Postgres** instances with **different credentials**.
+
+- Config: **`databases:`** — one **full DSN per entry** (`user`, `password`, in-cluster host).
+- **Do not** set `kube.postgres` (validation rejects `kube.postgres` + `databases:`).
+- **Do not** rely on `kube.password_from_secret` for N Secrets — inject each URL at deploy time.
+
+### Deploy pattern
+
+1. One Secret per database (or one Secret with multiple keys: `url_prod`, `url_analytics`, …).
+2. Helm / Kustomize / External Secrets renders `pgwd.conf` into a ConfigMap or Secret volume.
+3. Mount config; set `PGWD_CONFIG=/etc/pgwd/pgwd.conf`, `PGWD_INTERVAL=60`.
+4. Set **unique `client` per entry** when the same DB name exists on different hosts.
+
+```yaml
+# Rendered pgwd.conf (passwords from Secrets at deploy — not in git)
+client: pgwd-prod
+interval: 60
+databases:
+  - url: postgres://user1:PASS1@postgres-a.default.svc.cluster.local:5432/prod?sslmode=disable
+    client: pgwd-prod-a
+  - url: postgres://user2:PASS2@postgres-b.default.svc.cluster.local:5432/analytics?sslmode=disable
+    client: pgwd-prod-b
+sqlite:
+  path: /var/lib/pgwd/pgwd.db
+```
+
+**Full walkthrough:** [docs/use-cases.md UC-5](../docs/use-cases.md#uc-5--multi-database-in-cluster-n-different-credentials).  
+**Profile:** [contrib/profiles/multi-db.yml](../profiles/multi-db.yml).
+
+## Multiple databases (outside cluster)
+
+N Services in K8s, pgwd on a VM: **N port-forwards** + `databases:` with `127.0.0.1` and distinct local ports — or **N pgwd processes** (one `kube-prod.yml` each).
+
+**Full walkthrough:** [docs/use-cases.md UC-6](../docs/use-cases.md#uc-6--multi-database-outside-cluster-n-port-forwards). E2E: `testing/scripts/test-e2e-kube.sh`.
+
+## Operator use-case index
+
+All scenarios (cron, daemon, single/multi DB, in/out of cluster): **[docs/use-cases.md](../docs/use-cases.md)**.
 
 ## Persistence
 

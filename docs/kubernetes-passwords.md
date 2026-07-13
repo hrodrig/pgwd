@@ -1,173 +1,159 @@
-# Kubernetes passwords — deprecating `DISCOVER_MY_PASSWORD`
+# Kubernetes passwords — operator guide (0.9.x)
 
-**Status:** **Deprecated** in v0.6.x documentation (behavior unchanged until removal). **Removed** in **v0.9.x** ([plan-0.9.x.md](./plan-0.9.x.md) §10).
+**Status:** **`DISCOVER_MY_PASSWORD` removed in pgwd 0.9.x.** pgwd no longer runs `printenv` inside Postgres pods (`pods/exec`).
 
-This document is the **decision record** for operators and contributors: why the placeholder exists today, why it must go, and what to use instead.
+**All deployment scenarios (single DB, multi-DB, in/out of cluster):** **[use-cases.md](./use-cases.md)** — start there if unsure which pattern fits.
 
----
+If your URL or config still contains the literal `DISCOVER_MY_PASSWORD`, pgwd **exits at startup** with:
 
-## Summary
-
-When the Postgres DSN password is the literal string `DISCOVER_MY_PASSWORD`, pgwd runs **`printenv`** inside the **Postgres pod** via the Kubernetes **`pods/exec`** subresource, copies the value into the process, rewrites `-db-url`, and connects through port-forward.
-
-That trades a convenience problem (“I don’t want the password in my config file”) for a **strictly more dangerous primitive** than every standard Kubernetes alternative. pgwd is a **read-only** Postgres connection monitor; `pods/exec` is **process execution inside the workload**, not secret retrieval.
-
-**Verdict:** not an acceptable long-term trade-off. Deprecate now; remove in 0.9.x.
-
----
-
-## What it does today
-
-1. Operator sets `-db-url` (or config) with password `DISCOVER_MY_PASSWORD` and `-kube-postgres namespace/svc/name`.
-2. At startup, `setupKube` detects the placeholder and calls `GetPasswordFromPod`:
-
-```177:186:cmd/pgwd/main.go
-	if kube.URLContainsDiscoverPassword(cfg.DBURL) {
-		podName, err := kube.ResolvePod(ctx, cfg.KubeContext, namespace, resource)
-		if err != nil {
-			log.Fatalf("kube resolve pod: %v", err)
-		}
-		password, err = kube.GetPasswordFromPod(ctx, cfg.KubeContext, namespace, podName, cfg.KubePasswordContainer, cfg.KubePasswordVar)
-		if err != nil {
-			log.Fatal("kube: could not get password from pod (check namespace, pod name, container, and env var)")
-		}
-	}
+```text
+DISCOVER_MY_PASSWORD was removed in pgwd 0.9.x. Migration: docs/kubernetes-passwords.md — use kube.password_from_secret (contrib/profiles/kube-prod.yml), contrib/k8s/pgwd-kube-run.sh, or PGWD_DB_URL from kubectl get secret
 ```
 
-3. `GetPasswordFromPod` opens an SPDY exec stream and runs `printenv <envVar>` in the target container (fallback to `PGPASSWORD`):
+This page covers **credentials for Kubernetes-related setups** (especially **single-DB outside-cluster port-forward**). Multi-database patterns are in **[use-cases.md](./use-cases.md)** (UC-5, UC-6).
 
-```187:225:internal/kube/kube.go
-func GetPasswordFromPod(ctx context.Context, kubeContext, namespace, podName, container, envVar string) (string, error) {
-	// ...
-	req := clientset.CoreV1().RESTClient().Post().
-		Resource("pods").Namespace(namespace).Name(podName).
-		SubResource("exec")
-	opts := &corev1.PodExecOptions{
-		Command: []string{"printenv", envVar},
-		Stdout:  true,
-		// ...
-	}
-	executor, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
-	// ...
-}
+---
+
+## Scenario map (credentials only)
+
+| Scenario | Doc | Credential pattern |
+|----------|-----|-------------------|
+| 1 DB, outside K8s, daemon | Options 1–2 below | `password_from_secret` or wrapper |
+| 1 DB, outside K8s, cron | Options 2, 4 | `kubectl get secret` → `PGWD_DB_URL` |
+| 1 DB, inside K8s | Option 3 | `secretKeyRef` in Pod |
+| **N DBs, different passwords** | **[use-cases.md UC-5 / UC-6](./use-cases.md)** | Full DSN per `databases[].url` — **not** `kube.password_from_secret` × N |
+| N DBs, outside K8s | **[UC-6](./use-cases.md#uc-6--multi-database-outside-cluster-n-port-forwards)** | N port-forwards + `databases:` **or** N pgwd processes (UC-4 each) |
+
+**Hard rule (0.9.x):** `kube.postgres` and `databases:` (2+ targets) **cannot** coexist in one config. Multi-DB always uses **direct URLs** (in-cluster DNS, TCP, or `localhost` after port-forward).
+
+---
+
+## Choose your path (single database, outside cluster)
+
+| Where pgwd runs | Recommended approach | pgwd needs `pods/exec` | pgwd needs `secrets get` |
+|-----------------|----------------------|------------------------|---------------------------|
+| **Inside the cluster** (Deployment) | Secret → env (`PGWD_DB_URL`) + in-cluster DNS — [Option 3](#option-3--in-cluster-deployment-no-port-forward) | No | No |
+| **Outside** — long-lived daemon | **`kube.password_from_secret`** in config — [Option 1](#option-1--kubepassword_from_secret-outside-cluster-daemon) | No | **Yes** (one named Secret) |
+| **Outside** — cron / one-shot | **`contrib/k8s/pgwd-kube-run.sh`** or shell + `kubectl get secret` — [Options 2, 4](#option-2--wrapper-script-outside-cluster-cron) | No | No (operator identity reads Secret) |
+
+Copy-paste recipes below. Ready-made profile: **[contrib/profiles/kube-prod.yml](../contrib/profiles/kube-prod.yml)**.
+
+---
+
+## Multiple databases with different credentials
+
+**Supported:** one daemon, `databases:` with **a full `postgres://user:pass@host:port/db` per entry**. Each entry may use a **different user and password**.
+
+**Not supported:** one `kube.password_from_secret` block for multiple Secrets, or `kube.postgres` alongside `databases:`.
+
+| Where pgwd runs | Pattern |
+|-----------------|---------|
+| **Inside K8s** | Template `databases:` at deploy (Helm/Kustomize) from N Secrets — [UC-5](./use-cases.md#uc-5--multi-database-in-cluster-n-different-credentials) |
+| **Outside K8s** | N `kubectl port-forward` (ports 15432, 15433, …) + `databases:` with `127.0.0.1` and per-URL passwords — [UC-6](./use-cases.md#uc-6--multi-database-outside-cluster-n-port-forwards) |
+| **Simpler outside K8s** | N pgwd processes, each [kube-prod.yml](../contrib/profiles/kube-prod.yml) — [UC-7](./use-cases.md#uc-7--multi-database-cron--one-config-per-instance) |
+
+Profile: **[contrib/profiles/multi-db.yml](../contrib/profiles/multi-db.yml)** (direct TCP example; swap hosts to `127.0.0.1` + ports when using port-forward).
+
+```yaml
+# Excerpt — each url may use a different user:password
+databases:
+  - url: postgres://app1:SECRET_A@postgres-a.svc.cluster.local:5432/prod?sslmode=disable
+    client: monitor-prod
+  - url: postgres://app2:SECRET_B@postgres-b.svc.cluster.local:5432/analytics?sslmode=disable
+    client: monitor-analytics
 ```
 
-4. Password is injected into `cfg.DBURL`; port-forward starts; pgwd connects to `localhost`.
-
-Related flags (also deprecated): `-kube-password-var`, `-kube-password-container`, YAML `kube.password_var` / `kube.password_container`.
+Never commit secrets. Inject `SECRET_*` at deploy (CI, Helm, `envsubst`, Ansible).
 
 ---
 
-## Problem it tried to solve
+## Option 1 — `kube.password_from_secret` (outside cluster, daemon)
 
-**Goal:** run pgwd **outside** the cluster (VM, cron, laptop) with `-kube-postgres`, without storing the Postgres password in git, plain config files, or shell history.
+Best when pgwd runs as a **systemd service or long-lived process** on a VM and you want the password in config **without** putting it in git.
 
-**Intent was reasonable.** The **mechanism was not.**
+### 1. Find the Secret your Postgres chart uses
 
-The password already lives in a Kubernetes **Secret** (or external secret operator) that populates `POSTGRES_PASSWORD` in the Postgres pod. DISCOVER skips that layer and reaches into the running pod instead.
-
----
-
-## Why we are deprecating it
-
-### 1. `pods/exec` is not “read a secret” — it is “run a process in the pod”
-
-The exec subresource is the same API surface used for interactive shells and arbitrary commands. pgwd only runs `printenv` today, but the permission model is **`pods/exec` on the target pod**, not `secrets/get`.
-
-From a security review perspective, you are granting **remote code execution capability** on the Postgres workload to whatever identity runs pgwd. The password is just the first command that occurred to implement; the primitive allows any command the container image supports.
-
-**Risk:** a compromised pgwd kubeconfig or ServiceAccount becomes a **lateral movement path into Postgres pods**, not merely a credential leak.
-
-### 2. RBAC was implicit, undocumented, and often over-granted
-
-Port-forward alone needs roughly: `get/list` pods and services, `create` on `pods/portforward` (namespace-scoped Role is enough).
-
-`GetPasswordFromPod` additionally requires **`pods/exec`** on the Postgres pod. That requirement was **not** documented in operator guides, `contrib/k8s/`, or the pgwd-selfhosted Helm chart when this analysis was done.
-
-Typical failure mode:
-
-1. Operator deploys pgwd with DISCOVER; startup fails on RBAC.
-2. Operator grants **`pods/exec`** — often too broadly (ClusterRole, all pods) to “make it work”.
-3. pgwd becomes a **durable exec proxy**; auditors see “monitoring tool” but the bound Role allows shell-equivalent access.
-
-Least-privilege deployment is a stated product goal. DISCOVER works against that goal in practice.
-
-### 3. Standard Kubernetes paths already solve the same problem — more safely
-
-The canonical pattern:
-
-- **In-cluster pgwd:** mount Secret → env (`secretKeyRef`) or config; connect via service DNS. No port-forward, no exec.
-- **Outside cluster:** read the **same Secret** the Postgres chart uses (`kubectl get secret … | base64 -d`, wrapper script, CI secret injection, External Secrets, Vault Agent) and pass `PGWD_DB_URL` or config. RBAC is **`secrets/get` on one named Secret** (auditable, scoped) — or RBAC on the **human/CI** identity, not on a long-lived pgwd ServiceAccount with exec.
-
-Postgres also supports cert auth, IAM (cloud), and `.pgpass` for non-Kubernetes paths. None require exec into the database pod.
-
-DISCOVER does not enable a capability that Secret-backed URLs lack; it enables it with **worse worst-case** (exec vs read one Secret).
-
-### 4. It pulls secrets through pgwd — widening the blast radius
-
-Flow today:
-
-```
-Postgres pod env  →  SPDY exec stream  →  pgwd process memory  →  cfg.DBURL string
+```bash
+# Common patterns — adjust namespace and labels
+kubectl get secrets -n default | grep -i postgres
+kubectl get secret postgres-credentials -n default -o jsonpath='{.data}' | jq 'keys'
 ```
 
-That password then exists in:
+Note **namespace**, **Secret name**, and **key** (`password`, `postgres-password`, or `url` for a full DSN).
 
-- Process memory for the lifetime of pgwd
-- Potential log/panic/debug output (URL masking helps routine logs; it is not a secret boundary)
-- Any tooling that dumps config, env, or core dumps
-- The same host as the HTTP `/metrics` server when enabled
+### 2. Replace your old config
 
-A Secret confined to the pod (or read once into env at deploy time) has a **smaller exposure surface** than a monitor process that **materializes** the credential on every startup.
+**Before (0.8.x — fails on 0.9.x):**
 
-### 5. It contradicts pgwd’s positioning
+```yaml
+kube:
+  postgres: default/svc/postgres
+db:
+  url: "postgres://postgres:DISCOVER_MY_PASSWORD@localhost:5432/mydb?sslmode=disable"
+```
 
-pgwd monitors **`pg_stat_activity`** — read-only SQL. Documentation emphasizes monitor, non-mutating, minimal container, non-root runtime.
+**After (0.9.x):**
 
-`pods/exec` is the opposite axis: **mutation API** in Kubernetes terms (starting processes inside workloads). Keeping DISCOVER undermines the story operators tell auditors: “this binary only watches connections.”
+```yaml
+kube:
+  postgres: default/svc/postgres
+  local_port: 5432
+  password_from_secret:
+    namespace: default
+    name: postgres-credentials
+    key: password          # or "url" if the Secret holds a full postgres:// DSN
+db:
+  url: "postgres://postgres@127.0.0.1:5432/mydb?sslmode=disable"
+```
 
-### 6. Architectural dead end — single-DB, growing debt
+- Leave the **password empty** in `db.url` when `key: password` — pgwd injects it after reading the Secret.
+- Host must be **`127.0.0.1` or `localhost`**; port must match **`kube.local_port`** (port-forward target).
 
-Constraints today:
+### 3. Apply RBAC (scoped `secrets/get` only)
 
-- DISCOVER is wired to **`cfg.DBURL`** / single-DB `-kube-postgres` only.
-- **`kube.postgres` is not supported with `databases:`** (multi-DB is the canonical direction; legacy `db:` is deprecated for v1.0).
+Edit **`contrib/k8s/rbac-outside-cluster.yaml`** — set `resourceNames` to your Secret — then:
 
-So DISCOVER sits on the **deprecated side** of the config model. Every future per-database kube feature would multiply exec targets (N pods, N exec permissions) from one outside-the-cluster binary.
+```bash
+kubectl apply -f contrib/k8s/rbac-outside-cluster.yaml
+```
 
-Supporting it further invests in a path the project is explicitly leaving.
+pgwd’s kubeconfig must use the ServiceAccount token (or a user bound to that Role). **No `pods/exec`** is required.
 
-### 7. Operational fragility
+### 4. Verify
 
-Additional issues found in review:
-
-| Issue | Effect |
-|-------|--------|
-| **SPDY/WebSocket exec** | Only exec uses this path; port-forward uses SPDY separately. Proxies/LBs that break exec break **startup entirely** (pgwd exits before monitoring). |
-| **Image variance** | Bitnami and others use `POSTGRES_PASSWORD_FILE` (file mount), not env. Fallback chain (`kube.password_var` → `PGPASSWORD`) fails with opaque error: *“could not get password from pod”*. |
-| **Inconsistent stack** | Rest of `internal/kube/` uses client-go list/get/port-forward. Exec is a legacy vestige of “discover from pod” ergonomics. |
+```bash
+pgwd -kube-context YOUR_CTX -validate-k8s-access
+pgwd -config /etc/pgwd/pgwd.conf -dry-run
+```
 
 ---
 
-## Comparison
+## Option 2 — Wrapper script (outside cluster, cron)
 
-| Approach | pgwd outside cluster | Password in git/plain config | pgwd needs `pods/exec` | pgwd needs `secrets get` | Fits multi-DB future |
-|----------|------------------------|------------------------------|-------------------------|---------------------------|----------------------|
-| **`DISCOVER_MY_PASSWORD`** (current) | Yes | Placeholder only | **Yes** | No | No |
-| **Secret → env / URL** (script or CI) | Yes | No | No | No (human/CI reads Secret) | Yes |
-| **`kube.password_from_secret`** (planned 0.9) | Yes | No | No | **Yes** (one named Secret) | Planned |
-| **In-cluster Secret env** | N/A (inside) | No | No | No | Yes |
-| **Direct TCP + Secret** | If reachable | No | No | No | Yes |
+Best when you prefer **operator / CI RBAC** (`kubectl get secret`) and pgwd itself should **not** call the Secrets API.
+
+```bash
+export KUBECONFIG=/path/to/kubeconfig
+export SECRET_NS=default
+export SECRET_NAME=postgres-credentials
+export SECRET_KEY=password
+export DB_USER=postgres
+export DB_NAME=mydb
+
+./contrib/k8s/pgwd-kube-run.sh \
+  -kube-postgres default/svc/postgres \
+  -client prod \
+  -interval 60 \
+  -notifications-slack-webhook "$WEBHOOK"
+```
+
+The script reads the Secret with **kubectl**, builds `PGWD_DB_URL`, and execs pgwd. Requires **kubectl on PATH** for the wrapper only — pgwd still uses client-go for port-forward.
 
 ---
 
-## What to use instead
+## Option 3 — In-cluster Deployment (no port-forward)
 
-Choose by **where pgwd runs**:
-
-### A. In-cluster (preferred for daemon mode)
-
-Deployment/DaemonSet; DSN from Secret. No `-kube-postgres`.
+Best for **daemon mode** inside Kubernetes. Connect with **service DNS**; no `-kube-postgres`.
 
 ```yaml
 env:
@@ -176,82 +162,95 @@ env:
       secretKeyRef:
         name: pgwd-db
         key: url
+  - name: PGWD_CLIENT
+    value: "pgwd-prod"
+  - name: PGWD_INTERVAL
+    value: "60"
 ```
 
-See [contrib/k8s/README.md](../contrib/k8s/README.md) and [pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted).
+Full manifest examples: **[contrib/k8s/README.md](../contrib/k8s/README.md)** and **[pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted)** Helm chart.
 
-### B. Outside cluster — inject Secret before pgwd (no code change)
+---
+
+## Option 4 — Manual env injection (cron / ad hoc)
+
+Same security model as the wrapper — **you** read the Secret once per run:
 
 ```bash
-export PGPASSWORD="$(kubectl get secret postgres-credentials -n default \
+export KUBECONFIG=/path/to/kubeconfig
+PGPASSWORD="$(kubectl get secret postgres-credentials -n default \
   -o jsonpath='{.data.password}' | base64 -d)"
 export PGWD_DB_URL="postgres://postgres:${PGPASSWORD}@localhost:5432/mydb?sslmode=disable"
-pgwd -kube-postgres default/svc/postgres -client prod -interval 60 \
-  -notifications-slack-webhook "$WEBHOOK"
+
+pgwd -kube-postgres default/svc/postgres \
+  -client prod -interval 0 -dry-run
 ```
 
-Use in cron/systemd; RBAC on the **operator identity** (human or CI), not on pgwd with exec.
-
-### C. Outside cluster — wrapper script (planned 0.9)
-
-`contrib/k8s/pgwd-kube-run.sh` — reads Secret, builds URL, execs pgwd. Same security model as (B), packaged for operators.
-
-### D. Outside cluster — `kube.password_from_secret` (planned 0.9.0)
-
-Explicit, auditable config:
-
-```yaml
-kube:
-  postgres: default/svc/postgres
-  password_from_secret:
-    namespace: default
-    name: postgres-credentials
-    key: password
-db:
-  url: "postgres://postgres@localhost:5432/mydb?sslmode=disable"
-```
-
-Implementation: client-go **`secrets.Get`** only — no exec. Namespace-scoped Role with `resourceNames` on the Secret. See [plan-0.9.x.md](./plan-0.9.x.md) §10.
-
-### E. Enterprise secret sync
-
-External Secrets Operator, Sealed Secrets, Vault Agent → file or env consumed by pgwd or a wrapper. No pgwd-specific exec required.
+Never commit the password. Use cron with a restricted kubeconfig or wrapper script.
 
 ---
 
-## Migration checklist
+## Migration checklist (from DISCOVER)
 
-If you use `DISCOVER_MY_PASSWORD` today:
-
-1. **Identify** where the Postgres chart stores credentials (Secret name/key).
-2. **Choose** pattern A (in-cluster) or B/C/D (outside cluster).
-3. **Replace** placeholder in URL with real password from Secret (never commit the value).
-4. **Remove** `-kube-password-var` / `-kube-password-container` from config and docs.
-5. **Tighten RBAC** — drop `pods/exec` from pgwd ServiceAccount if it was added only for DISCOVER.
-6. **Test** `-validate-k8s-access` and a dry-run connect before production cutover.
-
-After **0.9.x**, pgwd will **exit at startup** if the placeholder remains:
-
-```text
-DISCOVER_MY_PASSWORD was removed in pgwd 0.9.x (security).
-Use a Secret-backed URL — see docs/kubernetes-passwords.md
-```
+1. **Find** the Postgres credentials Secret (name, namespace, key).
+2. **Pick** Option 1 (daemon + `password_from_secret`), 2 (wrapper), 3 (in-cluster), or 4 (manual env).
+3. **Remove** from config and scripts:
+   - `DISCOVER_MY_PASSWORD` in any URL
+   - `-kube-password-var`, `-kube-password-container`, YAML `kube.password_var` / `kube.password_container` (removed in 0.9.x)
+4. **Tighten RBAC** — if you added `pods/exec` only for DISCOVER, remove it from pgwd’s Role.
+5. **Test** `-validate-k8s-access` and `-dry-run` before production.
+6. **Upgrade** pgwd to 0.9.x when ready.
 
 ---
 
-## Timeline
+## Troubleshooting
 
-| Release | Action |
-|---------|--------|
-| **0.6.x** (now) | Document deprecation; Secret-backed examples in README/SPEC; this decision record |
-| **0.9.0** | Remove code (`GetPasswordFromPod`, placeholder detection); ship `password_from_secret` + wrapper + RBAC sample; migrate e2e tests |
-| **1.0.0** | No DISCOVER surface remains |
+| Symptom | What to do |
+|---------|------------|
+| Startup error mentions `DISCOVER_MY_PASSWORD` | URL or Secret value still contains the literal placeholder — follow Option 1 or 2 above |
+| `get secret … forbidden` | Apply **`contrib/k8s/rbac-outside-cluster.yaml`** (Option 1) or use wrapper / manual kubectl (Options 2/4) |
+| `secret … has no key "password"` | List keys: `kubectl get secret NAME -n NS -o jsonpath='{.data}' \| jq 'keys'` — set `kube.password_from_secret.key` |
+| Bitnami / file-based password | Secret may use a different key; or store full `postgres://…` in Secret with `key: url` |
+| Port-forward works but connect fails | Ensure `db.url` host is `localhost`/`127.0.0.1` and port matches `kube.local_port` |
+| Cron job worked before upgrade | Inject password via wrapper or env; DISCOVER no longer exists |
+
+---
+
+## Secret key reference
+
+| `kube.password_from_secret.key` | Secret content | `db.url` password |
+|---------------------------------|----------------|-------------------|
+| `password` (default) | Plain password string | Leave empty in URL; pgwd injects after read |
+| `url` | Full `postgres://user:pass@host:5432/db?…` | Ignored when full DSN returned; host rewritten to localhost for port-forward |
+
+---
+
+## Why we removed `DISCOVER_MY_PASSWORD`
+
+**Summary:** The placeholder made pgwd run **`printenv` inside the Postgres pod** via Kubernetes **`pods/exec`**. That is remote process execution on the database workload — not “read a Secret”. It required **`pods/exec` RBAC** (often over-granted), widened blast radius (password in pgwd memory/DSN), and conflicted with pgwd’s read-only monitoring role.
+
+**Standard alternatives** read the **same Secret** the chart already uses:
+
+- **`secrets/get`** on one named Secret (`password_from_secret`) — auditable, least privilege
+- **Operator reads Secret** (wrapper, CI, `kubectl`) — no Secret API in pgwd
+- **In-cluster `secretKeyRef`** — no port-forward
+
+| Approach | Outside cluster | Password in git | pgwd needs `pods/exec` | pgwd needs `secrets get` |
+|----------|-----------------|-----------------|-------------------------|---------------------------|
+| ~~`DISCOVER_MY_PASSWORD`~~ (removed) | Yes | Placeholder only | **Yes** | No |
+| Secret → env / URL (script or CI) | Yes | No | No | No |
+| **`kube.password_from_secret`** | Yes | No | No | **Yes** (scoped) |
+| In-cluster Secret env | N/A | No | No | No |
 
 ---
 
 ## References
 
-- Implementation: `internal/kube/kube.go` (`GetPasswordFromPod`), `cmd/pgwd/main.go` (`setupKube`)
-- Removal plan: [plan-0.9.x.md](./plan-0.9.x.md) §10
+- **Use-case index:** [use-cases.md](./use-cases.md)
+- Profile: [contrib/profiles/kube-prod.yml](../contrib/profiles/kube-prod.yml)
+- Multi-DB profile: [contrib/profiles/multi-db.yml](../contrib/profiles/multi-db.yml)
+- RBAC sample: [contrib/k8s/rbac-outside-cluster.yaml](../contrib/k8s/rbac-outside-cluster.yaml)
+- Wrapper: [contrib/k8s/pgwd-kube-run.sh](../contrib/k8s/pgwd-kube-run.sh)
+- Outside-cluster README: [contrib/k8s/README.md](../contrib/k8s/README.md#pgwd-outside-the-cluster)
 - Behavior contract: [SPECIFICATIONS.md](../SPECIFICATIONS.md) §9
-- Roadmap index: [docs/README.md](./README.md#roadmap-to-v100)
+- Removal plan: [plan-0.9.x.md](./plan-0.9.x.md) §10

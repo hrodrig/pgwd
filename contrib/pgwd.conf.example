@@ -96,9 +96,12 @@ databases:
     # long_query_cooldown_seconds: 3600 # min time between long_query alerts per target (default 3600 if min set)
     # long_query_min_count: 1          # alert when count >= N
 
-# Multi-DB example (uncomment and adjust):
+# Multi-DB example (uncomment and adjust). Each url may use a different user:password.
+# In-cluster: inject URLs from Secrets at deploy (Helm/Kustomize) — docs/use-cases.md UC-5.
+# Outside cluster: N port-forwards + 127.0.0.1 URLs — docs/use-cases.md UC-6.
+# Cannot combine with kube.postgres in one config. See docs/use-cases.md.
 # databases:
-#   - url: postgres://user:pass@host1:5432/prod
+#   - url: postgres://user_a:pass_a@host1:5432/prod
 #     client: "monitor-01-prod"
 #     stale_age: 0
 #     threshold:
@@ -178,6 +181,11 @@ databases:
 #   (e.g. postgres://...@postgres.default.svc.cluster.local:5432/mydb).
 #   No kubectl. No kube.postgres.
 # - pgwd OUTSIDE K8s (VM, cron): use kube.postgres + port-forward (client-go, no kubectl).
+#
+# DISCOVER_MY_PASSWORD was REMOVED in 0.9.x. Migration (copy-paste recipes):
+#   docs/kubernetes-passwords.md
+# Ready-made outside-cluster profile: contrib/profiles/kube-prod.yml
+# Wrapper (cron): contrib/k8s/pgwd-kube-run.sh | RBAC: contrib/k8s/rbac-outside-cluster.yaml
 #
 kube:
   context: ""
