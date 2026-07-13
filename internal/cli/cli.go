@@ -124,6 +124,8 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.IntVar(&cfg.Interval, "interval", cfg.Interval, "Run every N seconds; 0 = run once (PGWD_INTERVAL)")
 	flag.BoolVar(&cfg.DryRun, "dry-run", cfg.DryRun, "Only print, do not send notifications (PGWD_DRY_RUN)")
 	flag.BoolVar(&cfg.Strict, "strict", cfg.Strict, "Exit 4 when notifier delivery fails for a threshold event (PGWD_STRICT)")
+	flag.BoolVar(&cfg.EnableCollector, "enable-collector", cfg.EnableCollector, "Send anonymous usage telemetry on daemon startup (PGWD_ENABLE_COLLECTOR; default false)")
+	flag.BoolVar(&cfg.EnableUpdateCheck, "enable-update-check", cfg.EnableUpdateCheck, "Check GitHub for newer pgwd releases on daemon startup (PGWD_ENABLE_UPDATE_CHECK; default true)")
 	flag.BoolVar(&cfg.ForceNotification, "force-notification", cfg.ForceNotification, "Always send a test notification to validate delivery/format (PGWD_FORCE_NOTIFICATION)")
 	flag.IntVar(&cfg.DefaultThresholdPercent, "db-default-threshold-percent", cfg.DefaultThresholdPercent, "When one of total/active is 0, set it to this % of max_connections (1-100, default 80) (PGWD_DB_DEFAULT_THRESHOLD_PERCENT)")
 	flag.StringVar(&cfg.ThresholdLevels, "db-threshold-levels", cfg.ThresholdLevels, "When both total and active are 0: comma-separated percentages for 3-tier alerts, e.g. 75,85,95 (attention/alert/danger). Only highest level fires. (PGWD_DB_THRESHOLD_LEVELS)")
@@ -321,6 +323,10 @@ func Run() {
 		os.Exit(0)
 	}
 	validateConfig(&cfg)
+
+	if cfg.Interval > 0 {
+		startCollector(&cfg)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

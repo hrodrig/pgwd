@@ -41,7 +41,7 @@ Documented operator-facing gaps; planned hardening is in [ROADMAP.md](ROADMAP.md
 |-------|------------------|---------|
 | HTTP `/metrics` and `/healthz` auth | **`/healthz` always open.** **`/metrics` auth opt-in** (`http.metrics_token`, `http.metrics_basic_*`); empty = anonymous scrape (default for in-cluster Prometheus/Alloy) | — |
 | Prometheus label escaping | Full label-value sanitization (0.9.x) | Shipped |
-| Notifier transport TLS | Operator-supplied URLs; `http://` allowed for Slack, Loki, Teams, generic webhook | Startup warning for non-HTTPS URLs (0.9.x) |
+| Notifier transport TLS | Operator-supplied URLs; `http://` allowed for Slack, Loki, Teams, generic webhook | Startup warning for non-loopback `http://` URLs (0.9.x) |
 | Postgres query timeout | Uses caller `context`; no dedicated query timeout | Nice-to-have (0.9.x) |
 | Structured logging | `log.Printf` only | Post-1.0 |
 | Alert cooldown | `long_query` only (metrics store) | Per-threshold cooldown not planned (hysteresis covers threshold repeats) |
@@ -80,7 +80,7 @@ Documented operator-facing gaps; planned hardening is in [ROADMAP.md](ROADMAP.md
 | 1 | Config validation error (missing required flags, invalid combo, no notifier + no dry-run) |
 | 2 | Postgres connection failure (or too many clients) after config is valid |
 | 3 | Postgres query error during stats collection |
-| 4 | **Not currently used.** Reserved for notify delivery failure (when at least one sender fails). |
+| 4 | Notifier delivery failure when **`-strict`** is set (threshold events only) |
 
 ### Persistent flags
 
@@ -91,11 +91,56 @@ Documented operator-facing gaps; planned hardening is in [ROADMAP.md](ROADMAP.md
 | `-client <name>` | `PGWD_CLIENT` | **Required.** Monitor identity label. |
 | `-interval <sec>` | `PGWD_INTERVAL` | Daemon interval; 0 = run once. Default 0. |
 | `-dry-run` | `PGWD_DRY_RUN` | No outbound notifications; log events locally. |
+| `-strict` | `PGWD_STRICT` | Exit **4** when notifier delivery fails for a threshold event. |
+| `-enable-collector` | `PGWD_ENABLE_COLLECTOR` | Opt-in anonymous daemon telemetry (default off). |
+| `-enable-update-check` | `PGWD_ENABLE_UPDATE_CHECK` | Opt-out GitHub release check (default on). |
 | `-force-notification` | `PGWD_FORCE_NOTIFICATION` | Send a test event regardless of thresholds. |
 | `-notify-on-connect-failure` | `PGWD_NOTIFY_ON_CONNECT_FAILURE` | Legacy; currently always-on when notifiers configured. |
 | `-log-level <level>` | `PGWD_LOG_LEVEL` | `info` (default) or `debug`. |
 | `-test-max-connections <n>` | `PGWD_TEST_MAX_CONNECTIONS` | Override server `max_connections` for testing alerts. |
 | `-validate-k8s-access` | `PGWD_VALIDATE_K8S_ACCESS` | Connectivity probe, then exit. |
+
+### Daemon startup: anonymous usage (0.9.x)
+
+When **`interval > 0`** (daemon mode), pgwd may run **once per process start**:
+
+| Feature | Default | Behavior |
+|---------|---------|----------|
+| **Collector** (`enable_collector` / `PGWD_ENABLE_COLLECTOR`) | **off** (opt-in) | **POST** `https://collect.gghstats.com/a1b2c3d4e5f6a7b8` — `version`, `commit`, `build_date`, one-way `hash`, boolean `features` only |
+| **Update check** (`enable_update_check` / `PGWD_ENABLE_UPDATE_CHECK`) | **on** (opt-out) | **GET** `https://api.github.com/repos/hrodrig/pgwd/releases/latest` — public release tag only |
+
+- **Never runs** in one-shot (`interval == 0`) or export-only exits.
+- **Never sends:** DSN/URL, hostnames, database names, `client`, cluster/namespace, webhook URLs, file paths, Loki labels.
+- **Ingest:** shared [collect.gghstats.com](https://collect.gghstats.com) service (Hermes); server tags `project=pgwd`. Startup logs print both URLs when enabled.
+- Errors logged at **debug** only; must not block or fail the monitor.
+
+**Example collector payload** (POST `Content-Type: application/json; charset=utf-8`):
+
+```json
+{
+  "version": "0.9.0",
+  "commit": "abc1234",
+  "build_date": "2026-07-13T12:00:00Z",
+  "hash": "a1b2c3d4e5f67890",
+  "features": {
+    "multi_db": false,
+    "uses_level_mode": true,
+    "long_query_enabled": false,
+    "has_slack": true,
+    "has_loki": true,
+    "has_kube_postgres": false,
+    "has_kube_loki": false,
+    "has_sqlite_store": true,
+    "has_sql_metrics_store": false,
+    "has_http_listen": true,
+    "confirm_alert_gt_1": false,
+    "confirm_ok_gt_1": false,
+    "dry_run": false
+  }
+}
+```
+
+`features` booleans only — no paths, URLs, names, or secrets. `hash` is dedup metadata (16 hex chars from SHA-256 of feature struct).
 
 ## 4. Configuration contract
 
@@ -559,6 +604,8 @@ testing/
 ```
 
 ## 15. Configuration examples
+
+Ready-to-use YAML profiles: [`contrib/profiles/`](../contrib/profiles/) (`minimal-slack`, `daemon-loki`, `kube-prod`, `multi-db`).
 
 ### Minimal one-shot with Slack
 

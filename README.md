@@ -149,6 +149,49 @@ PGWD_CONFIG=/path/to/pgwd.conf pgwd
 - **`-kube-postgres` / `kube.postgres` and `databases:` are mutually exclusive.** Validation rejects that combination. Multi-DB mode expects **direct** Postgres URLs (e.g. in-cluster DNS, VPN, or plain TCP). To use port-forward from **outside** the cluster, use **single-DB** config (`db:` or one URL) with `-kube-postgres`, or run **one pgwd process per** forwarded instance.
 - **Persisted history and hysteresis** (SQLite) are keyed by **`(client, cluster, database)`**. The **host from the URL is not part of that key**. If several targets share the same database name and the same **derived** client (`base client` + `-` + name from the URL path), they **collide** in the store and resolution/hysteresis will be wrong. Give each `databases:` entry a **unique `client`** when monitoring the same logical DB name on different hosts.
 
+**Ready-to-use profiles:** [`contrib/profiles/`](contrib/profiles/) — `minimal-slack`, `daemon-loki`, `kube-prod`, `multi-db`.
+
+### Anonymous usage
+
+Daemon mode (`interval > 0`) can optionally phone home to improve pgwd (same privacy model as [gghstats](https://github.com/hrodrig/gghstats)). **Both are off by default for telemetry; update check is on unless disabled.**
+
+| Setting | Default | Outbound call | What is sent |
+|---------|---------|---------------|--------------|
+| `enable_collector` / `PGWD_ENABLE_COLLECTOR` | **off** | **POST** `https://collect.gghstats.com/a1b2c3d4e5f6a7b8` (once per daemon start) | `version`, `commit`, `build_date`, one-way `hash`, boolean `features` only (e.g. multi_db, has_slack, has_loki) |
+| `enable_update_check` / `PGWD_ENABLE_UPDATE_CHECK` | **on** | **GET** `https://api.github.com/repos/hrodrig/pgwd/releases/latest` | No pgwd config; public release tag only (semver compare) |
+
+**Never sent to either destination:** DSN/URL, hostnames, database names, `client`, cluster/namespace, webhook URLs, file paths, Loki labels, or any secret.
+
+The ingest host is [collect.gghstats.com](https://collect.gghstats.com) (shared Hermes collector; server tags reports as `project=pgwd`). Operators can audit the payload at debug log level (`log_level: debug`). Errors are debug-logged only; outbound calls never block monitoring.
+
+**Example collector payload** (POST body; illustrative values):
+
+```json
+{
+  "version": "0.9.0",
+  "commit": "abc1234",
+  "build_date": "2026-07-13T12:00:00Z",
+  "hash": "a1b2c3d4e5f67890",
+  "features": {
+    "multi_db": false,
+    "uses_level_mode": true,
+    "long_query_enabled": false,
+    "has_slack": true,
+    "has_loki": true,
+    "has_kube_postgres": false,
+    "has_kube_loki": false,
+    "has_sqlite_store": true,
+    "has_sql_metrics_store": false,
+    "has_http_listen": true,
+    "confirm_alert_gt_1": false,
+    "confirm_ok_gt_1": false,
+    "dry_run": false
+  }
+}
+```
+
+`hash` is a short one-way fingerprint of the feature shape (dedup only; not reversible config).
+
 ### Using only environment variables
 
 ```bash
@@ -570,6 +613,9 @@ All parameters can be set via **config file**, **CLI**, or **environment variabl
 | `-notifications-retry-initial-backoff` | `PGWD_NOTIFICATIONS_RETRY_INITIAL_BACKOFF` | Initial retry backoff, e.g. `1s` |
 | `-notifications-retry-max-backoff` | `PGWD_NOTIFICATIONS_RETRY_MAX_BACKOFF` | Max retry backoff, e.g. `10s` |
 | `-interval` | `PGWD_INTERVAL` | Run every N seconds; 0 = run once |
+| `-strict` | `PGWD_STRICT` | Exit **4** when notifier delivery fails for a threshold event |
+| `-enable-collector` | `PGWD_ENABLE_COLLECTOR` | Opt-in anonymous usage telemetry on daemon startup (default false) |
+| `-enable-update-check` | `PGWD_ENABLE_UPDATE_CHECK` | Check GitHub for newer releases on daemon startup (default true) |
 | `-dry-run` | `PGWD_DRY_RUN` | Only print stats, do not send notifications |
 | `-force-notification` | `PGWD_FORCE_NOTIFICATION` | Always send at least one notification: test event when connected (to validate delivery, format, and channel). Requires at least one notifier. (Connection failure is always notified when a notifier is configured, with or without this flag.) |
 | `-notify-on-connect-failure` | `PGWD_NOTIFY_ON_CONNECT_FAILURE` | Legacy: connection failure is **always** notified when a notifier is configured; this flag is no longer required. Kept for backward compatibility; if set, still requires at least one notifier at startup. |

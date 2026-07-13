@@ -39,6 +39,8 @@ type fileConfig struct {
 	Interval               int            `yaml:"interval"`
 	Strict                 bool           `yaml:"strict"`
 	NotifyOnConnectFailure bool           `yaml:"notify_on_connect_failure"`
+	EnableCollector        bool           `yaml:"enable_collector"`
+	EnableUpdateCheck      *bool          `yaml:"enable_update_check"`
 	Databases              []fileConfigDB `yaml:"databases"`
 	DB                     fileConfigDB   `yaml:"db"`
 	Sqlite                 struct {
@@ -136,6 +138,10 @@ func FromFile(path string) (Config, bool, error) {
 }
 
 func fileConfigToConfig(fc fileConfig) Config {
+	updateCheck := true
+	if fc.EnableUpdateCheck != nil {
+		updateCheck = *fc.EnableUpdateCheck
+	}
 	c := Config{
 		DBURL:                   fc.DB.URL,
 		Client:                  fc.Client,
@@ -144,6 +150,9 @@ func fileConfigToConfig(fc fileConfig) Config {
 		LogLevel:                fc.LogLevel,
 		Interval:                fc.Interval,
 		Strict:                  fc.Strict,
+		EnableCollector:         fc.EnableCollector,
+		EnableUpdateCheck:       updateCheck,
+		LoadedFromFile:          true,
 		KubePostgres:            fc.Kube.Postgres,
 		KubeContext:             fc.Kube.Context,
 		KubeLocalPort:           fc.Kube.LocalPort,
@@ -283,9 +292,19 @@ func databaseNameFromURL(raw string) string {
 func ApplyDefaults(c *Config) {
 	applyKubeDefaults(c)
 	applyGeneralDefaults(c)
+	applyCollectorDefaults(c)
 	applyNotifyDefaults(c)
 	applySqliteAndConfirmDefaults(c)
 	applyHTTPDefaults(c)
+}
+
+func applyCollectorDefaults(c *Config) {
+	if c.LoadedFromFile {
+		return
+	}
+	if os.Getenv("PGWD_ENABLE_UPDATE_CHECK") == "" {
+		c.EnableUpdateCheck = true
+	}
 }
 
 func applyKubeDefaults(c *Config) {

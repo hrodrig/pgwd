@@ -1,6 +1,8 @@
 package validator
 
 import (
+	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -286,5 +288,35 @@ func TestValidate_Integration(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestWarnNotifierTLS(t *testing.T) {
+	r, w, _ := os.Pipe()
+	old := os.Stderr
+	os.Stderr = w
+
+	cfg := &config.Config{
+		SlackWebhook:      "http://hooks.example.com/slack",
+		LokiURL:           "http://127.0.0.1:3100/push",
+		TeamsEnabled:      true,
+		TeamsWebhook:      "http://teams.example.com/hook",
+		GenericEnabled:    true,
+		GenericWebhookURL: "https://hooks.example.com/generic",
+	}
+	WarnNotifierTLS(cfg)
+	_ = w.Close()
+	os.Stderr = old
+
+	b, _ := io.ReadAll(r)
+	out := string(b)
+	if !strings.Contains(out, "Slack") || !strings.Contains(out, "Teams") {
+		t.Fatalf("stderr = %q", out)
+	}
+	if strings.Contains(out, "Loki") {
+		t.Fatalf("loopback Loki should not warn: %q", out)
+	}
+	if strings.Contains(out, "generic") {
+		t.Fatalf("https generic should not warn: %q", out)
 	}
 }

@@ -128,6 +128,9 @@ type Config struct {
 	ConfirmOk    int // consecutive "ok" checks before resolution notification (default 1)
 
 	LoadedLegacyDBConfig     bool   // set when YAML used deprecated top-level db: (not databases:)
+	LoadedFromFile           bool   // set when config was loaded from YAML file
+	EnableCollector          bool   // opt-in anonymous daemon telemetry (default false)
+	EnableUpdateCheck        bool   // opt-out GitHub release check (default true when unset)
 	HTTPListen               string // e.g. ":8080"; empty = disabled
 	HTTPBasePath             string // e.g. "/api/pgwd/v1"; paths relative to this
 	HTTPHealthPath           string // e.g. "/healthz" → base_path + health_path
@@ -373,6 +376,12 @@ func applyEnvBehaviour(cfg *Config) {
 	}
 	if _, ok := os.LookupEnv("PGWD_VALIDATE_K8S_ACCESS"); ok {
 		cfg.ValidateK8sAccess = envBool("VALIDATE_K8S_ACCESS", false)
+	}
+	if _, ok := os.LookupEnv("PGWD_ENABLE_COLLECTOR"); ok {
+		cfg.EnableCollector = envBool("ENABLE_COLLECTOR", false)
+	}
+	if _, ok := os.LookupEnv("PGWD_ENABLE_UPDATE_CHECK"); ok {
+		cfg.EnableUpdateCheck = envBool("ENABLE_UPDATE_CHECK", true)
 	}
 	if v := env("LOG_LEVEL", ""); v != "" {
 		cfg.LogLevel = v

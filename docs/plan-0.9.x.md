@@ -327,7 +327,7 @@ Finish [SPECIFICATIONS.md](../SPECIFICATIONS.md) audit against **0.9.x** code. C
 |---|----------|--------|
 | 1 | Logo/branding for 1.0? | Wait for user input on design direction. |
 | 2 | Implement distinct exit codes 2–3 (connect vs query) or only 4 in strict? | Defer granular 2/3 to 1.0 or post-1.0 unless needed for cron. |
-| 3 | Collector endpoint: dedicated `collect.pgwd…` vs shared backend with `product: pgwd`? | Decide before coding `internal/collector`. |
+| 3 | Collector endpoint: dedicated `collect.pgwd…` vs shared backend with `product: pgwd`? | **Shared** — `https://collect.gghstats.com/a1b2c3d4e5f6a7b8` → `project: pgwd` (see collect-gghstats-com.Infrastructure). |
 | 4 | Ship `kube.password_from_secret` in 0.9.0 or 0.9.1? | **0.9.0** — with wrapper script as alternate path. |
 
 ---

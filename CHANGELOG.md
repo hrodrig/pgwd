@@ -18,6 +18,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 - **Config profiles:** ready-to-use YAML under **`contrib/profiles/`** (minimal-slack, daemon-loki, kube-prod, multi-db).
 - **Deprecation runway:** stronger stderr warnings for legacy **`db:`** and ignored **`-notify-on-connect-failure`** (always-on when notifiers exist; removal in v1.0).
 - **`-strict`:** optional exit **4** when notifier delivery fails for a threshold event (cron/CI gate); default unchanged.
+- **Anonymous collector:** opt-in daemon telemetry (`enable_collector` / `PGWD_ENABLE_COLLECTOR`) → **POST** `https://collect.gghstats.com/a1b2c3d4e5f6a7b8`; opt-out update check (`enable_update_check`) → **GET** GitHub releases API — see README [Anonymous usage](#anonymous-usage).
+- **Notifier TLS warning:** startup stderr when Slack/Loki/Teams/generic webhook URLs use `http://` (non-loopback).
+- **`make bench`:** internal package benchmarks; CI job is non-blocking.
 
 - **Docker runtime:** **`Dockerfile`** and **`Dockerfile.release`** use **`gcr.io/distroless/static-debian13:nonroot`** instead of Alpine 3.24.1 (same pattern as [groot](https://github.com/hrodrig/groot) / [kzero](https://github.com/hrodrig/kzero)). Static binary + bundled CA certs; no BusyBox/apk OS packages. Entrypoint path **`/home/pgwd/pgwd`** unchanged for Compose/Helm compatibility.
 

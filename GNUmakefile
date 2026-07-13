@@ -50,6 +50,7 @@ help:
 	@echo ""
 	@echo "$(YELLOW)Test:$(RESET)"
 	@echo "  $(GREEN)test$(RESET)               Unit tests"
+	@echo "  $(GREEN)bench$(RESET)              Run internal package benchmarks (non-blocking in CI)"
 	@echo "  $(GREEN)test-integration$(RESET)   Integration tests (requires Docker)"
 	@echo "  $(GREEN)test-e2e-kube$(RESET)      E2E test with kind cluster (requires kind, kubectl, Docker)"
 	@echo "  $(GREEN)test-platforms$(RESET)     Multi-platform tests via Ansible (requires VMs; see testing/platforms/)"
@@ -132,6 +133,11 @@ install-man:
 # Run tests (unit tests; integration tests are skipped without PGWD_TEST_* env vars)
 test:
 	go test ./...
+
+# Benchmarks (non-blocking in CI; no minimum performance gate)
+.PHONY: bench
+bench:
+	go test -bench=. -benchmem -run=^$$ ./internal/...
 
 # Coverage report (writes coverage.out in repo root; not part of release-check)
 .PHONY: cover cover-check cover-integration integration-compose-up integration-compose-down
