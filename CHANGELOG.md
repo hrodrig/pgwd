@@ -6,13 +6,35 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-13
+
+Pre-1.0 security and operator polish: removes insecure Kubernetes password discovery (`pods/exec`), hardens `/metrics` and CSV export, adds ready-to-use config profiles and optional daemon telemetry, and documents single- and multi-database deployment patterns.
+
 ### Security
 
-- **Go 1.26.5** — stdlib fixes **CVE-2026-39822** (`os` Root symlink escape) and **CVE-2026-42505** (`crypto/tls` ECH privacy leak). Rebuild binaries and images; relevant for HTTPS notifiers and TLS Postgres URLs.
+- **Kubernetes:** removed **`DISCOVER_MY_PASSWORD`** / `pods/exec` password discovery. Use Secret-backed DSN, **`contrib/k8s/pgwd-kube-run.sh`**, or **`kube.password_from_secret`** — [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md). Sample RBAC: **`contrib/k8s/rbac-outside-cluster.yaml`**.
+- **`/metrics` exporter:** full Prometheus label-value escaping — fixes scraper breakage when `client` / `cluster` / `database` contain quotes, newlines, or control characters.
+- **CSV export:** prefix sanitization on string columns — mitigates spreadsheet formula injection when opening exports in Excel or Google Sheets.
+- **HTTP `/metrics`:** optional **`http.metrics_token`** (Bearer or `?token=`) and **`http.metrics_basic_*`** — **opt-in**; default empty = anonymous scrape (in-cluster Prometheus/Alloy unchanged). Limits exposure when `http.listen` is reachable outside a trusted network; **`/healthz` stays open** for probes. See **`contrib/k8s/README.md`**.
+
+### Added
+
+- **Config profiles:** ready-to-use YAML under **`contrib/profiles/`** (minimal-slack, daemon-loki, kube-prod, multi-db).
+- **`-strict`:** optional exit **4** when notifier delivery fails for a threshold event (cron/CI gate); default unchanged.
+- **Anonymous collector:** opt-in daemon telemetry (`enable_collector` / `PGWD_ENABLE_COLLECTOR`) → **POST** `https://collect.gghstats.com/a1b2c3d4e5f6a7b8`; opt-out update check (`enable_update_check`) → **GET** GitHub releases API — see README [Anonymous usage](#anonymous-usage).
+- **`make bench`:** `go test -bench=. ./internal/...` target; CI **bench** job is non-blocking (not in **`make release-check`**).
 
 ### Changed
 
+- **Deprecation runway:** stronger stderr warnings for legacy **`db:`** and ignored **`-notify-on-connect-failure`** (always-on when notifiers exist; removal in v1.0).
+- **Notifier TLS warning:** startup stderr when Slack/Loki/Teams/generic webhook URLs use `http://` (non-loopback).
 - **Docker runtime:** **`Dockerfile`** and **`Dockerfile.release`** use **`gcr.io/distroless/static-debian13:nonroot`** instead of Alpine 3.24.1 (same pattern as [groot](https://github.com/hrodrig/groot) / [kzero](https://github.com/hrodrig/kzero)). Static binary + bundled CA certs; no BusyBox/apk OS packages. Entrypoint path **`/home/pgwd/pgwd`** unchanged for Compose/Helm compatibility.
+
+### Documentation
+
+- **[docs/use-cases.md](docs/use-cases.md)** — operator scenario matrix (single/multi DB, in/out of Kubernetes, different credentials per target).
+- **[docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)** — DISCOVER migration guide; multi-DB credential patterns.
+- **[SPECIFICATIONS.md](SPECIFICATIONS.md)** — baseline v0.9.0; collector, TLS warning, CSV sanitization, kube password alternatives.
 
 ## [0.8.0] - 2026-07-11
 
@@ -452,7 +474,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/hrodrig/pgwd/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/hrodrig/pgwd/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/hrodrig/pgwd/compare/v0.6.10...v0.7.0
 [0.6.10]: https://github.com/hrodrig/pgwd/compare/v0.6.9...v0.6.10

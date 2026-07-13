@@ -1,6 +1,8 @@
 package validator
 
 import (
+	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -120,7 +122,7 @@ func TestValidateNotifiers(t *testing.T) {
 		{"has pagerduty", &config.Config{PagerDutyRoutingKey: "rk"}, false, ""},
 		{"no notifier no dry-run", &config.Config{}, true, "no notifier"},
 		{"force-notification no notifier", &config.Config{ForceNotification: true, DryRun: true}, true, "force-notification requires"},
-		{"notify-on-connect-failure no notifier", &config.Config{NotifyOnConnectFailure: true, DryRun: true}, true, "notify-on-connect-failure requires"},
+		{"notify-on-connect-failure no notifier", &config.Config{NotifyOnConnectFailure: true, DryRun: true}, false, ""},
 		{"pagerduty enabled missing key", &config.Config{PagerDutyEnabled: true, DryRun: true}, true, "routing_key is required"},
 		{"teams enabled missing webhook", &config.Config{TeamsEnabled: true, DryRun: true}, true, "webhook_url is required"},
 		{"generic enabled missing url", &config.Config{GenericEnabled: true, DryRun: true}, true, "webhook_url is required"},
@@ -286,5 +288,35 @@ func TestValidate_Integration(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestWarnNotifierTLS(t *testing.T) {
+	r, w, _ := os.Pipe()
+	old := os.Stderr
+	os.Stderr = w
+
+	cfg := &config.Config{
+		SlackWebhook:      "http://hooks.example.com/slack",
+		LokiURL:           "http://127.0.0.1:3100/push",
+		TeamsEnabled:      true,
+		TeamsWebhook:      "http://teams.example.com/hook",
+		GenericEnabled:    true,
+		GenericWebhookURL: "https://hooks.example.com/generic",
+	}
+	WarnNotifierTLS(cfg)
+	_ = w.Close()
+	os.Stderr = old
+
+	b, _ := io.ReadAll(r)
+	out := string(b)
+	if !strings.Contains(out, "Slack") || !strings.Contains(out, "Teams") {
+		t.Fatalf("stderr = %q", out)
+	}
+	if strings.Contains(out, "Loki") {
+		t.Fatalf("loopback Loki should not warn: %q", out)
+	}
+	if strings.Contains(out, "generic") {
+		t.Fatalf("https generic should not warn: %q", out)
 	}
 }

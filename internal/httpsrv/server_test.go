@@ -125,6 +125,48 @@ func TestServer_HandleMetrics_WithStore(t *testing.T) {
 	}
 }
 
+func TestServer_HandleMetrics_LabelEscape(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "pgwd.db")
+	st, err := store.Open(path, 100)
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	defer st.Close()
+
+	ctx := context.Background()
+	if err := st.Insert(ctx, store.Record{
+		Client: `c"1`, Cluster: "cl\n2", Database: "db",
+		Total: 1, Active: 0, Idle: 1, Stale: 0, MaxConnections: 10,
+		State: "ok", Threshold: "",
+	}); err != nil {
+		t.Fatalf("Insert: %v", err)
+	}
+
+	cfg := &config.Config{
+		HTTPListen:      ":0",
+		HTTPBasePath:    "/api/pgwd/v1",
+		HTTPHealthPath:  "/healthz",
+		HTTPMetricsPath: "/metrics",
+	}
+	srv := New(cfg, st)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/pgwd/v1/metrics", nil)
+	rec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if strings.Contains(body, "\nclient") || strings.Contains(body, "cl\n2") {
+		t.Errorf("raw newline in metrics body: %q", body)
+	}
+	if !strings.Contains(body, `client="c\"1"`) {
+		t.Errorf("want escaped quote in client label, got %q", body)
+	}
+	if !strings.Contains(body, `cluster="cl\n2"`) {
+		t.Errorf("want escaped newline in cluster label, got %q", body)
+	}
+}
+
 func TestServer_StartStop(t *testing.T) {
 	cfg := &config.Config{HTTPListen: ":0", HTTPBasePath: "/api/pgwd/v1", HTTPHealthPath: "/healthz", HTTPMetricsPath: "/metrics"}
 	srv := New(cfg, nil)

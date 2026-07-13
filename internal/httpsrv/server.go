@@ -10,11 +10,31 @@ import (
 	"github.com/hrodrig/pgwd/internal/store"
 )
 
+func escapePrometheusLabelValue(val string) string {
+	var b strings.Builder
+	for _, r := range val {
+		switch r {
+		case '\\':
+			b.WriteString(`\\`)
+		case '"':
+			b.WriteString(`\"`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			// drop CR; LF is escaped above
+		default:
+			if r < 0x20 {
+				b.WriteRune('_')
+			} else {
+				b.WriteRune(r)
+			}
+		}
+	}
+	return b.String()
+}
+
 func promLabel(key, val string) string {
-	// Prometheus label value: escape \ and "
-	val = strings.ReplaceAll(val, `\`, `\\`)
-	val = strings.ReplaceAll(val, `"`, `\"`)
-	return fmt.Sprintf(`%s="%s"`, key, val)
+	return fmt.Sprintf(`%s="%s"`, key, escapePrometheusLabelValue(val))
 }
 
 // Server serves /healthz and /metrics for Kubernetes probes and Prometheus.
@@ -74,6 +94,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	if !metricsAuthorized(r, s.cfg) {
+		writeMetricsUnauthorized(w, s.cfg)
+		return
+	}
 	if s.st == nil {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)

@@ -37,7 +37,10 @@ type fileConfig struct {
 	DryRun                 bool           `yaml:"dry_run"`
 	LogLevel               string         `yaml:"log_level"`
 	Interval               int            `yaml:"interval"`
+	Strict                 bool           `yaml:"strict"`
 	NotifyOnConnectFailure bool           `yaml:"notify_on_connect_failure"`
+	EnableCollector        bool           `yaml:"enable_collector"`
+	EnableUpdateCheck      *bool          `yaml:"enable_update_check"`
 	Databases              []fileConfigDB `yaml:"databases"`
 	DB                     fileConfigDB   `yaml:"db"`
 	Sqlite                 struct {
@@ -52,20 +55,26 @@ type fileConfig struct {
 	ConfirmAlert int `yaml:"confirm_alert"`
 	ConfirmOk    int `yaml:"confirm_ok"`
 	HTTP         struct {
-		Listen      string `yaml:"listen"`
-		BasePath    string `yaml:"base_path"`
-		HealthPath  string `yaml:"healthz_path"`
-		MetricsPath string `yaml:"metrics_path"`
+		Listen               string `yaml:"listen"`
+		BasePath             string `yaml:"base_path"`
+		HealthPath           string `yaml:"healthz_path"`
+		MetricsPath          string `yaml:"metrics_path"`
+		MetricsToken         string `yaml:"metrics_token"`
+		MetricsBasicUser     string `yaml:"metrics_basic_user"`
+		MetricsBasicPassword string `yaml:"metrics_basic_password"`
 	} `yaml:"http"`
 	Kube struct {
-		Context           string `yaml:"context"`
-		LocalPort         int    `yaml:"local_port"`
-		Loki              string `yaml:"loki"`
-		LokiLocalPort     int    `yaml:"loki_local_port"`
-		LokiRemotePort    int    `yaml:"loki_remote_port"`
-		PasswordContainer string `yaml:"password_container"`
-		PasswordVar       string `yaml:"password_var"`
-		Postgres          string `yaml:"postgres"`
+		Context            string `yaml:"context"`
+		LocalPort          int    `yaml:"local_port"`
+		Loki               string `yaml:"loki"`
+		LokiLocalPort      int    `yaml:"loki_local_port"`
+		LokiRemotePort     int    `yaml:"loki_remote_port"`
+		PasswordFromSecret struct {
+			Namespace string `yaml:"namespace"`
+			Name      string `yaml:"name"`
+			Key       string `yaml:"key"`
+		} `yaml:"password_from_secret"`
+		Postgres string `yaml:"postgres"`
 	} `yaml:"kube"`
 	Notifications struct {
 		Loki struct {
@@ -129,21 +138,32 @@ func FromFile(path string) (Config, bool, error) {
 }
 
 func fileConfigToConfig(fc fileConfig) Config {
+	updateCheck := true
+	if fc.EnableUpdateCheck != nil {
+		updateCheck = *fc.EnableUpdateCheck
+	}
 	c := Config{
-		DBURL:                    fc.DB.URL,
-		Client:                   fc.Client,
-		DefaultThresholdPercent:  fc.DB.DefaultThresholdPercent,
-		DryRun:                   fc.DryRun,
-		LogLevel:                 fc.LogLevel,
-		Interval:                 fc.Interval,
-		KubePostgres:             fc.Kube.Postgres,
-		KubeContext:              fc.Kube.Context,
-		KubeLocalPort:            fc.Kube.LocalPort,
-		KubeLoki:                 fc.Kube.Loki,
-		KubeLokiLocalPort:        fc.Kube.LokiLocalPort,
-		KubeLokiRemotePort:       fc.Kube.LokiRemotePort,
-		KubePasswordContainer:    fc.Kube.PasswordContainer,
-		KubePasswordVar:          fc.Kube.PasswordVar,
+		DBURL:                   fc.DB.URL,
+		Client:                  fc.Client,
+		DefaultThresholdPercent: fc.DB.DefaultThresholdPercent,
+		DryRun:                  fc.DryRun,
+		LogLevel:                fc.LogLevel,
+		Interval:                fc.Interval,
+		Strict:                  fc.Strict,
+		EnableCollector:         fc.EnableCollector,
+		EnableUpdateCheck:       updateCheck,
+		LoadedFromFile:          true,
+		KubePostgres:            fc.Kube.Postgres,
+		KubeContext:             fc.Kube.Context,
+		KubeLocalPort:           fc.Kube.LocalPort,
+		KubeLoki:                fc.Kube.Loki,
+		KubeLokiLocalPort:       fc.Kube.LokiLocalPort,
+		KubeLokiRemotePort:      fc.Kube.LokiRemotePort,
+		KubePasswordFromSecret: KubePasswordFromSecret{
+			Namespace: fc.Kube.PasswordFromSecret.Namespace,
+			Name:      fc.Kube.PasswordFromSecret.Name,
+			Key:       fc.Kube.PasswordFromSecret.Key,
+		},
 		LokiURL:                  fc.Notifications.Loki.URL,
 		LokiLabels:               fc.Notifications.Loki.Labels,
 		LokiOrgID:                fc.Notifications.Loki.OrgID,
@@ -160,6 +180,9 @@ func fileConfigToConfig(fc fileConfig) Config {
 		HTTPBasePath:             fc.HTTP.BasePath,
 		HTTPHealthPath:           fc.HTTP.HealthPath,
 		HTTPMetricsPath:          fc.HTTP.MetricsPath,
+		HTTPMetricsToken:         fc.HTTP.MetricsToken,
+		HTTPMetricsBasicUser:     fc.HTTP.MetricsBasicUser,
+		HTTPMetricsBasicPassword: fc.HTTP.MetricsBasicPassword,
 		SlackWebhook:             fc.Notifications.Slack.Webhook,
 		PagerDutyEnabled:         fc.Notifications.PagerDuty.Enabled,
 		PagerDutyRoutingKey:      fc.Notifications.PagerDuty.RoutingKey,
@@ -197,6 +220,7 @@ func fileConfigToConfig(fc fileConfig) Config {
 			c.Databases = append(c.Databases, t)
 		}
 	} else if fc.DB.URL != "" {
+		c.LoadedLegacyDBConfig = true
 		log.Printf("pgwd: config key 'db' is deprecated; use 'databases: [{ url: ... }]' instead. Support will be removed in v1.0.")
 		t := mergeDBTarget(fc.Client, fc.DB, fc.DB)
 		c.Databases = []DatabaseTarget{t}
@@ -268,14 +292,24 @@ func databaseNameFromURL(raw string) string {
 func ApplyDefaults(c *Config) {
 	applyKubeDefaults(c)
 	applyGeneralDefaults(c)
+	applyCollectorDefaults(c)
 	applyNotifyDefaults(c)
 	applySqliteAndConfirmDefaults(c)
 	applyHTTPDefaults(c)
 }
 
+func applyCollectorDefaults(c *Config) {
+	if c.LoadedFromFile {
+		return
+	}
+	if os.Getenv("PGWD_ENABLE_UPDATE_CHECK") == "" {
+		c.EnableUpdateCheck = true
+	}
+}
+
 func applyKubeDefaults(c *Config) {
-	if c.KubePasswordVar == "" {
-		c.KubePasswordVar = "POSTGRES_PASSWORD"
+	if c.KubePasswordFromSecret.Key == "" && c.KubePasswordFromSecret.Name != "" {
+		c.KubePasswordFromSecret.Key = "password"
 	}
 	if c.KubeLocalPort == 0 {
 		c.KubeLocalPort = 5432

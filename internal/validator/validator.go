@@ -4,6 +4,7 @@ package validator
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"text/template"
@@ -25,7 +26,8 @@ func Validate(cfg *config.Config) error {
 	if err := ValidateClient(cfg); err != nil {
 		return err
 	}
-	WarnDeprecatedThresholds(cfg)
+	WarnDeprecationStartup(cfg)
+	WarnNotifierTLS(cfg)
 	if err := ValidateStale(cfg); err != nil {
 		return err
 	}
@@ -48,6 +50,44 @@ func Validate(cfg *config.Config) error {
 		return err
 	}
 	return nil
+}
+
+// WarnDeprecationStartup prints stderr warnings for deprecated config surfaces.
+func WarnDeprecationStartup(cfg *config.Config) {
+	WarnDeprecatedThresholds(cfg)
+	if cfg.LoadedLegacyDBConfig {
+		fmt.Fprintln(os.Stderr, "pgwd: migrate legacy 'db:' to 'databases:' with one entry before v1.0 — see contrib/profiles/ and contrib/pgwd.conf.example")
+	}
+	if cfg.NotifyOnConnectFailure {
+		fmt.Fprintln(os.Stderr, "pgwd: -notify-on-connect-failure is ignored; connect failure notifications are always enabled when notifiers are configured (removal in v1.0)")
+	}
+}
+
+// WarnNotifierTLS logs a startup warning when notifier URLs use plain HTTP (non-loopback).
+func WarnNotifierTLS(cfg *config.Config) {
+	warnHTTPNotifierURL("Slack", cfg.SlackWebhook)
+	warnHTTPNotifierURL("Loki", cfg.LokiURL)
+	if cfg.TeamsActive() {
+		warnHTTPNotifierURL("Teams", cfg.TeamsWebhook)
+	}
+	if cfg.GenericActive() {
+		warnHTTPNotifierURL("generic webhook", cfg.GenericWebhookURL)
+	}
+}
+
+func warnHTTPNotifierURL(channel, rawURL string) {
+	if rawURL == "" {
+		return
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme != "http" {
+		return
+	}
+	host := strings.ToLower(u.Hostname())
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+		return
+	}
+	fmt.Fprintf(os.Stderr, "pgwd: notifier %s uses http:// — prefer https:// for production traffic\n", channel)
 }
 
 // WarnDeprecatedThresholds prints a deprecation warning when legacy thresholds are used.
@@ -116,9 +156,6 @@ func ValidateNotifiers(cfg *config.Config) error {
 	}
 	if cfg.ForceNotification && !cfg.HasAnyNotifier() {
 		return fmt.Errorf("pgwd: force-notification requires at least one notifier")
-	}
-	if cfg.NotifyOnConnectFailure && !cfg.HasAnyNotifier() {
-		return fmt.Errorf("pgwd: notify-on-connect-failure requires at least one notifier")
 	}
 	return nil
 }

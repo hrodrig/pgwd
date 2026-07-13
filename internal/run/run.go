@@ -118,9 +118,10 @@ func IsTooManyClientsError(err error) bool {
 }
 
 // NotifyConnectFailure sends an infrastructure alert when Postgres cannot be reached.
-func NotifyConnectFailure(ctx context.Context, senders []notify.Sender, cfg *config.Config, cluster, client, ns, db string, connectErr error) {
-	if len(senders) == 0 {
-		return
+// Returns true when senders were configured but every delivery failed (for -strict).
+func NotifyConnectFailure(ctx context.Context, senders []notify.Sender, cfg *config.Config, cluster, client, ns, db string, connectErr error) bool {
+	if len(senders) == 0 || cfg.DryRun {
+		return false
 	}
 	log.Printf("Sending notification…")
 	tooManyClients := IsTooManyClientsError(connectErr)
@@ -149,6 +150,7 @@ func NotifyConnectFailure(ctx context.Context, senders []notify.Sender, cfg *con
 	if sent > 0 {
 		log.Printf("Notification sent")
 	}
+	return sent == 0
 }
 
 // ApplyThresholdDefaults reads max_connections, fills zero thresholds, and validates config.
@@ -271,12 +273,17 @@ func collectLongQueryEvent(ctx context.Context, pool postgres.Querier, cfg *conf
 	return &e
 }
 
-// SendEvents delivers each event to all senders. Returns thresholds for which at least one send succeeded.
-func SendEvents(ctx context.Context, senders []notify.Sender, cfg *config.Config, events []notify.Event) map[string]bool {
+// SendEvents delivers each event to all senders. Returns thresholds for which at least one send succeeded,
+// and whether any non-dry-run event had senders configured but zero successful deliveries.
+func SendEvents(ctx context.Context, senders []notify.Sender, cfg *config.Config, events []notify.Event) (map[string]bool, bool) {
 	sent := make(map[string]bool)
+	deliveryFailed := false
 	for _, ev := range events {
 		if cfg.DryRun {
 			log.Printf("[dry-run] would send: %s", ev.Message)
+			continue
+		}
+		if len(senders) == 0 {
 			continue
 		}
 		n := 0
@@ -287,12 +294,15 @@ func SendEvents(ctx context.Context, senders []notify.Sender, cfg *config.Config
 				n++
 			}
 		}
+		if n == 0 {
+			deliveryFailed = true
+		}
 		if n > 0 {
 			sent[ev.Threshold] = true
 			log.Printf("Notification sent: %s", notificationSentLine(ev))
 		}
 	}
-	return sent
+	return sent, deliveryFailed
 }
 
 func notificationSentLine(ev notify.Event) string {
@@ -412,21 +422,22 @@ func ApplyLongQueryCooldownFilter(ctx context.Context, st store.MetricsStorer, c
 }
 
 // TrySendResolutionNotification sends a resolution event when state returns to ok.
-func TrySendResolutionNotification(ctx context.Context, st store.MetricsStorer, cfg *config.Config, senders []notify.Sender, res RunCheckResult, cluster, client, ns, db string) {
+// Returns true when delivery was attempted but all senders failed (-strict).
+func TrySendResolutionNotification(ctx context.Context, st store.MetricsStorer, cfg *config.Config, senders []notify.Sender, res RunCheckResult, cluster, client, ns, db string) bool {
 	if st == nil || cfg.ConfirmOk < 1 {
-		return
+		return false
 	}
 	last, _ := st.LastStates(ctx, client, cluster, db, cfg.ConfirmOk+1)
 	if len(last) < cfg.ConfirmOk+1 {
-		return
+		return false
 	}
 	for i := 0; i < cfg.ConfirmOk && i < len(last); i++ {
 		if last[i] != "ok" {
-			return
+			return false
 		}
 	}
 	if last[cfg.ConfirmOk] == "ok" || last[cfg.ConfirmOk] == "" {
-		return
+		return false
 	}
 	ev := notify.Event{
 		Stats:          res.Stats,
@@ -440,16 +451,18 @@ func TrySendResolutionNotification(ctx context.Context, st store.MetricsStorer, 
 		Namespace:      ns,
 		Database:       db,
 	}
-	SendEvents(ctx, senders, cfg, []notify.Event{ev})
+	_, failed := SendEvents(ctx, senders, cfg, []notify.Event{ev})
+	return failed
 }
 
 // MakeRunFunc returns the per-interval check closure for one target.
-func MakeRunFunc(ctx context.Context, pool postgres.Querier, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, cluster, client, ns, db string) func() {
-	return func() {
+// The returned func reports whether notifier delivery failed (for -strict).
+func MakeRunFunc(ctx context.Context, pool postgres.Querier, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, cluster, client, ns, db string) func() bool {
+	return func() bool {
 		res, err := DoRunCheck(ctx, pool, cfg, cluster, client, ns, db)
 		if err != nil {
 			log.Printf("stats: %v", err)
-			return
+			return false
 		}
 		if cfg.DryRun && cfg.LogLevel == "debug" {
 			LogDryRunStats(cluster, client, db, res)
@@ -458,7 +471,7 @@ func MakeRunFunc(ctx context.Context, pool postgres.Querier, cfg *config.Config,
 		res.Events = ApplyHysteresisFilter(ctx, st, cfg, client, cluster, db, statePre, res.Events)
 		res.Events = ApplyLongQueryCooldownFilter(ctx, st, cfg, client, cluster, db, res.Events)
 		state, thr := checker.StateAndThresholdFromEvents(res.Events)
-		sent := SendEvents(ctx, senders, cfg, res.Events)
+		sent, deliveryFailed := SendEvents(ctx, senders, cfg, res.Events)
 		if sent["long_query"] && st != nil {
 			if cd, ok := st.(store.AlertCooldownRecorder); ok {
 				if err := cd.SetLongQueryAlert(ctx, client, cluster, db, time.Now()); err != nil {
@@ -475,9 +488,12 @@ func MakeRunFunc(ctx context.Context, pool postgres.Querier, cfg *config.Config,
 			if err := st.Insert(ctx, rec); err != nil {
 				log.Printf("store insert: %v", err)
 			} else if state == "ok" {
-				TrySendResolutionNotification(ctx, st, cfg, senders, res, cluster, client, ns, db)
+				if TrySendResolutionNotification(ctx, st, cfg, senders, res, cluster, client, ns, db) {
+					deliveryFailed = true
+				}
 			}
 		}
+		return deliveryFailed
 	}
 }
 

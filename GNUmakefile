@@ -21,67 +21,73 @@ LDFLAGS   := -ldflags "-s -w -X main.Version=$(VERSION) -X main.Commit=$(COMMIT)
 # OpenBSD dist helper target default arch. Override: make dist-openbsd OPENBSD_ARCH=arm64
 OPENBSD_ARCH ?= amd64
 
+GREEN  := \033[0;32m
+YELLOW := \033[0;33m
+CYAN   := \033[0;36m
+RESET  := \033[0m
+
 # Default target: show help
 .DEFAULT_GOAL := help
 
 .PHONY: help
 help:
-	@echo "pgwd — Postgres Watch Dog"
+	@echo "$(GREEN)pgwd$(RESET) — Postgres Watch Dog"
 	@echo ""
 	@echo "Usage: make [target]"
 	@echo ""
-	@echo "Build:"
-	@echo "  build              Build binary for current platform"
-	@echo "  build-all          Cross-compile for Linux, macOS, Windows (output in dist/)"
-	@echo "  build-linux        Cross-compile for Linux (amd64, arm64, riscv64)"
-	@echo "  build-darwin       Cross-compile for macOS (amd64, arm64)"
-	@echo "  build-windows      Cross-compile for Windows (amd64, arm64)"
-	@echo "  build-solaris      Cross-compile for Solaris (amd64)"
+	@echo "$(YELLOW)Build:$(RESET)"
+	@echo "  $(GREEN)build$(RESET)              Build binary for current platform"
+	@echo "  $(GREEN)build-all$(RESET)          Cross-compile for Linux, macOS, Windows (output in dist/)"
+	@echo "  $(GREEN)build-linux$(RESET)        Cross-compile for Linux (amd64, arm64, riscv64)"
+	@echo "  $(GREEN)build-darwin$(RESET)       Cross-compile for macOS (amd64, arm64)"
+	@echo "  $(GREEN)build-windows$(RESET)      Cross-compile for Windows (amd64, arm64)"
+	@echo "  $(GREEN)build-solaris$(RESET)      Cross-compile for Solaris (amd64)"
 	@echo ""
-	@echo "Install & run:"
-	@echo "  install            Install to \$$GOBIN (go install)"
-	@echo "  install-man        Install man page to \$$MANDIR/man1 (default /usr/local/share/man)"
-	@echo "  clean              Remove binary and dist/"
+	@echo "$(YELLOW)Install & run:$(RESET)"
+	@echo "  $(GREEN)install$(RESET)            Install to \$$GOBIN (go install)"
+	@echo "  $(GREEN)install-man$(RESET)        Install man page to \$$MANDIR/man1 (default /usr/local/share/man)"
+	@echo "  $(GREEN)clean$(RESET)              Remove binary and dist/"
 	@echo ""
-	@echo "Test:"
-	@echo "  test               Unit tests"
-	@echo "  test-integration   Integration tests (requires Docker)"
-	@echo "  test-e2e-kube      E2E test with kind cluster (requires kind, kubectl, Docker)"
-	@echo "  test-platforms     Multi-platform tests via Ansible (requires VMs; see testing/platforms/)"
-	@echo "                     Target one platform: make test-platforms PLATFORM=pgwd-ubuntu"
-	@echo "  test-platforms-ping  Ansible builtin ping (pong on success); SSH + Python; same inventory"
+	@echo "$(YELLOW)Test:$(RESET)"
+	@echo "  $(GREEN)test$(RESET)               Unit tests"
+	@echo "  $(GREEN)bench$(RESET)              Run internal package benchmarks (non-blocking in CI)"
+	@echo "  $(GREEN)test-integration$(RESET)   Integration tests (requires Docker)"
+	@echo "  $(GREEN)test-e2e-kube$(RESET)      E2E test with kind cluster (requires kind, kubectl, Docker)"
+	@echo "  $(GREEN)test-platforms$(RESET)     Multi-platform tests via Ansible (requires VMs; see testing/platforms/)"
+	@echo "                         Target one platform: make test-platforms PLATFORM=pgwd-ubuntu"
+	@echo "  $(GREEN)test-platforms-ping$(RESET)  Ansible builtin ping (pong on success); SSH + Python; same inventory"
 	@echo ""
-	@echo "Quality:"
-	@echo "  lint               Check gofmt, go vet, and gocyclo"
-	@echo "  lint-fix           Fix formatting (gofmt -s -w)"
-	@echo "  cover              Unit tests with coverage (coverage.out + summary line)"
-	@echo "  cover-check        Fail if library coverage < $(COVERAGE_MIN)% (Docker + Postgres; see COVER_TEST_PKGS)"
-	@echo "  cover-integration  Same stack as test-integration; go test ./... with coverage (coverage-integration.out)"
-	@echo "  tools              Install govulncheck and gocyclo to \$$GOBIN"
-	@echo "  security           govulncheck + docker-scan (same as CI Security workflow)"
+	@echo "$(YELLOW)Quality:$(RESET)"
+	@echo "  $(GREEN)lint$(RESET)               Check gofmt, go vet, and gocyclo"
+	@echo "  $(GREEN)lint-fix$(RESET)           Fix formatting (gofmt -s -w)"
+	@echo "  $(GREEN)cover$(RESET)              Unit tests with coverage (coverage.out + summary line)"
+	@echo "  $(GREEN)cover-check$(RESET)        Fail if library coverage < $(COVERAGE_MIN)% (Docker + Postgres; see COVER_TEST_PKGS)"
+	@echo "  $(GREEN)cover-integration$(RESET)  Same stack as test-integration; go test ./... with coverage (coverage-integration.out)"
+	@echo "  $(GREEN)tools$(RESET)              Install govulncheck and gocyclo to \$$GOBIN"
+	@echo "  $(GREEN)security$(RESET)           govulncheck + docker-scan (same as CI Security workflow)"
 	@echo ""
-	@echo "Docker:"
-	@echo "  docker-build              Build image (native platform) as pgwd"
-	@echo "  docker-buildx-amd64       Build linux/amd64 only, load as pgwd:amd64"
-	@echo "  docker-buildx-amd64-push  Push linux/amd64 (needs DOCKER_IMAGE=registry/img:tag)"
-	@echo "  docker-scan               Build image and run Grype (uses Grype on PATH, else anchore/grype container)"
+	@echo "$(YELLOW)Docker:$(RESET)"
+	@echo "  $(GREEN)docker-build$(RESET)              Build image (native platform) as pgwd"
+	@echo "  $(GREEN)docker-buildx-amd64$(RESET)       Build linux/amd64 only, load as pgwd:amd64"
+	@echo "  $(GREEN)docker-buildx-amd64-push$(RESET)  Push linux/amd64 (needs DOCKER_IMAGE=registry/img:tag)"
+	@echo "  $(GREEN)docker-scan$(RESET)               Build image and run Grype (uses Grype on PATH, else anchore/grype container)"
 	@echo ""
-	@echo "Release:"
-	@echo "  release-check      Run all checks (lint, test, cover-check, test-integration, test-e2e-kube, docker-scan)"
-	@echo "  release            Full release (from main only; runs release-check first)"
-	@echo "  snapshot           Goreleaser snapshot build (outputs to dist/)"
-	@echo "  dist-freebsd       Build FreeBSD tar.gz distfile for ports local testing"
-	@echo "  dist-openbsd       Build OpenBSD tar.gz distfile for ports local testing"
-	@echo "  port-freebsd-sync  Sync VERSION to contrib/freebsd/Makefile (run before port update)"
-	@echo "  port-openbsd-sync  Sync VERSION to contrib/openbsd/port/Makefile (run before port update)"
+	@echo "$(YELLOW)Release:$(RESET)"
+	@echo "  $(GREEN)release-check$(RESET)      Run all checks (lint, test, cover-check, test-integration, test-e2e-kube, docker-scan)"
+	@echo "  $(GREEN)release$(RESET)            Full release (from main only; runs release-check first)"
+	@echo "  $(GREEN)snapshot$(RESET)           Goreleaser snapshot build (outputs to dist/)"
+	@echo "  $(GREEN)dist-freebsd$(RESET)       Build FreeBSD tar.gz distfile for ports local testing"
+	@echo "  $(GREEN)dist-openbsd$(RESET)       Build OpenBSD tar.gz distfile for ports local testing"
+	@echo "  $(GREEN)port-freebsd-sync$(RESET)  Sync VERSION to contrib/freebsd/Makefile (run before port update)"
+	@echo "  $(GREEN)port-openbsd-sync$(RESET)  Sync VERSION to contrib/openbsd/port/Makefile (run before port update)"
 	@echo ""
-	@echo "Examples:"
+	@echo "$(CYAN)Current version:$(RESET) $$(cat VERSION 2>/dev/null | tr -d '\n\r' || echo '?') (ldflags VERSION=$(VERSION), branch $(BRANCH))"
+	@echo ""
+	@echo "$(CYAN)Examples:$(RESET)"
 	@echo "  make build"
 	@echo "  make build VERSION=v0.6.4"
 	@echo "  GOBIN=/usr/local/bin make install"
 	@echo "  make release-check"
-	@echo ""
-	@echo "Current version: $$(cat VERSION 2>/dev/null | tr -d '\n\r' || echo '?') (ldflags VERSION=$(VERSION), branch $(BRANCH))"
 
 # Build for current platform. Override version: make build VERSION=v0.1.0
 build:
@@ -127,6 +133,11 @@ install-man:
 # Run tests (unit tests; integration tests are skipped without PGWD_TEST_* env vars)
 test:
 	go test ./...
+
+# Benchmarks (non-blocking in CI; no minimum performance gate)
+.PHONY: bench
+bench:
+	go test -bench=. -benchmem -run=^$$ ./internal/...
 
 # Coverage report (writes coverage.out in repo root; not part of release-check)
 .PHONY: cover cover-check cover-integration integration-compose-up integration-compose-down

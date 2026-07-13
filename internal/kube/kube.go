@@ -3,6 +3,7 @@ package kube
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -17,15 +18,22 @@ import (
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/portforward"
-	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/client-go/transport/spdy"
 )
 
-const discoverPasswordPlaceholder = "DISCOVER_MY_PASSWORD"
+const discoverPasswordRemovedMsg = "DISCOVER_MY_PASSWORD was removed in pgwd 0.9.x. Migration: docs/kubernetes-passwords.md — use kube.password_from_secret (contrib/profiles/kube-prod.yml), contrib/k8s/pgwd-kube-run.sh, or PGWD_DB_URL from kubectl get secret"
+
+var errDiscoverPasswordRemoved = errors.New(discoverPasswordRemovedMsg)
+
+// PasswordFromSecret mirrors kube.password_from_secret config (avoids importing internal/config).
+type PasswordFromSecret struct {
+	Namespace string
+	Name      string
+	Key       string
+}
 
 // getConfig loads rest.Config from kubeconfig. kubeContext empty = current context.
 func getConfig(kubeContext string) (*rest.Config, error) {
@@ -184,45 +192,64 @@ func ResolvePod(ctx context.Context, kubeContext, namespace, resource string) (s
 	return resolvePodFromService(ctx, clientset, namespace, strings.TrimPrefix(resource, "svc/"))
 }
 
-// GetPasswordFromPod reads the given env var from the pod's container.
-func GetPasswordFromPod(ctx context.Context, kubeContext, namespace, podName, container, envVar string) (string, error) {
-	config, clientset, err := getConfigAndClientset(kubeContext)
+// ReadSecretKey returns the string value for key in the named Secret (client-go read-only).
+func ReadSecretKey(ctx context.Context, kubeContext, namespace, name, key string) (string, error) {
+	if namespace == "" || name == "" {
+		return "", fmt.Errorf("secret namespace and name are required")
+	}
+	if key == "" {
+		key = "password"
+	}
+	_, clientset, err := getConfigAndClientset(kubeContext)
 	if err != nil {
 		return "", err
 	}
-	req := clientset.CoreV1().RESTClient().Post().
-		Resource("pods").Namespace(namespace).Name(podName).
-		SubResource("exec")
-	opts := &corev1.PodExecOptions{
-		Command: []string{"printenv", envVar},
-		Stdout:  true,
-		Stderr:  true,
-		TTY:     false,
-	}
-	if container != "" {
-		opts.Container = container
-	}
-	req.VersionedParams(opts, scheme.ParameterCodec)
-	var buf bytes.Buffer
-	executor, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
+	sec, err := clientset.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("get secret %s/%s: %w", namespace, name, err)
 	}
-	err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
-		Stdout: &buf,
-		Stderr: &buf,
-	})
-	if err != nil {
-		return "", fmt.Errorf("exec in pod %s: %w", podName, err)
+	b, ok := sec.Data[key]
+	if !ok {
+		return "", fmt.Errorf("secret %s/%s has no key %q", namespace, name, key)
 	}
-	out := strings.TrimSpace(buf.String())
-	if out != "" {
-		return out, nil
+	return string(b), nil
+}
+
+// ResolveKubeDBURL rejects DISCOVER_MY_PASSWORD, optionally loads password or full DSN from a Secret,
+// and rewrites the host to localhost for port-forward.
+func ResolveKubeDBURL(ctx context.Context, kubeContext, dbURL string, secret PasswordFromSecret, localPort int) (string, error) {
+	if containsDiscoverPassword(dbURL) {
+		return "", errDiscoverPasswordRemoved
 	}
-	if envVar != "PGPASSWORD" {
-		return GetPasswordFromPod(ctx, kubeContext, namespace, podName, container, "PGPASSWORD")
+	baseURL := dbURL
+	password := ""
+	if secret.Name != "" {
+		key := secret.Key
+		if key == "" {
+			key = "password"
+		}
+		ns := secret.Namespace
+		if ns == "" {
+			return "", fmt.Errorf("kube password_from_secret: namespace is required")
+		}
+		val, err := ReadSecretKey(ctx, kubeContext, ns, secret.Name, key)
+		if err != nil {
+			return "", err
+		}
+		if key == "url" || strings.HasPrefix(val, "postgres://") || strings.HasPrefix(val, "postgresql://") {
+			baseURL = val
+		} else {
+			password = val
+		}
+		if containsDiscoverPassword(baseURL) {
+			return "", errDiscoverPasswordRemoved
+		}
 	}
-	return "", fmt.Errorf("could not find %s or PGPASSWORD in pod %s", envVar, podName)
+	return ReplaceDBURLForKube(baseURL, password, localPort)
+}
+
+func containsDiscoverPassword(dbURL string) bool {
+	return strings.Contains(dbURL, "DISCOVER_MY_PASSWORD")
 }
 
 // StartPortForward runs port-forward to localPort:5432 (Postgres).
@@ -295,16 +322,6 @@ func StartPortForwardTo(ctx context.Context, kubeContext, namespace, resource st
 		}
 		return nil, fmt.Errorf("port %d did not become ready in time (port-forward may have failed)", localPort)
 	}
-}
-
-// DiscoverPasswordPlaceholder returns the placeholder string used in DBURL to trigger password discovery from the pod.
-func DiscoverPasswordPlaceholder() string {
-	return discoverPasswordPlaceholder
-}
-
-// URLContainsDiscoverPassword returns true if the connection URL contains the discover-password placeholder.
-func URLContainsDiscoverPassword(dbURL string) bool {
-	return strings.Contains(dbURL, discoverPasswordPlaceholder)
 }
 
 // ReplaceDBURLForKube returns a new connection URL with host set to localhost:localPort and, if newPassword is non-empty, the user info password replaced.

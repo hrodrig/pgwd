@@ -36,6 +36,41 @@ dry_run: true
 log_level: info    # info (default) or debug; debug = verbose dry-run stats
 notify_on_connect_failure: false
 
+# Optional anonymous usage (daemon mode only; interval > 0):
+# enable_collector: false       # opt-in — default off
+# enable_update_check: true      # opt-out GitHub release check — default on
+#
+# When enable_collector is true, pgwd POSTs once per daemon start to:
+#   https://collect.gghstats.com/a1b2c3d4e5f6a7b8
+# Example JSON body (no secrets — boolean feature flags only):
+#   {
+#     "version": "0.9.0",
+#     "commit": "abc1234",
+#     "build_date": "2026-07-13T12:00:00Z",
+#     "hash": "a1b2c3d4e5f67890",
+#     "features": {
+#       "multi_db": false,
+#       "uses_level_mode": true,
+#       "long_query_enabled": false,
+#       "has_slack": true,
+#       "has_loki": true,
+#       "has_kube_postgres": false,
+#       "has_kube_loki": false,
+#       "has_sqlite_store": true,
+#       "has_sql_metrics_store": false,
+#       "has_http_listen": true,
+#       "confirm_alert_gt_1": false,
+#       "confirm_ok_gt_1": false,
+#       "dry_run": false
+#     }
+#   }
+# Never sent: DSN/URL, hostnames, client, webhooks, paths, secrets.
+#
+# When enable_update_check is true (default), pgwd GETs:
+#   https://api.github.com/repos/hrodrig/pgwd/releases/latest
+# No pgwd config leaves the host; only public release tag for semver compare.
+# See README "Anonymous usage" and SPECIFICATIONS.md §3.
+
 # -----------------------------------------------------------------------------
 # Database connection and thresholds (databases: canonical; db: deprecated)
 # -----------------------------------------------------------------------------
@@ -61,9 +96,12 @@ databases:
     # long_query_cooldown_seconds: 3600 # min time between long_query alerts per target (default 3600 if min set)
     # long_query_min_count: 1          # alert when count >= N
 
-# Multi-DB example (uncomment and adjust):
+# Multi-DB example (uncomment and adjust). Each url may use a different user:password.
+# In-cluster: inject URLs from Secrets at deploy (Helm/Kustomize) — docs/use-cases.md UC-5.
+# Outside cluster: N port-forwards + 127.0.0.1 URLs — docs/use-cases.md UC-6.
+# Cannot combine with kube.postgres in one config. See docs/use-cases.md.
 # databases:
-#   - url: postgres://user:pass@host1:5432/prod
+#   - url: postgres://user_a:pass_a@host1:5432/prod
 #     client: "monitor-01-prod"
 #     stale_age: 0
 #     threshold:
@@ -123,8 +161,17 @@ databases:
 # http:
 #   listen: ":8080"
 #   base_path: "/api/pgwd/v1"     # paths are relative to this
-#   healthz_path: "/healthz"      # → /api/pgwd/v1/healthz
+#   healthz_path: "/healthz"      # → /api/pgwd/v1/healthz (always open for probes)
 #   metrics_path: "/metrics"     # → /api/pgwd/v1/metrics
+#   metrics_token: ""            # OPT-IN: leave empty for anonymous /metrics (default)
+#   metrics_basic_user: ""       # OPT-IN: basic auth for /metrics only (both user+password required)
+#   metrics_basic_password: ""
+#
+# In-cluster Prometheus / Grafana Alloy: leave metrics_token and metrics_basic_* empty.
+# ServiceMonitor / PodMonitor scrapes work without credentials (same as before 0.9.x).
+# Enable token or basic auth only when http.listen is reachable beyond a trusted network
+# (VM, port-forward, wide bind). See contrib/k8s/README.md#http-metrics-privacy-opt-in.
+# Bind to loopback or use NetworkPolicy when the port is not cluster-internal only.
 #
 # -----------------------------------------------------------------------------
 # Kubernetes (optional)
@@ -135,14 +182,22 @@ databases:
 #   No kubectl. No kube.postgres.
 # - pgwd OUTSIDE K8s (VM, cron): use kube.postgres + port-forward (client-go, no kubectl).
 #
+# DISCOVER_MY_PASSWORD was REMOVED in 0.9.x. Migration (copy-paste recipes):
+#   docs/kubernetes-passwords.md
+# Ready-made outside-cluster profile: contrib/profiles/kube-prod.yml
+# Wrapper (cron): contrib/k8s/pgwd-kube-run.sh | RBAC: contrib/k8s/rbac-outside-cluster.yaml
+#
 kube:
   context: ""
   local_port: 5432
   loki: ""
   loki_local_port: 3100
   loki_remote_port: 3100
-  password_container: ""   # deprecated with DISCOVER_MY_PASSWORD (removed 0.9.x)
-  password_var: POSTGRES_PASSWORD   # deprecated with DISCOVER_MY_PASSWORD (removed 0.9.x)
+  # Outside cluster: read password or full DSN from Secret (no pods/exec). See docs/kubernetes-passwords.md
+  password_from_secret:
+    namespace: ""
+    name: ""
+    key: password   # or "url" for a full postgres:// DSN in the Secret
   postgres: ""
 
 # -----------------------------------------------------------------------------
