@@ -11,7 +11,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 - **Kubernetes:** removed **`DISCOVER_MY_PASSWORD`** / `pods/exec` password discovery. Use Secret-backed DSN, **`contrib/k8s/pgwd-kube-run.sh`**, or **`kube.password_from_secret`** — [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md). Sample RBAC: **`contrib/k8s/rbac-outside-cluster.yaml`**.
 - **`/metrics` exporter:** full Prometheus label-value escaping — fixes scraper breakage when `client` / `cluster` / `database` contain quotes, newlines, or control characters.
 - **CSV export:** prefix sanitization on string columns — mitigates spreadsheet formula injection when opening exports in Excel or Google Sheets.
-- **HTTP `/metrics`:** optional **`http.metrics_token`** (Bearer or `?token=`) and **`http.metrics_basic_*`** — limits exposure of connection stats; **`/healthz` stays open** for probes.
+- **HTTP `/metrics`:** optional **`http.metrics_token`** (Bearer or `?token=`) and **`http.metrics_basic_*`** — **opt-in**; default empty = anonymous scrape (in-cluster Prometheus/Alloy unchanged). Limits exposure when `http.listen` is reachable outside a trusted network; **`/healthz` stays open** for probes. See **`contrib/k8s/README.md`**.
 
 ### Changed
 

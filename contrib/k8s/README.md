@@ -111,6 +111,28 @@ spec:
 
 When `PGWD_HTTP_LISTEN` is set, default paths are `/api/pgwd/v1/healthz` and `/api/pgwd/v1/metrics`.
 
+## HTTP `/metrics` privacy (opt-in)
+
+**Default: no credentials.** Leave `http.metrics_token` and `http.metrics_basic_*` empty (or unset). Prometheus, Grafana Alloy, and kube probes behave as before — anonymous `GET /metrics`, open `GET /healthz`.
+
+| Setting | Effect |
+|---------|--------|
+| *(empty)* | In-cluster scrape without auth — typical `ServiceMonitor` / `PodMonitor` setup |
+| `http.metrics_token` | `/metrics` requires `Authorization: Bearer <token>` or `?token=`; `/healthz` unchanged |
+| `http.metrics_basic_user` + `password` | `/metrics` requires HTTP Basic auth; `/healthz` unchanged |
+
+**When to enable:** pgwd listens on a host network, VM, or `port-forward` where firewall / NetworkPolicy alone is not enough. **In-cluster:** prefer ClusterIP + NetworkPolicy; auth is optional extra.
+
+**Prometheus scrape with token** (only if you set `metrics_token`):
+
+```yaml
+# prometheus.yml excerpt
+authorization:
+  credentials: "<same value as http.metrics_token>"
+```
+
+Env equivalents: `PGWD_HTTP_METRICS_TOKEN`, `PGWD_HTTP_METRICS_BASIC_USER`, `PGWD_HTTP_METRICS_BASIC_PASSWORD`.
+
 ## pgwd outside the cluster
 
 When pgwd runs on a VM or cron host, use `-kube-postgres` / `-kube-loki` with client-go port-forward (kubeconfig required; no kubectl binary). **Do not use `DISCOVER_MY_PASSWORD`** in the DSN — it requires `pods/exec` RBAC and will be **removed in 0.9.x**. Rationale and migration: **[docs/kubernetes-passwords.md](../docs/kubernetes-passwords.md)**.

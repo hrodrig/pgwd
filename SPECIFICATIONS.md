@@ -39,8 +39,8 @@ Documented operator-facing gaps; planned hardening is in [ROADMAP.md](ROADMAP.md
 
 | Topic | Current behavior | Planned |
 |-------|------------------|---------|
-| HTTP `/metrics` and `/healthz` auth | No authentication or authorization | Optional token or basic auth (0.9.x) |
-| Prometheus label escaping | Backslash and double-quote only | Full label-value sanitization (0.9.x) |
+| HTTP `/metrics` and `/healthz` auth | **`/healthz` always open.** **`/metrics` auth opt-in** (`http.metrics_token`, `http.metrics_basic_*`); empty = anonymous scrape (default for in-cluster Prometheus/Alloy) | — |
+| Prometheus label escaping | Full label-value sanitization (0.9.x) | Shipped |
 | Notifier transport TLS | Operator-supplied URLs; `http://` allowed for Slack, Loki, Teams, generic webhook | Startup warning for non-HTTPS URLs (0.9.x) |
 | Postgres query timeout | Uses caller `context`; no dedicated query timeout | Nice-to-have (0.9.x) |
 | Structured logging | `log.Printf` only | Post-1.0 |
@@ -190,6 +190,9 @@ When `databases:` is non-empty in the config file, each entry is one Postgres ta
 | `http.base_path` | string | `/api/pgwd/v1` | |
 | `http.health_path` | string | `/healthz` | |
 | `http.metrics_path` | string | `/metrics` | |
+| `http.metrics_token` | string | — | **Opt-in.** When set, `/metrics` requires Bearer token or `?token=`; leave empty for anonymous scrape (default). |
+| `http.metrics_basic_user` | string | — | **Opt-in** with `http.metrics_basic_password`; Basic auth on `/metrics` only. |
+| `http.metrics_basic_password` | string | — | Pair with `http.metrics_basic_user`. |
 
 ### Environment variables (PGWD_*)
 
@@ -424,12 +427,12 @@ Optional (`http.listen`). Endpoints:
 
 Used for Kubernetes liveness/readiness probes and Prometheus scraping.
 
-### Operator security (v0.7.0)
+### Operator security
 
-- **No authentication** on `/healthz` or `/metrics` — any client that can reach `http.listen` can read them.
-- `/metrics` exposes **topology labels** (`client`, `cluster`, `database`) and connection counts. Bind to loopback (e.g. `127.0.0.1:8080`) or restrict with firewall / NetworkPolicy when the port is not cluster-internal only.
-- **Prometheus label values** are escaped for `\` and `"` only. Values containing newlines or other control characters may break scraping; sanitize `client` / `cluster` / `database` in config.
-- Optional token or basic auth for the HTTP server is **planned for 0.9.x** (see [ROADMAP.md](ROADMAP.md)).
+- **`/healthz`:** no authentication (Kubernetes probes must work without secrets).
+- **`/metrics`:** **opt-in** authentication. With `http.metrics_token` and `http.metrics_basic_*` **unset or empty**, `/metrics` is **anonymous** — the usual in-cluster Prometheus / Grafana Alloy scrape (no credentials). When token or basic auth is configured, only `/metrics` is protected; probes still use `/healthz`.
+- `/metrics` exposes **topology labels** (`client`, `cluster`, `database`) and connection counts. Prefer ClusterIP + NetworkPolicy in Kubernetes; bind to loopback on VMs when the port is not cluster-internal only.
+- **Prometheus label values** are escaped for `\`, `"`, newlines, and other control characters (0.9.x).
 
 ## 9. Kubernetes integration
 

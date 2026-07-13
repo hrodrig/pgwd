@@ -125,10 +125,15 @@ databases:
 #   base_path: "/api/pgwd/v1"     # paths are relative to this
 #   healthz_path: "/healthz"      # → /api/pgwd/v1/healthz (always open for probes)
 #   metrics_path: "/metrics"     # → /api/pgwd/v1/metrics
-#   metrics_token: ""            # optional Bearer token or ?token= for /metrics only
-#   metrics_basic_user: ""       # optional basic auth for /metrics only
+#   metrics_token: ""            # OPT-IN: leave empty for anonymous /metrics (default)
+#   metrics_basic_user: ""       # OPT-IN: basic auth for /metrics only (both user+password required)
 #   metrics_basic_password: ""
-# Bind to loopback or a private interface unless a reverse proxy enforces access.
+#
+# In-cluster Prometheus / Grafana Alloy: leave metrics_token and metrics_basic_* empty.
+# ServiceMonitor / PodMonitor scrapes work without credentials (same as before 0.9.x).
+# Enable token or basic auth only when http.listen is reachable beyond a trusted network
+# (VM, port-forward, wide bind). See contrib/k8s/README.md#http-metrics-privacy-opt-in.
+# Bind to loopback or use NetworkPolicy when the port is not cluster-internal only.
 #
 # -----------------------------------------------------------------------------
 # Kubernetes (optional)
