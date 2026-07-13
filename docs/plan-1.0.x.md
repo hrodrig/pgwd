@@ -52,13 +52,56 @@
 
 ---
 
+## Marketing — transparent comparison (1.0 gate)
+
+Same pattern as **[gfire/docs/compare.md](https://github.com/hrodrig/gfire/blob/main/docs/compare.md)** and **[groot § vs kubectl-gather](https://github.com/hrodrig/groot#groot-vs-kubectl-gather)**: honest matrix, “when to pick”, “when not pgwd”, footnote that competitor claims are best-effort.
+
+### Deliverables
+
+| Artifact | Action |
+|----------|--------|
+| **`docs/compare.md`** | Full matrix + narratives |
+| **`README.md`** | § Compare — short table + link to `docs/compare.md` |
+| **`docs/README.md`** | Index link |
+| **`docs/use-cases.md`** | Cross-link (“deployment how-to” vs “product choice”) |
+| **pgwd-hermesrodriguez-com** | `/compare` page (i18n if site already multi-locale) |
+| **CHANGELOG 1.0.0** | Note positioning docs under **Documentation** |
+
+### Alternatives to cover (minimum)
+
+| Alternative | Category | pgwd contrast (honest) |
+|-------------|----------|-------------------------|
+| **Prometheus `postgres_exporter` + Grafana/Alertmanager** | Metrics stack | pgwd = **connection-focused watchdog**, no Prometheus required; optional `/metrics` export. Exporter = broad SQL metrics, you own alert rules + stack ops. |
+| **pgwatch / pgwatch3** | Postgres monitoring suite | pgwd = **single binary**, read-only connection/stale alerts; pgwatch = richer dashboards/metrics, heavier deploy. |
+| **Datadog / New Relic / hosted APM** | SaaS observability | pgwd = **self-hosted**, no vendor lock-in, narrow scope, signed supply chain; SaaS = full platform, cost, agent. |
+| **AWS CloudWatch / GCP Cloud SQL / Azure** managed DB alarms | Cloud-native | pgwd = **same tool everywhere** (on-prem, K8s, VM, multi-cloud); cloud alarms = per-provider, often connection/limit focused but not pgwd’s notifier/hysteresis story. |
+| **cron + `psql` / shell script** | DIY | pgwd = **threshold tiers**, resolution alerts, SQLite history, multi-DB daemon, connect-failure notify; DIY = zero deps but you maintain scripts. |
+| **Nagios / check_postgres-style** | Legacy monitoring | pgwd = **Postgres-native** (`pg_stat_activity`), modern notifiers (Slack, Loki, PagerDuty); Nagios = generic plugin ecosystem. |
+
+### Out of scope for compare doc
+
+- Full **query performance** / slow-query platforms (pgwd only has optional **long-query** alerts)
+- **Connection poolers** (PgBouncer) as “alternatives” — complementary, not substitutes
+- **Incident bundles** (e.g. Groot) — different problem
+
+### Checklist
+
+- [ ] `docs/compare.md` drafted (snapshot version **v1.0.0** in header)
+- [ ] README § Compare + TOC entry
+- [ ] ROADMAP document map updated (remove “planned” when shipped)
+- [ ] Landing `/compare` live or linked from README
+- [ ] Competitor feature claims re-verified before tag
+
+---
+
 ## Documentation
 
 | Artifact | Action |
 |----------|--------|
 | `SPECIFICATIONS.md` | Remove "deprecated" and "planned" notes; 1.0 is the contract |
-| `README.md` | Badges, version, breaking upgrade link |
-| `CHANGELOG.md` | 1.0.0 section with full breaking list |
+| `README.md` | Badges, version, breaking upgrade link, **§ Compare** (short table → `docs/compare.md`) |
+| `docs/compare.md` | **New** — transparent vs alternatives (see Marketing section above) |
+| `CHANGELOG.md` | 1.0.0 section with full breaking list + positioning docs |
 | `docs/UPGRADE-*` | 0.9 → 1.0 migration guide |
 | `contrib/pgwd.conf.example` | Only `databases:` canonical form |
 
