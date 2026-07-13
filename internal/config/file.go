@@ -52,10 +52,13 @@ type fileConfig struct {
 	ConfirmAlert int `yaml:"confirm_alert"`
 	ConfirmOk    int `yaml:"confirm_ok"`
 	HTTP         struct {
-		Listen      string `yaml:"listen"`
-		BasePath    string `yaml:"base_path"`
-		HealthPath  string `yaml:"healthz_path"`
-		MetricsPath string `yaml:"metrics_path"`
+		Listen               string `yaml:"listen"`
+		BasePath             string `yaml:"base_path"`
+		HealthPath           string `yaml:"healthz_path"`
+		MetricsPath          string `yaml:"metrics_path"`
+		MetricsToken         string `yaml:"metrics_token"`
+		MetricsBasicUser     string `yaml:"metrics_basic_user"`
+		MetricsBasicPassword string `yaml:"metrics_basic_password"`
 	} `yaml:"http"`
 	Kube struct {
 		Context            string `yaml:"context"`
@@ -166,6 +169,9 @@ func fileConfigToConfig(fc fileConfig) Config {
 		HTTPBasePath:             fc.HTTP.BasePath,
 		HTTPHealthPath:           fc.HTTP.HealthPath,
 		HTTPMetricsPath:          fc.HTTP.MetricsPath,
+		HTTPMetricsToken:         fc.HTTP.MetricsToken,
+		HTTPMetricsBasicUser:     fc.HTTP.MetricsBasicUser,
+		HTTPMetricsBasicPassword: fc.HTTP.MetricsBasicPassword,
 		SlackWebhook:             fc.Notifications.Slack.Webhook,
 		PagerDutyEnabled:         fc.Notifications.PagerDuty.Enabled,
 		PagerDutyRoutingKey:      fc.Notifications.PagerDuty.RoutingKey,

@@ -94,6 +94,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	if !metricsAuthorized(r, s.cfg) {
+		writeMetricsUnauthorized(w, s.cfg)
+		return
+	}
 	if s.st == nil {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)

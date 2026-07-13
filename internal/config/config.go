@@ -127,10 +127,13 @@ type Config struct {
 	ConfirmOk    int // consecutive "ok" checks before resolution notification (default 1)
 
 	// HTTP: metrics and health endpoint for Kubernetes probes. Optional.
-	HTTPListen      string // e.g. ":8080"; empty = disabled
-	HTTPBasePath    string // e.g. "/api/pgwd/v1"; paths relative to this
-	HTTPHealthPath  string // e.g. "/healthz" → base_path + health_path
-	HTTPMetricsPath string // e.g. "/metrics" → base_path + metrics_path
+	HTTPListen               string // e.g. ":8080"; empty = disabled
+	HTTPBasePath             string // e.g. "/api/pgwd/v1"; paths relative to this
+	HTTPHealthPath           string // e.g. "/healthz" → base_path + health_path
+	HTTPMetricsPath          string // e.g. "/metrics" → base_path + metrics_path
+	HTTPMetricsToken         string // optional; when set, /metrics requires Bearer token or ?token=
+	HTTPMetricsBasicUser     string // optional basic auth user for /metrics only
+	HTTPMetricsBasicPassword string // optional basic auth password for /metrics only
 }
 
 // ConfigPath returns the config file path: -config flag, PGWD_CONFIG, or DefaultConfigPath.
@@ -223,6 +226,10 @@ func applyEnvSqliteAndHTTP(cfg *Config) {
 	if v := envInt("CONFIRM_OK", -1); v >= 0 {
 		cfg.ConfirmOk = v
 	}
+	applyEnvHTTP(cfg)
+}
+
+func applyEnvHTTP(cfg *Config) {
 	if v := env("HTTP_LISTEN", ""); v != "" {
 		cfg.HTTPListen = v
 		// Apply defaults for paths when only HTTP_LISTEN is set
@@ -244,6 +251,15 @@ func applyEnvSqliteAndHTTP(cfg *Config) {
 	}
 	if v := env("HTTP_METRICS_PATH", ""); v != "" {
 		cfg.HTTPMetricsPath = v
+	}
+	if v := env("HTTP_METRICS_TOKEN", ""); v != "" {
+		cfg.HTTPMetricsToken = v
+	}
+	if v := env("HTTP_METRICS_BASIC_USER", ""); v != "" {
+		cfg.HTTPMetricsBasicUser = v
+	}
+	if v := env("HTTP_METRICS_BASIC_PASSWORD", ""); v != "" {
+		cfg.HTTPMetricsBasicPassword = v
 	}
 }
 

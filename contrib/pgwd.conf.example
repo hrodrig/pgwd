@@ -123,8 +123,12 @@ databases:
 # http:
 #   listen: ":8080"
 #   base_path: "/api/pgwd/v1"     # paths are relative to this
-#   healthz_path: "/healthz"      # → /api/pgwd/v1/healthz
+#   healthz_path: "/healthz"      # → /api/pgwd/v1/healthz (always open for probes)
 #   metrics_path: "/metrics"     # → /api/pgwd/v1/metrics
+#   metrics_token: ""            # optional Bearer token or ?token= for /metrics only
+#   metrics_basic_user: ""       # optional basic auth for /metrics only
+#   metrics_basic_password: ""
+# Bind to loopback or a private interface unless a reverse proxy enforces access.
 #
 # -----------------------------------------------------------------------------
 # Kubernetes (optional)
