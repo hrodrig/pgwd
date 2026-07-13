@@ -10,11 +10,31 @@ import (
 	"github.com/hrodrig/pgwd/internal/store"
 )
 
+func escapePrometheusLabelValue(val string) string {
+	var b strings.Builder
+	for _, r := range val {
+		switch r {
+		case '\\':
+			b.WriteString(`\\`)
+		case '"':
+			b.WriteString(`\"`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\r':
+			// drop CR; LF is escaped above
+		default:
+			if r < 0x20 {
+				b.WriteRune('_')
+			} else {
+				b.WriteRune(r)
+			}
+		}
+	}
+	return b.String()
+}
+
 func promLabel(key, val string) string {
-	// Prometheus label value: escape \ and "
-	val = strings.ReplaceAll(val, `\`, `\\`)
-	val = strings.ReplaceAll(val, `"`, `\"`)
-	return fmt.Sprintf(`%s="%s"`, key, val)
+	return fmt.Sprintf(`%s="%s"`, key, escapePrometheusLabelValue(val))
 }
 
 // Server serves /healthz and /metrics for Kubernetes probes and Prometheus.
