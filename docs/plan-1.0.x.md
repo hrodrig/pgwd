@@ -94,6 +94,40 @@ Same pattern as **[gfire/docs/compare.md](https://github.com/hrodrig/gfire/blob/
 
 ---
 
+## Distro packaging (1.x)
+
+**Goal:** get **pgwd** into **official** OS package trees so operators can `apt` / `apk` / `pkg` / `dnf` without downloading GitHub assets. Today: GoReleaser artifacts, Homebrew tap, and **`contrib/`** port seeds — not yet in most official trees.
+
+**Not a hard gate for the first `v1.0.0` tag** (review boards / freeze windows are external). Start submissions when **1.0** is stable; track acceptances through **1.x**.
+
+### Targets
+
+| Distro / OS | Mechanism | Seed / notes |
+|-------------|-----------|--------------|
+| **Debian** | ITP → unstable → testing | GoReleaser `.deb` is **not** a Debian package; need proper packaging + mentor |
+| **Ubuntu** | Sync from Debian or upload | Prefer Debian first |
+| **Fedora** | Package review → repos | `.rpm` from GoReleaser ≠ Fedora guidelines |
+| **Alpine** | aports MR | OpenRC already in `contrib/openrc` |
+| **FreeBSD** | ports Bugzilla | `contrib/freebsd` + [PORT-RELEASE.md](../contrib/freebsd/PORT-RELEASE.md) |
+| **OpenBSD** | ports@ diff | `contrib/openbsd` |
+| **NetBSD** | pkgsrc | New / adapt from FreeBSD port |
+| **DragonFly BSD** | DPorts | `contrib/dragonflybsd` |
+| **Arch / openSUSE / …** | As demand | Optional after core set |
+
+### Checklist
+
+- [ ] Inventory: which `contrib/*` ports are submission-ready at v1.0.0
+- [ ] FreeBSD: update + submit / refresh Bugzilla if needed
+- [ ] OpenBSD: ports@ with makesum + diff
+- [ ] Alpine aports draft
+- [ ] Debian ITP filed
+- [ ] Fedora review request (or COPR interim documented)
+- [ ] NetBSD pkgsrc + DragonFly DPorts
+- [ ] README “Install” updated when each official path lands
+- [ ] Track acceptances in GitHub issues / CHANGELOG under Documentation
+
+---
+
 ## Documentation
 
 | Artifact | Action |

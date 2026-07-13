@@ -30,7 +30,7 @@ flowchart LR
 | **0.7.x** | ✅ Ready (v0.7.0) | Jul 2026 | PagerDuty, Teams, generic webhook + JWT/HMAC, shared HTTP retry | [plan-0.7.x.md](docs/plan-0.7.x.md) · [CHANGELOG](CHANGELOG.md#070---2026-07-03) |
 | **0.8.0** | ✅ Ready (v0.8.0) | Jul 2026 | Syft SBOM + Cosign keyless signing (GHCR + release artifacts) | [plan-0.8.x.md](docs/plan-0.8.x.md) · [CHANGELOG](CHANGELOG.md#080---2026-07-11) |
 | **0.9.x** | ✅ Ready (v0.9.0) | Jul 2026 | Pre-1.0 polish, DISCOVER removal, profiles, `--strict`, collector, SPEC audit | [plan-0.9.x.md](docs/plan-0.9.x.md) · [CHANGELOG](CHANGELOG.md#090---2026-07-13) |
-| **1.0.0** | 📋 **Active** | Jul 2026 | Breaking stable API, deprecations removed, **compare / positioning docs** | [plan-1.0.x.md](docs/plan-1.0.x.md) |
+| **1.0.0** | 📋 **Active** | Jul 2026 | Breaking stable API, compare docs, **start official distro packaging** | [plan-1.0.x.md](docs/plan-1.0.x.md) |
 
 **Suggested calendar** (from band plans — **slip OK**; 0.7.x started 2026-07-02):
 
@@ -105,6 +105,23 @@ Each band: design → implement → test → `make release-check` → docs → t
 | **Landing `/compare`** | Mirror on [pgwd.hermesrodriguez.com](https://pgwd.hermesrodriguez.com) (app repo) for 1.0 announcement |
 | **`docs/use-cases.md`** | Cross-link from compare doc (deployment scenarios already shipped in 0.9.x) |
 
+**Distro packaging (1.x — start with v1.0.0; acceptance may land in later 1.x):**
+
+Aim for **official** packages / ports (not only GitHub Releases / Homebrew tap / GoReleaser `.deb`/`.rpm`). Use existing **`contrib/`** port files as submission seeds where present.
+
+| Target | Path |
+|--------|------|
+| **Debian** / **Ubuntu** | ITP + mentors; sync / universe once in Debian |
+| **Fedora** | Package review → official repos |
+| **Alpine** | aports (`apk`) |
+| **FreeBSD** | Official ports tree (`contrib/freebsd` → Bugzilla) |
+| **OpenBSD** | Official ports (`contrib/openbsd` → ports@) |
+| **NetBSD** | pkgsrc |
+| **DragonFly BSD** | DPorts (`contrib/dragonflybsd`) |
+| **Others** | As demand appears (e.g. Arch AUR → community, openSUSE) |
+
+Acceptance timelines are external (reviewers, freeze windows) — **not** a hard blocker for tagging **v1.0.0**; track progress in [plan-1.0.x.md](docs/plan-1.0.x.md) and GitHub issues.
+
 **Candidates to compare** (verify upstream before each release): Prometheus **`postgres_exporter`** + Grafana/Alertmanager; **pgwatch** / pgwatch3; **hosted APM** (Datadog, New Relic); **cloud RDS/Cloud SQL** connection alarms; **cron + `psql`** / Nagios-style checks. pgwd is **not** a full metrics platform — position as a **read-only connection watchdog** with notifier + hysteresis out of the box.
 
 **Release gate:** 100+ tests ✅, [plan-0.8.x](docs/plan-0.8.x.md) supply chain shipped, `make release-check` green, man page + demo GIF synced, **compare doc reviewed**.
@@ -162,6 +179,7 @@ See [SPECIFICATIONS.md §2](SPECIFICATIONS.md#2-scope).
 - Per-database `kube.postgres` in `databases:`
 - Additional Prometheus series or OpenMetrics (today: text exposition on HTTP `/metrics`)
 - Discord, email, additional channels via same notifier pattern as 0.7.x
+- Finish / expand **official distro** coverage if any 1.x submissions still pending (see [plan-1.0.x.md](docs/plan-1.0.x.md) § Distro packaging)
 
 Track via GitHub issues after 1.0.0.
 
