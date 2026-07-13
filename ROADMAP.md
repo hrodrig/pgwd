@@ -67,21 +67,21 @@ Each band: design → implement → test → `make release-check` → docs → t
 
 → [plan-0.8.x.md](docs/plan-0.8.x.md)
 
-### 0.9.x — pre-1.0 polish and security
+### 0.9.x — pre-1.0 polish and security ✅ (on `develop`; tag pending)
 
 | Item | Notes |
 |------|--------|
-| **Remove `DISCOVER_MY_PASSWORD`** | Decision record: [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md). Replace with Secret-backed URLs, wrapper script, `kube.password_from_secret` |
-| **Config profiles** | `contrib/profiles/` (minimal-slack, daemon-loki, kube-prod, multi-db) |
-| **`--strict`** | Optional exit 4 on notify delivery failure |
-| **Coverage** | **`make cover-check`** ≥ 80% (library packages; homologated with kzero) |
-| **Collector** | Opt-in anonymous daemon telemetry + opt-out update check (gghstats model) |
-| **Deprecation runway** | Stronger warnings for legacy `db:` config |
-| **HTTP metrics privacy** | Operator bind guidance; optional `/metrics` token or basic auth |
-| **Prometheus label escape** | Full label-value sanitization in `/metrics` exporter |
-| **CSV export safety** | Prefix sanitization for spreadsheet formula injection |
-| **Notifier TLS warning** | Log when Slack/Loki/Teams/generic URLs use `http://` |
-| **SPEC audit** | [SPECIFICATIONS.md](SPECIFICATIONS.md) matches shipped 0.9 code (§8 HTTP, §10 CSV, notifications TLS, collector privacy) |
+| **Remove `DISCOVER_MY_PASSWORD`** ✅ | Decision record: [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md). `kube.password_from_secret`, wrapper, RBAC sample |
+| **Config profiles** ✅ | `contrib/profiles/` (minimal-slack, daemon-loki, kube-prod, multi-db) |
+| **`--strict`** ✅ | Optional exit 4 on notify delivery failure |
+| **Coverage** ✅ | **`make cover-check`** ≥ 80% (library packages) |
+| **Collector** ✅ | Opt-in telemetry + opt-out update check → `collect.gghstats.com` |
+| **Deprecation runway** ✅ | Stronger warnings for legacy `db:` config |
+| **HTTP metrics privacy** ✅ | Optional `/metrics` token or basic auth |
+| **Prometheus label escape** ✅ | Full label-value sanitization in `/metrics` exporter |
+| **CSV export safety** ✅ | Prefix sanitization for spreadsheet formula injection |
+| **Notifier TLS warning** ✅ | Log when Slack/Loki/Teams/generic URLs use `http://` (non-loopback) |
+| **SPEC audit** ✅ | [SPECIFICATIONS.md](SPECIFICATIONS.md) baseline v0.9.0 |
 
 → [plan-0.9.x.md](docs/plan-0.9.x.md)
 
@@ -115,6 +115,7 @@ Each band: design → implement → test → `make release-check` → docs → t
 | 0.6.10 | Jun 2026 | Docker Alpine 3.24.1 (CVE-2026-2673) |
 | 0.7.0 | Jul 2026 | PagerDuty, Teams, generic webhook, HTTP retry |
 | 0.8.0 | Jul 2026 | Syft SBOM, Cosign signing, supply chain docs |
+| 0.9.0 | (pending tag) | DISCOVER removed, profiles, strict, collector, metrics/CSV hardening |
 
 Full detail: [CHANGELOG.md](CHANGELOG.md).
 
@@ -129,7 +130,7 @@ Full detail: [CHANGELOG.md](CHANGELOG.md).
 | **K8s passwords** | Deprecate `DISCOVER_MY_PASSWORD` (exec) → Secret-backed DSN — [kubernetes-passwords.md](docs/kubernetes-passwords.md) |
 | **Multi-DB + kube** | `-kube-postgres` not supported with `databases:` until per-db kube exists (post-1.0) |
 | **Connect failure alerts** | Always sent when notifiers configured (no extra flag) |
-| **HTTP `/metrics` privacy** | No auth in 0.7.x — operator controls bind and network exposure; hardening in 0.9.x |
+| **HTTP `/metrics` privacy** | Opt-in token/basic auth (0.9.x); default anonymous in-cluster scrape; operator controls bind/network |
 
 ---
 
@@ -160,7 +161,7 @@ Track via GitHub issues after 1.0.0.
 | Document | Role |
 |----------|------|
 | **ROADMAP.md** (this file) | Where we are, where we go, band index |
-| **[SPECIFICATIONS.md](SPECIFICATIONS.md)** | Observable behavior contract for **shipped** code (v0.8.0); planned bands noted as deprecated/future only |
+| **[SPECIFICATIONS.md](SPECIFICATIONS.md)** | Observable behavior contract for **shipped** code (v0.9.0) |
 | **[CHANGELOG.md](CHANGELOG.md)** | What actually shipped per version |
 | **[docs/plan-0.7.x.md](docs/plan-0.7.x.md) … [plan-1.0.x.md](docs/plan-1.0.x.md)** | Implementation checklists per band |
 | **[docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)** | Security decision: DISCOVER deprecation |

@@ -33,11 +33,16 @@ sequenceDiagram
     pgwd->>pgwd: validate: stale-age if threshold-stale
     pgwd->>pgwd: validate: at least one notifier (or dry-run)
     pgwd->>pgwd: validate: force-notification / notify-on-connect-failure require notifier
+    pgwd->>pgwd: stderr warnings: legacy db:, http:// notifiers, deprecated flags
+    opt interval > 0 (daemon)
+        pgwd->>pgwd: optional collector POST / GitHub update check (see SPEC §3)
+    end
     pgwd->>pgwd: signal.NotifyContext(SIGINT, SIGTERM)
     opt -kube-postgres set
-        pgwd->>Kube: resolve pod, get password (if DISCOVER_MY_PASSWORD)
+        pgwd->>Kube: optional password_from_secret (Secret GET) or operator DSN
         pgwd->>Kube: port-forward (background)
         pgwd->>pgwd: replace DB URL (localhost, port)
+        Note over pgwd: DISCOVER_MY_PASSWORD → config error (removed 0.9.x)
     end
     opt -kube-loki set
         pgwd->>Kube: port-forward to Loki (background)

@@ -282,13 +282,13 @@ If Postgres is reachable without port-forward: Secret → `PGWD_DB_URL` or `~/.p
 
 Finish [SPECIFICATIONS.md](../SPECIFICATIONS.md) audit against **0.9.x** code. Checklist:
 
-- [ ] §8 HTTP: `healthz` body is plain `ok`; operator security notes current
-- [ ] §8 HTTP: Prometheus label escaping spec matches implementation (or document fix shipped in 0.9.x)
-- [ ] §10 CSV: column list matches `internal/metricsexport/csv.go`; formula-injection note current
-- [ ] §6 Notifications: TLS operator responsibility documented
-- [ ] K8s client-go, metrics store interface, CSV columns, config load order
-- [ ] Collector privacy (§3 / dedicated subsection when collector ships)
-- [ ] Sequence diagrams in [docs/sequence/](./sequence/) re-audit if behavior changed
+- [x] §8 HTTP: `healthz` body is plain `ok`; operator security notes current
+- [x] §8 HTTP: Prometheus label escaping spec matches implementation (or document fix shipped in 0.9.x)
+- [x] §10 CSV: column list matches `internal/metricsexport/csv.go`; formula-injection note current
+- [x] §6 Notifications: TLS operator responsibility documented
+- [x] K8s client-go, metrics store interface, CSV columns, config load order
+- [x] Collector privacy (§3 / dedicated subsection when collector ships)
+- [x] Sequence diagrams in [docs/sequence/](./sequence/) re-audit if behavior changed
 
 ---
 
@@ -335,7 +335,7 @@ Finish [SPECIFICATIONS.md](../SPECIFICATIONS.md) audit against **0.9.x** code. C
 ## Release checklist
 
 - [ ] Tag `v0.9.0` from `main`
-- [ ] SPEC audited for 0.9.x
-- [ ] Profiles shipped under `contrib/profiles/`
-- [ ] `DISCOVER_MY_PASSWORD` removed; `docs/kubernetes-passwords.md` + wrapper/RBAC shipped; e2e kube updated
+- [x] SPEC audited for 0.9.x
+- [x] Profiles shipped under `contrib/profiles/`
+- [x] `DISCOVER_MY_PASSWORD` removed; `docs/kubernetes-passwords.md` + wrapper/RBAC shipped; e2e kube updated
 - [ ] CHANGELOG [Unreleased] → 0.9.x section

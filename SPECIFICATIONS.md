@@ -4,7 +4,7 @@
 
 `pgwd` (Postgres Watch Dog) is a Go CLI that **monitors PostgreSQL connection counts** (total, active, idle, stale) and optionally alerts on **long-running queries**. When configured thresholds are exceeded, it notifies via configured channels (Slack, Loki, PagerDuty, Microsoft Teams, and/or generic webhook). It can run as a **one-shot check** (for cron or ad-hoc) or as a **daemon** (recurring interval).
 
-This document is the source of truth for **observable behavior** and test expectations (**baseline: v0.8.0** shipped code; deprecated and planned items are labeled). **Roadmap:** [ROADMAP.md](ROADMAP.md). Band plans: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md). Shipped releases: **[CHANGELOG.md](CHANGELOG.md)**.
+This document is the source of truth for **observable behavior** and test expectations (**baseline: v0.9.0** shipped code; deprecated and planned items are labeled). **Roadmap:** [ROADMAP.md](ROADMAP.md). Band plans: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md). Shipped releases: **[CHANGELOG.md](CHANGELOG.md)**.
 
 ## 2. Scope
 
@@ -22,7 +22,7 @@ This document is the source of truth for **observable behavior** and test expect
 - HTTP server: optional `/metrics` and `/healthz` endpoints for Kubernetes probes.
 - CSV export: one-shot dump of persisted metrics via `-export-metrics-format csv`.
 - System packages: `.deb`, `.rpm`, Homebrew cask, FreeBSD/OpenBSD/NetBSD ports, Solaris SMF.
-- Rootless Docker image (Alpine, non-root user `pgwd`).
+- Rootless Docker image (distroless/static, non-root user `nonroot`).
 
 ### Out of scope (v1)
 
@@ -179,8 +179,9 @@ When `databases:` is non-empty in the config file, each entry is one Postgres ta
 | `kube.postgres` | string | — | `namespace/type/name` for port-forward. |
 | `kube.context` | string | — | Kubectl context override. |
 | `kube.local_port` | int | `5432` | Local port. |
-| `kube.password_var` | string | `POSTGRES_PASSWORD` | **Deprecated** (removed in 0.9.x). Pod env for legacy `DISCOVER_MY_PASSWORD`. |
-| `kube.password_container` | string | `""` | **Deprecated** (removed in 0.9.x). Container for legacy password discovery. |
+| `kube.password_from_secret.namespace` | string | — | Kubernetes namespace for Secret (defaults to kube.postgres namespace). |
+| `kube.password_from_secret.name` | string | — | Secret name. When set, password or full DSN is read via API (no `pods/exec`). |
+| `kube.password_from_secret.key` | string | `password` | Secret data key (`password` or `url` for full `postgres://` DSN). |
 | `kube.loki` | string | — | `namespace/type/name` for Loki port-forward. |
 | `kube.loki_local_port` | int | `3100` | |
 | `kube.loki_remote_port` | int | `3100` | |
@@ -218,6 +219,9 @@ When `databases:` is non-empty in the config file, each entry is one Postgres ta
 | `notifications.retry.initial_backoff` | duration | `1s` | Initial retry backoff. |
 | `notifications.retry.max_backoff` | duration | `10s` | Maximum retry backoff. |
 | `interval` | int | 0 | 0 = one-shot. |
+| `strict` | bool | false | Exit **4** when notifier delivery fails for a threshold event. |
+| `enable_collector` | bool | false | Opt-in anonymous daemon telemetry (see §3). |
+| `enable_update_check` | bool | true | Opt-out GitHub release check on daemon startup. |
 | `dry_run` | bool | false | |
 | `force_notification` | bool | false | |
 | `notify_on_connect_failure` | bool | false | Legacy. |
@@ -291,14 +295,15 @@ All config keys map to `PGWD_<UPPER_SNAKE>` equivalents. Notifier env vars:
 ### Startup sequence
 
 1. Load config (file, or defaults + env if no file; then CLI flags)
-2. Validate config
-3. If `-kube-postgres`, start port-forward; if URL password is `DISCOVER_MY_PASSWORD` (**deprecated**, removed in 0.9.x), read pod env via `pods/exec` — see [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)
-4. If `-kube-loki`, start port-forward, set `LokiURL` to `localhost:port`
-5. Connect to Postgres
-6. Query `max_connections`
-7. Apply threshold defaults from `-db-default-threshold-percent` (when not in level mode)
-8. If `-force-notification`, send test event to all notifiers
-9. Enter daemon loop or run once
+2. Validate config (including deprecation warnings for legacy `db:`, ignored `notify_on_connect_failure`, and non-loopback `http://` notifier URLs)
+3. If `interval > 0` (daemon): optional collector telemetry and/or GitHub update check — see [§3 Daemon startup: anonymous usage](#daemon-startup-anonymous-usage-09x)
+4. If `-kube-postgres`, start port-forward; resolve DB URL via `kube.password_from_secret` or operator-supplied DSN (**`DISCOVER_MY_PASSWORD` removed in 0.9.x** — config error) — see [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)
+5. If `-kube-loki`, start port-forward, set `LokiURL` to `localhost:port`
+6. Connect to Postgres
+7. Query `max_connections`
+8. Apply threshold defaults from `-db-default-threshold-percent` (when not in level mode)
+9. If `-force-notification`, send test event to all notifiers
+10. Enter daemon loop or run once
 
 ### Connection stats
 
@@ -377,7 +382,7 @@ All notifier senders (Slack, Loki, PagerDuty, Teams, generic webhook) use shared
 - Retry on **5xx** and network errors only (4xx fails immediately)
 - Defaults: `max_attempts=3`, `initial_backoff=1s`, `max_backoff=10s` (configurable via `notifications.retry` or CLI/env)
 - Non-2xx final response logs an error but does not fail the check
-- **TLS:** pgwd does not enforce HTTPS on operator-configured webhook URLs (Slack, Loki, Teams, generic). Use `https://` endpoints in production. PagerDuty is hardcoded to `https://events.pagerduty.com/v2/enqueue`.
+- **TLS:** pgwd does not enforce HTTPS on operator-configured webhook URLs (Slack, Loki, Teams, generic). Use `https://` endpoints in production. PagerDuty is hardcoded to `https://events.pagerduty.com/v2/enqueue`. At startup, pgwd logs a **stderr warning** when Slack, Loki, Teams, or generic webhook URLs use `http://` to a **non-loopback** host (loopback `http://127.0.0.1` / `localhost` is not warned — e.g. kube-loki port-forward).
 
 ### Slack
 
@@ -485,8 +490,9 @@ Used for Kubernetes liveness/readiness probes and Prometheus scraping.
 
 - Valid formats: `namespace/svc/service-name` or `namespace/pod/pod-name`
 - Uses **client-go** port-forward (kubeconfig required; **no kubectl binary**)
-- **Deprecated (0.6.x, removed in 0.9.x):** when the URL password is the literal `DISCOVER_MY_PASSWORD`, pgwd runs `printenv` in the Postgres pod via `pods/exec` (extra RBAC). **Decision record:** [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md). Prefer a Secret-backed DSN or planned `kube.password_from_secret` (0.9.x).
-- `-kube-password-var` / `-kube-password-container` — **deprecated** with `DISCOVER_MY_PASSWORD`
+- **`DISCOVER_MY_PASSWORD` removed in 0.9.x:** URLs containing that literal fail at startup with a migration error. **Decision record:** [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md).
+- **Preferred:** operator-supplied DSN (env/Secret injection), **`contrib/k8s/pgwd-kube-run.sh`**, or **`kube.password_from_secret`** (read-only Secret GET; key `password` or full `url`).
+- Legacy `kube.password_var` / `kube.password_container` and `pods/exec` password discovery are **removed** in 0.9.x.
 
 ### Loki port-forward (`-kube-loki`)
 
@@ -510,7 +516,7 @@ One-shot mode (`-export-metrics-format csv -export-metrics-destination <path>`):
 
 Requires an active metrics store (sqlite.path or metrics_store.driver+dsn).
 
-**Spreadsheet safety (v0.7.0):** string fields (`client`, `cluster`, `database`, `state`, `threshold`) are written without prefix sanitization. Values starting with `=`, `+`, `-`, or `@` may be interpreted as formulas when opened in Excel or Google Sheets. Treat exports as untrusted input or import as plain text. Prefix sanitization is **planned for 0.9.x**.
+**Spreadsheet safety (0.9.x):** string fields (`client`, `cluster`, `namespace`, `database`, `state`, `threshold`) are passed through `sanitizeCSVField` before write. Values whose first non-whitespace character is `=`, `+`, `-`, `@`, tab, or CR are prefixed with `'` (OWASP CSV injection mitigation). Numeric columns are unchanged.
 
 ## 11. Build and release
 
@@ -527,7 +533,7 @@ Requires an active metrics store (sqlite.path or metrics_store.driver+dsn).
 - Multi-stage build: `golang:1.26.5-alpine` → `gcr.io/distroless/static-debian13:nonroot`
 - **Static binary** (`CGO_ENABLED=0`); runtime image has **no shell, kubectl, or OS packages**
 - **HTTPS notifiers** (Slack, Loki, PagerDuty, etc.): CA bundle included in distroless/static
-- **Kubernetes in-container:** `-kube-postgres` / `-kube-loki` use **client-go** (port-forward, API calls). **No `kubectl` binary** — mount kubeconfig or use in-cluster ServiceAccount + RBAC (same as pre-distroless). Legacy `DISCOVER_MY_PASSWORD` uses `pods/exec` via API (deprecated 0.9.x), not a local kubectl.
+- **Kubernetes in-container:** `-kube-postgres` / `-kube-loki` use **client-go** (port-forward, API calls). **No kubectl binary** — mount kubeconfig or use in-cluster ServiceAccount + RBAC. **`DISCOVER_MY_PASSWORD` / `pods/exec` removed in 0.9.x**; use Secret-backed DSN or `kube.password_from_secret`.
 - Non-root (`nonroot` user); entrypoint **`/home/pgwd/pgwd`**
 - Image scanning via `make docker-scan` (Grype)
 
@@ -681,7 +687,7 @@ notifications:
     org_id: "my-tenant"
 ```
 
-> **Note:** `DISCOVER_MY_PASSWORD` in the URL is **deprecated** and will be **removed in 0.9.x** (requires `pods/exec` RBAC). Rationale: [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md).
+> **Note:** `DISCOVER_MY_PASSWORD` in the URL was **removed in 0.9.x**. Use Secret-backed DSN, `kube.password_from_secret`, or `contrib/k8s/pgwd-kube-run.sh` — [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md).
 
 ### Dry-run for testing
 
