@@ -7,6 +7,9 @@ Alpine uses OpenRC, not systemd. This init script runs pgwd as a daemon.
 ## Install (manual, from tarball)
 
 ```bash
+# Binary (tarball layout)
+sudo install -m 755 pgwd /usr/local/bin/pgwd
+
 # Copy init script
 sudo cp contrib/openrc/pgwd.initd /etc/init.d/pgwd
 sudo chmod +x /etc/init.d/pgwd
@@ -14,12 +17,14 @@ sudo chmod +x /etc/init.d/pgwd
 # Config (required)
 sudo mkdir -p /etc/pgwd
 sudo cp contrib/pgwd.conf.example /etc/pgwd/pgwd.conf
-sudo nano /etc/pgwd/pgwd.conf  # edit client, db.url, etc.
+sudo nano /etc/pgwd/pgwd.conf  # edit client, databases:, etc.
 
 # Enable and start
 rc-service pgwd start
 rc-update add pgwd default
 ```
+
+The init script defaults to **`/usr/local/bin/pgwd`**. If your package installs to `/usr/bin/pgwd`, set `command="/usr/bin/pgwd"` in **`/etc/conf.d/pgwd`**.
 
 ## When installed via `apk add pgwd`
 

@@ -1,5 +1,8 @@
 ---
-# full-cycle.yml — setup → test → teardown (release validation).
+# full-cycle.yml — preflight → setup → test → teardown (release validation).
+- name: "pgwd full cycle: preflight"
+  ansible.builtin.import_playbook: preflight.yml
+
 - name: "pgwd full cycle: setup"
   ansible.builtin.import_playbook: setup.yml
 

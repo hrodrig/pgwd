@@ -44,7 +44,8 @@ Kubernetes and container deployments are **not** in scope here — they are cove
 1. **VMs accessible via SSH as root.** Any topology works: VMs behind a firewall with port-forwarded SSH (same public IP, different ports), direct IPs, cloud instances, or local VMs.
 2. **At least 3 PostgreSQL instances** reachable from the VMs (same subnet or routed). Used for multi-database testing. These can be 3 separate hosts, 3 containers, or 3 databases on one server.
 3. **Python 3** on each target VM (required by Ansible and the notification mock). Debian, Ubuntu, AlmaLinux, and OpenSUSE include it. Minimal distros need manual install: Alpine `apk add python3`, Arch `pacman -S python`, FreeBSD `pkg install python3`, OpenBSD `pkg_add python%3`, NetBSD `pkg_add python312` (then `ln -s /usr/pkg/bin/python3.12 /usr/pkg/bin/python3`), DragonFly `pkg install python3`.
-4. **BSD hosts** need `ansible_python_interpreter` in inventory: FreeBSD/OpenBSD/DragonFly use `/usr/local/bin/python3`, NetBSD uses `/usr/pkg/bin/python3`. See `hosts.yml.example`.
+4. **Linux hosts:** set `ansible_python_interpreter: /usr/bin/python3` on the group (see `hosts.yml.example`) so discovery does not pin a removed `/usr/bin/python3.12` after an upgrade.
+5. **BSD hosts** need `ansible_python_interpreter` in inventory: FreeBSD/OpenBSD/DragonFly use `/usr/local/bin/python3`, NetBSD uses `/usr/pkg/bin/python3`. See `hosts.yml.example`.
 
 ## Quick start
 
@@ -53,8 +54,8 @@ Kubernetes and container deployments are **not** in scope here — they are cove
 cp inventory/hosts.yml.example inventory/hosts.yml
 vim inventory/hosts.yml
 
-# 2. Verify SSH and Ansible can reach each host using Ansible's ping module (not ICMP).
-#    ansible.builtin.ping checks the connection and remote Python; a successful host shows "pong".
+# 2. Verify SSH + remote Python (Ansible ping → "pong"), then Postgres TCP from each
+#    target to postgres_instances (fail fast if the test DB is down).
 cd testing/platforms
 ansible-playbook playbooks/ping.yml
 # Optional: one host or group
@@ -73,14 +74,14 @@ ansible-playbook playbooks/full-cycle.yml --limit linux_systemd
 From the repo root you can also use:
 
 ```bash
-# Connectivity only — Ansible ping module (success → "pong"), same as:
+# Connectivity — Ansible ping (pong) + Postgres TCP preflight, same as:
 #   cd testing/platforms && ansible-playbook playbooks/ping.yml
 make test-platforms-ping
 
 # Single host
 make test-platforms-ping PLATFORM=pgwd-ubuntu
 
-# All platforms (full cycle)
+# All platforms (full cycle; starts with the same Postgres preflight)
 make test-platforms
 
 # Single platform
@@ -91,11 +92,12 @@ make test-platforms PLATFORM=pgwd-ubuntu
 
 | Playbook | Description |
 |---|---|
-| `ping.yml` | Runs `ansible.builtin.ping` on each host (not ICMP); success output includes **`pong`**. Validates SSH, inventory, and remote Python before `full-cycle.yml` |
+| `ping.yml` | `ansible.builtin.ping` (SSH/Python → **pong**), then imports **`preflight.yml`** |
+| `preflight.yml` | Fail fast: one host checks **unique** `postgres_instances` host:port (TCP, ~5s); aborts before install |
 | `setup.yml` | Install pgwd, deploy config, start daemon |
 | `test.yml` | Dry-run, notification (Loki+Slack) tests, timer tests |
 | `teardown.yml` | Uninstall pgwd, verify full cleanup |
-| `full-cycle.yml` | Setup, test, teardown (full release validation) |
+| `full-cycle.yml` | Preflight, setup, test, teardown (full release validation) |
 
 ## Test flow
 

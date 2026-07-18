@@ -83,7 +83,6 @@ databases:
     stale_age: 0
     default_threshold_percent: 80
     threshold:
-      active: 0
       idle: 0
       levels: "75,85,95"    # 3-tier: attention, alert, danger
       stale: 0
@@ -101,7 +100,6 @@ databases:
 #     client: "monitor-01-prod"
 #     stale_age: 0
 #     threshold:
-#       active: 0
 #       idle: 0
 #       levels: "75,85,95"
 #       stale: 0
