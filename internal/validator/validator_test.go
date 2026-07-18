@@ -19,7 +19,8 @@ func TestValidateDatabases(t *testing.T) {
 		{"no databases", &config.Config{}, false, ""},
 		{"databases with url", &config.Config{Databases: []config.DatabaseTarget{{URL: "postgres://x/db"}}}, false, ""},
 		{"databases missing url", &config.Config{Databases: []config.DatabaseTarget{{URL: ""}}}, true, "databases[0] missing url"},
-		{"databases + kube-postgres", &config.Config{Databases: []config.DatabaseTarget{{URL: "x"}}, KubePostgres: "default/svc/pg"}, true, "kube-postgres is not supported with databases"},
+		{"single databases + kube-postgres", &config.Config{Databases: []config.DatabaseTarget{{URL: "postgres://x/db"}}, KubePostgres: "default/svc/pg"}, false, ""},
+		{"multi databases + kube-postgres", &config.Config{Databases: []config.DatabaseTarget{{URL: "x"}, {URL: "y"}}, KubePostgres: "default/svc/pg"}, true, "kube-postgres is not supported with multiple databases"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -151,6 +152,7 @@ func TestValidateKubePostgres(t *testing.T) {
 		{"no kube-postgres", &config.Config{}, false, ""},
 		{"kube-postgres with url", &config.Config{KubePostgres: "default/svc/pg", DBURL: "postgres://localhost:5432/db"}, false, ""},
 		{"kube-postgres without url", &config.Config{KubePostgres: "default/svc/pg", DBURL: ""}, true, "kube-postgres requires"},
+		{"kube-postgres with single databases entry", &config.Config{KubePostgres: "default/svc/pg", Databases: []config.DatabaseTarget{{URL: "postgres://localhost:5432/db"}}}, false, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

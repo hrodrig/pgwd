@@ -13,10 +13,10 @@ kube:
     name: postgres-credentials
     key: password
 
-db:
-  url: postgres://postgres@127.0.0.1:5432/mydb?sslmode=disable
-  threshold:
-    levels: "75,85,95"
+databases:
+  - url: postgres://postgres@127.0.0.1:5432/mydb?sslmode=disable
+    threshold:
+      levels: "75,85,95"
 
 notifications:
   slack:

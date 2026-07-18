@@ -80,8 +80,8 @@ kube:
     namespace: pgwd-e2e
     name: postgres-credentials
     key: password
-db:
-  url: "postgres://pgwd@localhost:15432/pgwd?sslmode=disable"
+databases:
+  - url: "postgres://pgwd@localhost:15432/pgwd?sslmode=disable"
 SECRETCONF
 ./pgwd -config "$SECRET_CONF"
 rm -f "$SECRET_CONF"

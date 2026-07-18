@@ -560,9 +560,32 @@ func (c *Config) Targets() []DatabaseTarget {
 	}}
 }
 
-// UsesDatabases returns true when config has multiple database targets (from databases: in YAML).
+// UsesDatabases returns true when config has database targets from databases: in YAML.
 func (c *Config) UsesDatabases() bool {
 	return len(c.Databases) > 0
+}
+
+// PromoteSingleDatabaseForKube flattens a one-entry databases: list into single-DB
+// fields so kube.postgres / password_from_secret can rewrite DBURL and port-forward.
+// No-op when kube is unset or databases: has zero or multiple entries.
+func (c *Config) PromoteSingleDatabaseForKube() {
+	if c.KubePostgres == "" || len(c.Databases) != 1 {
+		return
+	}
+	t := c.Databases[0]
+	c.DBURL = t.URL
+	if t.Client != "" {
+		c.Client = t.Client
+	}
+	c.StaleAge = t.StaleAge
+	c.DefaultThresholdPercent = t.DefaultThresholdPercent
+	c.ThresholdIdle = t.ThresholdIdle
+	c.ThresholdStale = t.ThresholdStale
+	c.ThresholdLevels = t.ThresholdLevels
+	c.LongQueryMinSeconds = t.LongQueryMinSeconds
+	c.LongQueryCooldownSeconds = t.LongQueryCooldownSeconds
+	c.LongQueryMinCount = t.LongQueryMinCount
+	c.Databases = nil
 }
 
 // ConfigForTarget returns a Config with base values and target-specific overrides for one check.

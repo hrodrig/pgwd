@@ -349,6 +349,7 @@ func Run() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	cfg.PromoteSingleDatabaseForKube()
 	if !cfg.UsesDatabases() {
 		defer setupKube(ctx, &cfg)()
 		defer setupKubeLoki(ctx, &cfg)()

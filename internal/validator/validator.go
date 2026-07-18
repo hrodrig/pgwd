@@ -107,8 +107,8 @@ func ValidateDatabases(cfg *config.Config) error {
 	if !cfg.UsesDatabases() {
 		return nil
 	}
-	if cfg.KubePostgres != "" {
-		return fmt.Errorf("pgwd: kube-postgres is not supported with databases (multi-DB); use db (single) or add per-db kube in a future release")
+	if cfg.KubePostgres != "" && len(cfg.Databases) > 1 {
+		return fmt.Errorf("pgwd: kube-postgres is not supported with multiple databases: entries; use a single databases: entry with kube, or omit kube for multi-DB direct URLs")
 	}
 	for i, t := range cfg.Databases {
 		if t.URL == "" {
@@ -196,12 +196,19 @@ func validateNotifyRetry(cfg *config.Config) error {
 	return nil
 }
 
-// ValidateKubePostgres ensures db-url is set when kube-postgres is used.
+// ValidateKubePostgres ensures a DB URL is set when kube-postgres is used
+// (top-level -db-url / PGWD_DB_URL, or a single databases: entry).
 func ValidateKubePostgres(cfg *config.Config) error {
-	if cfg.KubePostgres == "" || cfg.DBURL != "" {
+	if cfg.KubePostgres == "" {
 		return nil
 	}
-	return fmt.Errorf("pgwd: kube-postgres requires PGWD_DB_URL or -db-url (use host localhost and the same port as -kube-local-port)")
+	if cfg.DBURL != "" {
+		return nil
+	}
+	if len(cfg.Databases) == 1 && cfg.Databases[0].URL != "" {
+		return nil
+	}
+	return fmt.Errorf("pgwd: kube-postgres requires PGWD_DB_URL, -db-url, or a single databases: entry (use host localhost and the same port as -kube-local-port)")
 }
 
 // ValidateKubePostgresFormat validates kube-postgres format (namespace/type/name).

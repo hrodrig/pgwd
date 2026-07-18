@@ -166,7 +166,7 @@ When `databases:` is non-empty in the config file, each entry is one Postgres ta
 | `long_query_cooldown_seconds` | int | Config-level value | Default 3600 when min is set. |
 | `long_query_min_count` | int | Config-level value | Default 1. |
 
-`kube.postgres` is **not supported** with `databases:` (multi-DB requires direct URLs; single-DB + kube until per-db kube exists).
+`kube.postgres` is **not supported** with **multiple** `databases:` entries (multi-DB requires direct URLs). A **single** `databases:` entry with `kube.postgres` is supported (same as former top-level `db:` + kube).
 
 ### Top-level config keys (config file)
 
@@ -269,7 +269,7 @@ All config keys map to `PGWD_<UPPER_SNAKE>` equivalents. Notifier env vars:
 ### Multi-database limitations
 
 - **SQLite / hysteresis** rows keyed by `(client, cluster, database)` — not by URL host. Use a **unique `client` per `databases:` entry** when the same DB name is used on different hosts.
-- **kube.postgres** not supported with `databases:` (multi-DB requires direct URLs). Single-DB + kube until per-db kube exists.
+- **kube.postgres** not supported with **multiple** `databases:` entries (multi-DB requires direct URLs). A **single** `databases:` entry + kube is supported.
 
 ### Validation rules
 

@@ -735,6 +735,44 @@ func TestUsesDatabases(t *testing.T) {
 	}
 }
 
+func TestPromoteSingleDatabaseForKube(t *testing.T) {
+	t.Run("promotes one entry", func(t *testing.T) {
+		c := Config{
+			Client:       "base",
+			KubePostgres: "ns/svc/pg",
+			Databases: []DatabaseTarget{{
+				URL:             "postgres://u@localhost:15432/db",
+				Client:          "tgt",
+				ThresholdLevels: "70,80,90",
+			}},
+		}
+		c.PromoteSingleDatabaseForKube()
+		if c.UsesDatabases() {
+			t.Fatal("want Databases cleared")
+		}
+		if c.DBURL != "postgres://u@localhost:15432/db" || c.Client != "tgt" || c.ThresholdLevels != "70,80,90" {
+			t.Fatalf("got DBURL=%q client=%q levels=%q", c.DBURL, c.Client, c.ThresholdLevels)
+		}
+	})
+	t.Run("noop without kube", func(t *testing.T) {
+		c := Config{Databases: []DatabaseTarget{{URL: "postgres://x"}}}
+		c.PromoteSingleDatabaseForKube()
+		if !c.UsesDatabases() {
+			t.Fatal("want Databases kept")
+		}
+	})
+	t.Run("noop with multiple entries", func(t *testing.T) {
+		c := Config{
+			KubePostgres: "ns/svc/pg",
+			Databases:    []DatabaseTarget{{URL: "a"}, {URL: "b"}},
+		}
+		c.PromoteSingleDatabaseForKube()
+		if len(c.Databases) != 2 {
+			t.Fatalf("want 2 entries, got %d", len(c.Databases))
+		}
+	})
+}
+
 // ---------------------------------------------------------------------------
 // ConfigForTarget
 // ---------------------------------------------------------------------------
