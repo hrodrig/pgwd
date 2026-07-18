@@ -41,9 +41,9 @@ log_level: info    # info (default) or debug; debug = verbose dry-run stats
 #   https://collect.gghstats.com/a1b2c3d4e5f6a7b8
 # Example JSON body (no secrets — boolean feature flags only):
 #   {
-#     "version": "0.9.0",
+#     "version": "1.0.0",
 #     "commit": "abc1234",
-#     "build_date": "2026-07-13T12:00:00Z",
+#     "build_date": "2026-07-18T12:00:00Z",
 #     "hash": "a1b2c3d4e5f67890",
 #     "features": {
 #       "multi_db": false,
@@ -69,7 +69,7 @@ log_level: info    # info (default) or debug; debug = verbose dry-run stats
 # See README "Anonymous usage" and SPECIFICATIONS.md §3.
 
 # -----------------------------------------------------------------------------
-# Database connection and thresholds (databases: canonical; db: deprecated)
+# Database connection and thresholds (databases: canonical; db: removed in 1.0)
 # -----------------------------------------------------------------------------
 # Each entry: url (required), optional client, stale_age, default_threshold_percent, threshold.
 # client: optional; defaults to base client + "-" + db name from URL path (NOT the hostname).

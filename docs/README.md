@@ -13,8 +13,7 @@ Release bands from **v0.7.0** to **v1.0.0**. Behavior contract: [SPECIFICATIONS.
 | **0.7.x** | [plan-0.7.x.md](./plan-0.7.x.md) | ✅ v0.7.0 — PagerDuty, Teams, generic webhook, HTTP retry |
 | **0.8.x** | [plan-0.8.x.md](./plan-0.8.x.md) | ✅ v0.8.0 — Syft SBOM, Cosign signing |
 | **0.9.x** | [plan-0.9.x.md](./plan-0.9.x.md) | ✅ v0.9.0 — DISCOVER removal, profiles, collector, operator docs |
-| **1.0.x** | [plan-1.0.x.md](./plan-1.0.x.md) | Breaking API, deprecations removed, **compare / positioning** |
-| **1.0.x** | [plan-1.0.x.md](./plan-1.0.x.md) | Breaking stable API, deprecations removed |
+| **1.0.x** | [plan-1.0.x.md](./plan-1.0.x.md) | ✅ v1.0.0 — stable API, compare / upgrade / connection-limits docs |
 
 ## Upgrading
 

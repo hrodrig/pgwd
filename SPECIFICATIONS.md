@@ -4,7 +4,7 @@
 
 `pgwd` (Postgres Watch Dog) is a Go CLI that **monitors PostgreSQL connection counts** (total, active, idle, stale) and optionally alerts on **long-running queries**. When configured thresholds are exceeded, it notifies via configured channels (Slack, Loki, PagerDuty, Microsoft Teams, and/or generic webhook). It can run as a **one-shot check** (for cron or ad-hoc) or as a **daemon** (recurring interval).
 
-This document is the source of truth for **observable behavior** and test expectations (**baseline: v0.9.0** shipped code; deprecated and planned items are labeled). **Roadmap:** [ROADMAP.md](ROADMAP.md). Band plans: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md). Shipped releases: **[CHANGELOG.md](CHANGELOG.md)**.
+This document is the source of truth for **observable behavior** and test expectations (**baseline: v1.0.0** shipped code). **Roadmap:** [ROADMAP.md](ROADMAP.md). Band plans: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md). Shipped releases: **[CHANGELOG.md](CHANGELOG.md)**.
 
 ## 2. Scope
 
@@ -116,9 +116,9 @@ When **`interval > 0`** (daemon mode), pgwd may run **once per process start**:
 
 ```json
 {
-  "version": "0.9.0",
+  "version": "1.0.0",
   "commit": "abc1234",
-  "build_date": "2026-07-13T12:00:00Z",
+  "build_date": "2026-07-18T12:00:00Z",
   "hash": "a1b2c3d4e5f67890",
   "features": {
     "multi_db": false,

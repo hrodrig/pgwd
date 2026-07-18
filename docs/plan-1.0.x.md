@@ -14,12 +14,11 @@
 
 | Removed | Replacement |
 |---------|-------------|
-| `-db-threshold-levels` | `75,85,95` (3-tier default) |
+| `-db-threshold-total` / `-db-threshold-active` (CLI, env, YAML `threshold.total` / `threshold.active`) | `-db-threshold-levels` (default `75,85,95`) |
 | `-notify-on-connect-failure` flag | Always-on when notifiers configured |
 | `PGWD_NOTIFY_ON_CONNECT_FAILURE` env var | Always-on |
 | Config key `notify_on_connect_failure` | Removed |
 | `db:` config key (single-DB) | `databases:` array (even for one target) |
-| Legacy flag names `-threshold-total` / `-threshold-active` | Removed |
 
 **Already removed in 0.9.x (not 1.0):** `DISCOVER_MY_PASSWORD`, `-kube-password-var`, `-kube-password-container`, `GetPasswordFromPod` / `pods/exec`. Migration: [kubernetes-passwords.md](./kubernetes-passwords.md).
 
@@ -40,15 +39,15 @@
 
 ## Milestones (release gate)
 
-- [ ] **100+ tests** total (`go test ./...`)
+- [x] **100+ tests** total (`go test ./...`)
 - [x] Logo/branding (simple pgwd icon) — optional but targeted for 1.0 announcement (`docs/logo.svg`)
-- [ ] [SPECIFICATIONS.md](../SPECIFICATIONS.md) fully audited against 1.0 code
+- [x] [SPECIFICATIONS.md](../SPECIFICATIONS.md) audited for 1.0 (exit codes 2/3; baseline header → v1.0.0 at release bump)
 - [x] All deprecations removed (grep for `Deprecated`, v1.0 warnings)
-- [ ] [plan-0.8.x.md](./plan-0.8.x.md) supply chain shipped (SBOM + cosign)
+- [x] [plan-0.8.x.md](./plan-0.8.x.md) supply chain shipped (SBOM + cosign) in **v0.8.0**
 - [ ] Platform tests green on target OSes (`make test-platforms` or documented subset)
 - [ ] `make release-check` green on `main`
-- [ ] Demo GIF regenerated if VERSION changes (`make install && bash -c "vhs docs/demo.tape"`)
-- [ ] Man page [contrib/man/man1/pgwd.1](../contrib/man/man1/pgwd.1) synced
+- [x] Demo GIF regenerated if VERSION changes (`make install && bash -c "vhs docs/demo.tape"`)
+- [x] Man page [contrib/man/man1/pgwd.1](../contrib/man/man1/pgwd.1) synced
 
 ---
 
@@ -89,7 +88,7 @@ Same pattern as **[gfire/docs/compare.md](https://github.com/hrodrig/gfire/blob/
 - [x] `docs/compare.md` drafted (snapshot version **v1.0.0** in header)
 - [x] README § Compare + TOC entry
 - [x] ROADMAP document map updated (remove “planned” when shipped)
-- [ ] Landing `/compare` live or linked from README
+- [ ] Landing `/compare` live or linked from README — **deferred** (external landing repo; not a hard tag gate)
 - [ ] Competitor feature claims re-verified before tag
 
 ---
