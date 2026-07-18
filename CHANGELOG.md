@@ -21,6 +21,10 @@ Stable API release: remove remaining pre-1.0 config/flag surface, document exit 
 - **Connect-failure legacy surface:** removed **`-notify-on-connect-failure`**, **`PGWD_NOTIFY_ON_CONNECT_FAILURE`**, and YAML **`notify_on_connect_failure`**. Connect failure notifications are always sent when notifiers are configured.
 - **Legacy total/active thresholds:** removed **`-db-threshold-total`**, **`-db-threshold-active`**, **`PGWD_DB_THRESHOLD_TOTAL`**, **`PGWD_DB_THRESHOLD_ACTIVE`**, and YAML **`threshold.total`** / **`threshold.active`**. Use **`-db-threshold-levels`** instead.
 
+### Changed
+
+- **Cosign v3 signing:** checksum signatures use a single **`checksums.txt.sigstore.json`** bundle (`cosign sign-blob --bundle`); verify with `cosign verify-blob --bundle …`. `make snapshot` skips signing (no local OIDC).
+
 ### Documentation
 
 - **[docs/postgresql-connection-limits.md](docs/postgresql-connection-limits.md)** — practical guide to connection saturation and sizing heuristics; README short problem blurb + link.

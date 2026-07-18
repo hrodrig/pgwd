@@ -779,12 +779,11 @@ cosign verify ghcr.io/hrodrig/pgwd:v0.8.0 \
   --certificate-identity-regexp '^https://github\.com/hrodrig/pgwd/\.github/workflows/release\.yml@refs/tags/v'
 ```
 
-**Verify release checksums** (download `checksums.txt`, `checksums.txt.sig`, and `checksums.txt.pem` from the release assets):
+**Verify release checksums** (download `checksums.txt` and `checksums.txt.sigstore.json` from the release assets; Cosign v3+ bundle):
 
 ```bash
 cosign verify-blob \
-  --certificate checksums.txt.pem \
-  --signature checksums.txt.sig \
+  --bundle checksums.txt.sigstore.json \
   checksums.txt
 ```
 

@@ -49,11 +49,15 @@ builds:
 
 archives:
   - id: default
-    format: tar.gz
+    ids:
+      - pgwd
+    formats: [tar.gz]
     format_overrides:
       - goos: windows
-        format: zip
-    name_template: "{{ .ProjectName }}_{{ if .IsSnapshot }}v{{ .Version }}{{ else }}{{ .Tag }}{{ end }}_{{ .Os }}_{{ .Arch }}"
+        formats: [zip]
+    # Always {{ .Version }} (from tag on release, or PGWD_SNAPSHOT_VERSION on snapshot) — not {{ .Tag }}.
+    # Keep the literal v prefix so FreeBSD/OpenBSD DISTFILES stay pgwd_v<semver>_*.
+    name_template: "{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - src: contrib/man/man1/pgwd.1
         dst: share/man/man1/pgwd.1
@@ -77,15 +81,15 @@ checksum:
 
 # Cosign keyless signing (GitHub Actions OIDC). Requires id-token: write in release.yml
 # and sigstore/cosign-installer. Signs checksums.txt and container images on ghcr.io.
+# Cosign v3+: use --bundle (sigstore JSON); --output-signature/--output-certificate are deprecated.
 signs:
   - cmd: cosign
     env:
       - COSIGN_EXPERIMENTAL=1
-    certificate: "${artifact}.pem"
+    signature: "${artifact}.sigstore.json"
     args:
       - sign-blob
-      - "--output-signature=${signature}"
-      - "--output-certificate=${certificate}"
+      - "--bundle=${signature}"
       - "${artifact}"
       - --yes
     artifacts: checksum
@@ -110,15 +114,16 @@ nfpms:
     scripts:
       preremove: contrib/deb/prerm.sh
       postremove: contrib/deb/postrm.sh
-    file_name_template: "{{ .ProjectName }}_{{ if .IsSnapshot }}v{{ .Version }}{{ else }}{{ .Tag }}{{ end }}_{{ .Os }}_{{ .Arch }}"
+    file_name_template: "{{ .ProjectName }}_v{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     description: Postgres Watch Dog - monitor PostgreSQL connections and notify via Slack/Loki
     vendor: "Hermes Rodríguez"
+    maintainer: Hermes Rodriguez <hermesrodriguez@users.noreply.github.com>
     homepage: https://github.com/hrodrig/pgwd
     license: MIT
     formats:
       - deb
       - rpm
-    builds:
+    ids:
       - pgwd
     contents:
       - src: contrib/man/man1/pgwd.1.gz

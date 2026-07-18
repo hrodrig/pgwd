@@ -538,10 +538,10 @@ Requires an active metrics store (sqlite.path or metrics_store.driver+dsn).
 ### Supply chain (from 0.8.0)
 
 - **SBOM:** SPDX and CycloneDX JSON attached to each GitHub Release (`pgwd_<version>_sbom.spdx.json`, `pgwd_<version>_sbom.cyclonedx.json`) — source-tree catalog via Syft in GoReleaser.
-- **Signing:** Cosign keyless (GitHub Actions OIDC) for `checksums.txt` (`.sig` + `.pem` on the release) and `ghcr.io/hrodrig/pgwd:<tag>` container manifests.
+- **Signing:** Cosign keyless (GitHub Actions OIDC) for `checksums.txt` (`checksums.txt.sigstore.json` bundle on the release; Cosign v3+) and `ghcr.io/hrodrig/pgwd:<tag>` container manifests.
 - **Verification (operators):**
   - Image: `cosign verify ghcr.io/hrodrig/pgwd:v0.8.0 --certificate-oidc-issuer https://token.actions.githubusercontent.com --certificate-identity-regexp '^https://github\.com/hrodrig/pgwd/\.github/workflows/release\.yml@refs/tags/v'`
-  - Checksums: `cosign verify-blob --certificate checksums.txt.pem --signature checksums.txt.sig checksums.txt` (download assets from the release page).
+  - Checksums: `cosign verify-blob --bundle checksums.txt.sigstore.json checksums.txt` (download assets from the release page).
 - **CI:** Release workflow installs cosign + syft; post-release `cosign verify` on the published image. `make docker-scan` (Grype) remains mandatory in `release-check`.
 - Container image SBOM OCI attestation deferred (GitHub Actions buildx driver limit; same as kzero/groot).
 
