@@ -19,6 +19,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ### Documentation
 
+- **[docs/postgresql-connection-limits.md](docs/postgresql-connection-limits.md)** — practical guide to connection saturation and sizing heuristics; README short problem blurb + link.
 - **[docs/compare.md](docs/compare.md)** — transparent comparison vs postgres_exporter, pgwatch, SaaS, cloud alarms, DIY, Nagios; README § Compare.
 - **[docs/UPGRADE-0.9-to-1.0.md](docs/UPGRADE-0.9-to-1.0.md)** — migration guide for 1.0 breaking removals.
 

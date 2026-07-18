@@ -28,6 +28,10 @@ Release bands from **v0.7.0** to **v1.0.0**. Behavior contract: [SPECIFICATIONS.
 
 **[Kubernetes passwords — migration from DISCOVER_MY_PASSWORD](./kubernetes-passwords.md)** — Single-DB outside-cluster credentials (`password_from_secret`, wrapper, RBAC). Multi-DB: [use-cases.md](./use-cases.md).
 
+## Operations
+
+**[PostgreSQL connection limits and saturation](./postgresql-connection-limits.md)** — Why `max_connections` matters, reserved slots, memory/CPU/WAL considerations, illustrative sizing heuristics for hardware and app types, developer pool pitfalls, and how pgwd fits.
+
 ## Loki and Grafana alerts
 
 [Loki payload structure for Grafana alerts](./loki-grafana-alerts.md) — Labels, log line format, example LogQL queries, and how to build Grafana alert rules that react to pgwd notifications (attention, alert, danger).
