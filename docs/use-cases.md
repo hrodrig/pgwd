@@ -210,7 +210,7 @@ Each file can be UC-1 (direct URL), UC-4 (`kube-prod`), etc. See [README — Exa
 
 | Mode | Config keys | Password |
 |------|-------------|----------|
-| Single DB, direct | `databases:` (one entry) or legacy `db:` | In each `url` or env `PGWD_DB_URL` |
+| Single DB, direct | `databases:` (one entry) | In each `url` or env `PGWD_DB_URL` |
 | Single DB, outside K8s | `kube.postgres` + `db.url` or `databases:` (one entry) | `password_from_secret`, wrapper, or URL |
 | Multi DB | `databases:` only (no `kube.postgres`) | **Per-entry `url`** (inject at deploy) |
 

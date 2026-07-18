@@ -174,8 +174,7 @@ When `databases:` is non-empty in the config file, each entry is one Postgres ta
 
 | Key | Type | Default | Notes |
 |-----|------|---------|-------|
-| `db` | object | — | **Deprecated** single-DB config (removed in v1.0). Warning printed if used. |
-| `databases` | array | — | Multi-DB targets. When set, `db` is ignored. |
+| `databases` | array | — | One or more Postgres targets (required in config file; even for a single DB). |
 | `kube.postgres` | string | — | `namespace/type/name` for port-forward. |
 | `kube.context` | string | — | Kubectl context override. |
 | `kube.local_port` | int | `5432` | Local port. |
@@ -186,16 +185,16 @@ When `databases:` is non-empty in the config file, each entry is one Postgres ta
 | `kube.loki_local_port` | int | `3100` | |
 | `kube.loki_remote_port` | int | `3100` | |
 | `client` | string | — | **Required.** Monitor identity label. |
-| `db.threshold_total` | int | 0 | **Deprecated** (v1.0). |
-| `db.threshold_active` | int | 0 | **Deprecated** (v1.0). |
-| `db.threshold_idle` | int | 0 | |
-| `db.stale_age` | int | 0 | Seconds. |
-| `db.threshold_stale` | int | 0 | |
-| `db.default_threshold_percent` | int | 80 | |
-| `db.threshold_levels` | string | `75,85,95` | 3-tier percentages. |
-| `db.long_query_min_seconds` | int | 0 | 0 = off. |
-| `db.long_query_cooldown_seconds` | int | 3600 | |
-| `db.long_query_min_count` | int | 1 | |
+| `databases[].threshold.total` | int | 0 | **Deprecated** (v1.0) — use `threshold.levels`. |
+| `databases[].threshold.active` | int | 0 | **Deprecated** (v1.0) — use `threshold.levels`. |
+| `databases[].threshold.idle` | int | 0 | |
+| `databases[].stale_age` | int | 0 | Seconds. |
+| `databases[].threshold.stale` | int | 0 | |
+| `databases[].default_threshold_percent` | int | 80 | |
+| `databases[].threshold.levels` | string | `75,85,95` | 3-tier percentages. |
+| `databases[].long_query_min_seconds` | int | 0 | 0 = off. |
+| `databases[].long_query_cooldown_seconds` | int | 3600 | |
+| `databases[].long_query_min_count` | int | 1 | |
 | `notifications.slack.webhook` | string | — | Slack Incoming Webhook URL. |
 | `notifications.loki.url` | string | — | Loki push API. |
 | `notifications.loki.labels` | string | — | `k1=v1,k2=v2`. |
@@ -295,7 +294,7 @@ All config keys map to `PGWD_<UPPER_SNAKE>` equivalents. Notifier env vars:
 ### Startup sequence
 
 1. Load config (file, or defaults + env if no file; then CLI flags)
-2. Validate config (including deprecation warnings for legacy `db:`, ignored `notify_on_connect_failure`, and non-loopback `http://` notifier URLs)
+2. Validate config (including deprecation warnings for ignored `notify_on_connect_failure`, and non-loopback `http://` notifier URLs)
 3. If `interval > 0` (daemon): optional collector telemetry and/or GitHub update check — see [§3 Daemon startup: anonymous usage](#daemon-startup-anonymous-usage-09x)
 4. If `-kube-postgres`, start port-forward; resolve DB URL via `kube.password_from_secret` or operator-supplied DSN (**`DISCOVER_MY_PASSWORD` removed in 0.9.x** — config error) — see [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)
 5. If `-kube-loki`, start port-forward, set `LokiURL` to `localhost:port`

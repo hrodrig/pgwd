@@ -11,6 +11,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 - **Exit codes 2 and 3:** single-target connect failure exits **2** (after `Ping`); one-shot stats/query failure exits **3**. Daemon mode does not exit on query errors. Exit **4** (`-strict`) unchanged. See SPECIFICATIONS.md § Exit codes.
 - **Brand mark:** [`docs/logo.svg`](docs/logo.svg) (and `docs/logo.png`) — cyan **`pg`** monogram + green live status dot; README header uses the SVG.
 
+### Removed
+
+- **Config key `db:`:** removed. Use **`databases:`** with one entry for a single Postgres target. Loading a file that still has `db:` fails with a migration hint.
+
 ## [0.9.0] - 2026-07-13
 
 Pre-1.0 security and operator polish: removes insecure Kubernetes password discovery (`pods/exec`), hardens `/metrics` and CSV export, adds ready-to-use config profiles and optional daemon telemetry, and documents single- and multi-database deployment patterns.

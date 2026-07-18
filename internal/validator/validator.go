@@ -55,9 +55,6 @@ func Validate(cfg *config.Config) error {
 // WarnDeprecationStartup prints stderr warnings for deprecated config surfaces.
 func WarnDeprecationStartup(cfg *config.Config) {
 	WarnDeprecatedThresholds(cfg)
-	if cfg.LoadedLegacyDBConfig {
-		fmt.Fprintln(os.Stderr, "pgwd: migrate legacy 'db:' to 'databases:' with one entry before v1.0 — see contrib/profiles/ and contrib/pgwd.conf.example")
-	}
 	if cfg.NotifyOnConnectFailure {
 		fmt.Fprintln(os.Stderr, "pgwd: -notify-on-connect-failure is ignored; connect failure notifications are always enabled when notifiers are configured (removal in v1.0)")
 	}

@@ -1,6 +1,6 @@
 # /etc/pgwd/pgwd.conf — pgwd config (YAML)
 # Copy to /etc/pgwd/pgwd.conf and adjust.
-# Use databases: for one or more Postgres. Legacy db: is deprecated (still works, emits warning).
+# Use databases: for one or more Postgres (required; even for a single target).
 # When config file is loaded, env vars (PGWD_*) are ignored. CLI flags override.
 #
 # RECOMMENDED: Use daemon mode (interval > 0) for sqlite, http, resolution notifications,
@@ -14,7 +14,6 @@
 #   databases[].url           → (config only). Override: -db-url + -interval 0 = one-shot against that URL only.
 #   databases[].stale_age     → -db-stale-age (when single target)
 #   databases[].threshold.*   → -db-threshold-* (when single target)
-#   db                        → DEPRECATED; use databases. Will be removed in v1.0.
 #
 # CLI -db-url override (one-shot): with config that has databases:, passing -db-url and -interval 0
 # runs against that single URL only (ignores databases from config for that run).
@@ -118,27 +117,13 @@ databases:
 #     # no client → use base client + "-" + db name from URL
 
 # -----------------------------------------------------------------------------
-# DEPRECATED: db (use databases: instead). Will be removed in v1.0.
-# -----------------------------------------------------------------------------
-# db:
-#   url: postgres://user:pass@localhost:5432/mydb
-#   stale_age: 0
-#   default_threshold_percent: 80
-#   threshold:
-#     active: 0
-#     idle: 0
-#     levels: "75,85,95"
-#     stale: 0
-#     total: 0
-
-# -----------------------------------------------------------------------------
 # SQLite & state (for resolution notifications and /metrics)
 # -----------------------------------------------------------------------------
 # REQUIRES daemon mode (interval > 0). One-shot/timer: no history, no resolution, no /metrics.
 # sqlite:
 #   path: /var/lib/pgwd/pgwd.db   # state and metrics history
 #   max_metrics: 10000            # FIFO eviction when exceeded
-#   stale_age: 300                # optional; seconds for stale count in store (0 = use db.stale_age)
+#   stale_age: 300                # optional; seconds for stale count in store (0 = use databases[].stale_age)
 #
 # Optional: persist metrics to PostgreSQL or MySQL instead of SQLite (same FIFO semantics; max rows: sqlite.max_metrics).
 # TimescaleDB: use driver postgres with a DSN to your Timescale instance (no separate pgwd driver).

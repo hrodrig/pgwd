@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -31,7 +31,7 @@ type fileConfigDB struct {
 	LongQueryMinCount        int `yaml:"long_query_min_count"`
 }
 
-// fileConfig mirrors the YAML structure: db, databases, kube, notifications, and top-level keys.
+// fileConfig mirrors the YAML structure: databases, kube, notifications, and top-level keys.
 type fileConfig struct {
 	Client                 string         `yaml:"client"`
 	DryRun                 bool           `yaml:"dry_run"`
@@ -42,8 +42,9 @@ type fileConfig struct {
 	EnableCollector        bool           `yaml:"enable_collector"`
 	EnableUpdateCheck      *bool          `yaml:"enable_update_check"`
 	Databases              []fileConfigDB `yaml:"databases"`
-	DB                     fileConfigDB   `yaml:"db"`
-	Sqlite                 struct {
+	// RemovedDB detects legacy top-level db: (removed in v1.0). Non-nil → FromFile error.
+	RemovedDB *fileConfigDB `yaml:"db"`
+	Sqlite    struct {
 		Path       string `yaml:"path"`
 		MaxMetrics int    `yaml:"max_metrics"`
 		StaleAge   int    `yaml:"stale_age"`
@@ -134,6 +135,9 @@ func FromFile(path string) (Config, bool, error) {
 	if err := yaml.Unmarshal(data, &fc); err != nil {
 		return Config{}, false, err
 	}
+	if fc.RemovedDB != nil {
+		return Config{}, false, fmt.Errorf("config key 'db:' was removed in v1.0; use 'databases:' with one entry — see contrib/pgwd.conf.example")
+	}
 	return fileConfigToConfig(fc), true, nil
 }
 
@@ -143,22 +147,20 @@ func fileConfigToConfig(fc fileConfig) Config {
 		updateCheck = *fc.EnableUpdateCheck
 	}
 	c := Config{
-		DBURL:                   fc.DB.URL,
-		Client:                  fc.Client,
-		DefaultThresholdPercent: fc.DB.DefaultThresholdPercent,
-		DryRun:                  fc.DryRun,
-		LogLevel:                fc.LogLevel,
-		Interval:                fc.Interval,
-		Strict:                  fc.Strict,
-		EnableCollector:         fc.EnableCollector,
-		EnableUpdateCheck:       updateCheck,
-		LoadedFromFile:          true,
-		KubePostgres:            fc.Kube.Postgres,
-		KubeContext:             fc.Kube.Context,
-		KubeLocalPort:           fc.Kube.LocalPort,
-		KubeLoki:                fc.Kube.Loki,
-		KubeLokiLocalPort:       fc.Kube.LokiLocalPort,
-		KubeLokiRemotePort:      fc.Kube.LokiRemotePort,
+		Client:             fc.Client,
+		DryRun:             fc.DryRun,
+		LogLevel:           fc.LogLevel,
+		Interval:           fc.Interval,
+		Strict:             fc.Strict,
+		EnableCollector:    fc.EnableCollector,
+		EnableUpdateCheck:  updateCheck,
+		LoadedFromFile:     true,
+		KubePostgres:       fc.Kube.Postgres,
+		KubeContext:        fc.Kube.Context,
+		KubeLocalPort:      fc.Kube.LocalPort,
+		KubeLoki:           fc.Kube.Loki,
+		KubeLokiLocalPort:  fc.Kube.LokiLocalPort,
+		KubeLokiRemotePort: fc.Kube.LokiRemotePort,
 		KubePasswordFromSecret: KubePasswordFromSecret{
 			Namespace: fc.Kube.PasswordFromSecret.Namespace,
 			Name:      fc.Kube.PasswordFromSecret.Name,
@@ -201,29 +203,14 @@ func fileConfigToConfig(fc fileConfig) Config {
 		RetryMaxAttempts:         fc.Notifications.Retry.MaxAttempts,
 		RetryInitialBackoff:      parseDurationOrZero(fc.Notifications.Retry.InitialBackoff),
 		RetryMaxBackoff:          parseDurationOrZero(fc.Notifications.Retry.MaxBackoff),
-		StaleAge:                 fc.DB.StaleAge,
-		ThresholdTotal:           fc.DB.Threshold.Total,
-		ThresholdActive:          fc.DB.Threshold.Active,
-		ThresholdIdle:            fc.DB.Threshold.Idle,
-		ThresholdStale:           fc.DB.Threshold.Stale,
-		ThresholdLevels:          fc.DB.Threshold.Levels,
-		LongQueryMinSeconds:      fc.DB.LongQueryMinSeconds,
-		LongQueryCooldownSeconds: fc.DB.LongQueryCooldownSeconds,
-		LongQueryMinCount:        fc.DB.LongQueryMinCount,
 	}
 
-	// Normalize to Databases: use databases if present, else wrap db as single target.
 	if len(fc.Databases) > 0 {
 		c.Databases = make([]DatabaseTarget, 0, len(fc.Databases))
 		for _, d := range fc.Databases {
-			t := mergeDBTarget(fc.Client, fc.DB, d)
+			t := mergeDBTarget(fc.Client, fileConfigDB{}, d)
 			c.Databases = append(c.Databases, t)
 		}
-	} else if fc.DB.URL != "" {
-		c.LoadedLegacyDBConfig = true
-		log.Printf("pgwd: config key 'db' is deprecated; use 'databases: [{ url: ... }]' instead. Support will be removed in v1.0.")
-		t := mergeDBTarget(fc.Client, fc.DB, fc.DB)
-		c.Databases = []DatabaseTarget{t}
 	}
 
 	ApplyDefaults(&c)

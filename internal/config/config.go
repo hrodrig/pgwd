@@ -127,7 +127,6 @@ type Config struct {
 	ConfirmAlert int // consecutive "bad" checks before sending alert (default 1)
 	ConfirmOk    int // consecutive "ok" checks before resolution notification (default 1)
 
-	LoadedLegacyDBConfig     bool   // set when YAML used deprecated top-level db: (not databases:)
 	LoadedFromFile           bool   // set when config was loaded from YAML file
 	EnableCollector          bool   // opt-in anonymous daemon telemetry (default false)
 	EnableUpdateCheck        bool   // opt-out GitHub release check (default true when unset)

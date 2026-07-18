@@ -133,7 +133,7 @@ pgwd loads settings from (in order): **config file** → **environment variables
 | Environment | `PGWD_*` |
 | CLI | `-flag` |
 
-**Config file** (YAML) — keys match `-flag` and `PGWD_*` env vars. See `contrib/pgwd.conf.example` (or **`pgwd --print-sample-config > /etc/pgwd/pgwd.conf`** when the example file is not on disk). Use `databases:` for one or more Postgres (canonical). Legacy `db:` is deprecated and will be removed in v1.0. For kube.postgres, use `db:` until per-db kube support exists.
+**Config file** (YAML) — keys match `-flag` and `PGWD_*` env vars. See `contrib/pgwd.conf.example` (or **`pgwd --print-sample-config > /etc/pgwd/pgwd.conf`** when the example file is not on disk). Use **`databases:`** for one or more Postgres (required even for a single target). Legacy top-level **`db:`** was removed in v1.0. For kube.postgres, use a single `databases:` entry with a URL that kube port-forward rewrites (multi-DB + kube is not supported).
 
 ```bash
 # Use default path /etc/pgwd/pgwd.conf
