@@ -78,7 +78,6 @@ PostgreSQL enforces a configured ceiling (`max_connections`). Slots reserved for
 - [Solaris](#solaris)
 - [Roadmap](#roadmap)
 - [Get involved](#get-involved)
-- [Star History](#star-history)
 - [License](#license)
 
 ---
@@ -1516,14 +1515,6 @@ Found pgwd useful? We’d love your help to make it better. You can:
 - **Star the repo** — it helps others discover pgwd
 
 Thanks for using pgwd. Happy watching.
-
-[↑ Back to top](#top)
-
----
-
-## Star History
-
-[![Star History Chart](https://api.star-history.com/chart?repos=hrodrig/pgwd&type=date&legend=bottom-right)](https://www.star-history.com/?repos=hrodrig%2Fpgwd&type=date&legend=bottom-right)
 
 [↑ Back to top](#top)
 
