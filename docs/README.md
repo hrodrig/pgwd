@@ -18,7 +18,11 @@ Release bands from **v0.7.0** to **v1.0.0**. Behavior contract: [SPECIFICATIONS.
 
 ## Upgrading
 
+**[Upgrading from 0.9.x to 1.0.0](./UPGRADE-0.9-to-1.0.md)** — Breaking removals (`db:`, total/active thresholds, `notify-on-connect-failure`), migration examples, verify steps.
+
 **[Upgrading from 0.5.x to 0.6.x](./UPGRADE-0.5-to-0.6.md)** — Checklist and links for moving from **0.5.10** (or earlier **0.5.x**) to **0.6.x**: config/CLI/env breaks introduced in **0.5.10**, optional **0.6.x** features (metrics store, HTTP, CSV export), and **Helm** moving to [pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted). For the raw rename table, see the [README breaking-changes section](../README.md#breaking-changes-upgrade-from-05x).
+
+**[Compare pgwd vs alternatives](./compare.md)** — Honest matrix (exporter, pgwatch, SaaS, cloud alarms, DIY, Nagios). Product choice; for deploy recipes see use cases below.
 
 **[Operator use cases](./use-cases.md)** — Scenario matrix: single/multi database, in/out of Kubernetes, cron vs daemon, different credentials per target. Profiles under `contrib/profiles/`.
 

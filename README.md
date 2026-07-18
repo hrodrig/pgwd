@@ -40,6 +40,7 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 ## Table of contents
 
 - [Quick start](#quick-start)
+- [Compare](#compare)
 - [Configuration: CLI vs environment](#configuration-cli-vs-environment)
 - [Usage examples](#usage-examples)
 - [Typical scenarios](#typical-scenarios)
@@ -85,6 +86,10 @@ pgwd -db-url "postgres://user:pass@localhost:5432/mydb" \
 # Custom 3-tier levels (default 75,85,95)
 pgwd -db-url "postgres://..." -notifications-slack-webhook "https://..." -db-threshold-levels 70,85,90
 ```
+
+### Breaking changes (upgrade from 0.9.x)
+
+**1.0.0** removes legacy `db:`, total/active thresholds, and `notify-on-connect-failure`. Migration checklist: **[docs/UPGRADE-0.9-to-1.0.md](docs/UPGRADE-0.9-to-1.0.md)**.
 
 ### Breaking changes (upgrade from 0.5.x)
 
@@ -856,6 +861,21 @@ Using **127.0.0.1** and host port **5433** avoids hitting a local Postgres on 54
 | **4** | Notifier delivery failure when **`-strict`** is set |
 
 Full contract: [SPECIFICATIONS.md — Exit codes](SPECIFICATIONS.md#exit-codes).
+
+## Compare
+
+Honest positioning vs common options (connection watchdog vs full metrics stack / SaaS / DIY):
+
+| Need | Prefer |
+|------|--------|
+| Connection / stale / long-query alerts, single binary, Slack/Loki/PagerDuty | **pgwd** |
+| Broad Postgres metrics + PromQL + Grafana | **postgres_exporter** (+ Alertmanager) |
+| Rich dashboards / monitoring suite | **pgwatch** |
+| Full APM / hosted observability | **Datadog / New Relic** (etc.) |
+| Cloud-only managed DB alarms | **CloudWatch / GCP / Azure** alarms |
+| Zero deps, custom scripts | **cron + psql** |
+
+Full matrix and “when not pgwd”: **[docs/compare.md](docs/compare.md)**. Deployment scenarios: **[docs/use-cases.md](docs/use-cases.md)**.
 
 ## Help
 

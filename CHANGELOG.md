@@ -17,6 +17,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 - **Connect-failure legacy surface:** removed **`-notify-on-connect-failure`**, **`PGWD_NOTIFY_ON_CONNECT_FAILURE`**, and YAML **`notify_on_connect_failure`**. Connect failure notifications are always sent when notifiers are configured.
 - **Legacy total/active thresholds:** removed **`-db-threshold-total`**, **`-db-threshold-active`**, **`PGWD_DB_THRESHOLD_TOTAL`**, **`PGWD_DB_THRESHOLD_ACTIVE`**, and YAML **`threshold.total`** / **`threshold.active`**. Use **`-db-threshold-levels`** instead.
 
+### Documentation
+
+- **[docs/compare.md](docs/compare.md)** — transparent comparison vs postgres_exporter, pgwatch, SaaS, cloud alarms, DIY, Nagios; README § Compare.
+- **[docs/UPGRADE-0.9-to-1.0.md](docs/UPGRADE-0.9-to-1.0.md)** — migration guide for 1.0 breaking removals.
+
 ## [0.9.0] - 2026-07-13
 
 Pre-1.0 security and operator polish: removes insecure Kubernetes password discovery (`pods/exec`), hardens `/metrics` and CSV export, adds ready-to-use config profiles and optional daemon telemetry, and documents single- and multi-database deployment patterns.

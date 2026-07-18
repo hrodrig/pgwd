@@ -86,9 +86,9 @@ Same pattern as **[gfire/docs/compare.md](https://github.com/hrodrig/gfire/blob/
 
 ### Checklist
 
-- [ ] `docs/compare.md` drafted (snapshot version **v1.0.0** in header)
-- [ ] README § Compare + TOC entry
-- [ ] ROADMAP document map updated (remove “planned” when shipped)
+- [x] `docs/compare.md` drafted (snapshot version **v1.0.0** in header)
+- [x] README § Compare + TOC entry
+- [x] ROADMAP document map updated (remove “planned” when shipped)
 - [ ] Landing `/compare` live or linked from README
 - [ ] Competitor feature claims re-verified before tag
 

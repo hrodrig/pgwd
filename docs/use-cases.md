@@ -2,6 +2,8 @@
 
 Copy-paste starting points for common deployments. Profiles live under **[contrib/profiles/](../contrib/profiles/)**. K8s credential patterns (including DISCOVER migration): **[kubernetes-passwords.md](./kubernetes-passwords.md)**.
 
+Choosing **pgwd vs other tools** (exporter, SaaS, DIY): **[compare.md](./compare.md)**. This page is **how to deploy**; compare is **what to pick**.
+
 ---
 
 ## Choose your scenario
