@@ -288,18 +288,28 @@ func TestQueryAllMetrics(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("len=%d", len(got))
 	}
-	if got[0].ID != 1 || got[0].TSMillis != 1700000000000 ||
-		got[0].Client != "c" || got[0].Cluster != "cl" ||
-		got[0].Namespace != "ns" || got[0].Database != "db" ||
-		got[0].Threshold != "total" {
-		t.Fatalf("row0=%+v", got[0])
-	}
-	if got[1].Cluster != "" || got[1].Namespace != "" ||
-		got[1].Database != "" || got[1].Threshold != "" {
-		t.Fatalf("nulls not cleared: %+v", got[1])
-	}
+	assertExportRowFilled(t, got[0])
+	assertExportRowNullsCleared(t, got[1])
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func assertExportRowFilled(t *testing.T, r ExportRow) {
+	t.Helper()
+	if r.ID != 1 || r.TSMillis != 1700000000000 ||
+		r.Client != "c" || r.Cluster != "cl" ||
+		r.Namespace != "ns" || r.Database != "db" ||
+		r.Threshold != "total" {
+		t.Fatalf("row0=%+v", r)
+	}
+}
+
+func assertExportRowNullsCleared(t *testing.T, r ExportRow) {
+	t.Helper()
+	if r.Cluster != "" || r.Namespace != "" ||
+		r.Database != "" || r.Threshold != "" {
+		t.Fatalf("nulls not cleared: %+v", r)
 	}
 }
 
