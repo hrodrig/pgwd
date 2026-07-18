@@ -29,11 +29,17 @@
 
 Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via **Slack** and/or **Loki** when configured thresholds are exceeded. It can also alert on **stale connections** (connections that stay open and never close).
 
+### Why connection limits matter
+
+PostgreSQL enforces a configured ceiling (`max_connections`). Slots reserved for privileged roles (`superuser_reserved_connections`, and on PostgreSQL 16+ `reserved_connections`) reduce how many ordinary application connections can succeed before the server starts refusing new sessions. When the limit is hit, clients fail to connect with SQLSTATE **53300** (“too many clients”). Under high concurrency, each backend is still a process: memory (`shared_buffers` plus per-session/`work_mem` pressure), CPU, and I/O can degrade even before hard rejection—or the OS can OOM.
+
+**pgwd** watches connection pressure (and connect failures) so you can alert before or when saturation happens. It does **not** replace connection poolers or careful sizing. For hardware/app heuristics, reserved slots, WAL/standby notes, and developer pool pitfalls, see **[PostgreSQL connection limits and saturation](docs/postgresql-connection-limits.md)**.
+
 **Self-hosted deployment (Docker Compose, Helm, Kubernetes manifests):** **[pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted)** — production paths, env layout, and observability stacks live there; this repo ships the application binary, packages, and container image only.
 
 **GitHub repo traffic (history beyond 14 days):** sibling tool **[gghstats](https://github.com/hrodrig/gghstats)** — [live stats for pgwd](https://gghstats.hermesrodriguez.com/hrodrig/pgwd) (clone badge above).
 
-**Documentation:** [ROADMAP.md](ROADMAP.md), [Operator use cases](docs/use-cases.md), [SPECIFICATIONS.md](SPECIFICATIONS.md) (behavior contract), [Kubernetes passwords / DISCOVER migration](docs/kubernetes-passwords.md), [docs/](docs/README.md) (band plans, sequence diagrams, upgrades), `man pgwd`. **Scanning:** [tools/README.md](tools/README.md).
+**Documentation:** [ROADMAP.md](ROADMAP.md), [Operator use cases](docs/use-cases.md), [Connection limits](docs/postgresql-connection-limits.md), [SPECIFICATIONS.md](SPECIFICATIONS.md) (behavior contract), [Kubernetes passwords / DISCOVER migration](docs/kubernetes-passwords.md), [docs/](docs/README.md) (band plans, sequence diagrams, upgrades), `man pgwd`. **Scanning:** [tools/README.md](tools/README.md).
 
 ![Terminal demo](docs/demo.gif)
 
