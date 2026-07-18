@@ -122,7 +122,6 @@ func TestValidateNotifiers(t *testing.T) {
 		{"has pagerduty", &config.Config{PagerDutyRoutingKey: "rk"}, false, ""},
 		{"no notifier no dry-run", &config.Config{}, true, "no notifier"},
 		{"force-notification no notifier", &config.Config{ForceNotification: true, DryRun: true}, true, "force-notification requires"},
-		{"notify-on-connect-failure no notifier", &config.Config{NotifyOnConnectFailure: true, DryRun: true}, false, ""},
 		{"pagerduty enabled missing key", &config.Config{PagerDutyEnabled: true, DryRun: true}, true, "routing_key is required"},
 		{"teams enabled missing webhook", &config.Config{TeamsEnabled: true, DryRun: true}, true, "webhook_url is required"},
 		{"generic enabled missing url", &config.Config{GenericEnabled: true, DryRun: true}, true, "webhook_url is required"},
@@ -304,6 +303,13 @@ func TestValidateRemovedThresholdEnv(t *testing.T) {
 			t.Fatalf("expected removed active env error, got %v", err)
 		}
 	})
+}
+
+func TestValidateRemovedNotifyOnConnectFailureEnv(t *testing.T) {
+	t.Setenv("PGWD_NOTIFY_ON_CONNECT_FAILURE", "true")
+	if err := ValidateRemovedNotifyOnConnectFailureEnv(); err == nil || !strings.Contains(err.Error(), "PGWD_NOTIFY_ON_CONNECT_FAILURE") {
+		t.Fatalf("expected removed notify-on-connect-failure env error, got %v", err)
+	}
 }
 
 func TestWarnNotifierTLS(t *testing.T) {

@@ -623,7 +623,6 @@ All parameters can be set via **config file**, **CLI**, or **environment variabl
 | `-enable-update-check` | `PGWD_ENABLE_UPDATE_CHECK` | Check GitHub for newer releases on daemon startup (default true) |
 | `-dry-run` | `PGWD_DRY_RUN` | Only print stats, do not send notifications |
 | `-force-notification` | `PGWD_FORCE_NOTIFICATION` | Always send at least one notification: test event when connected (to validate delivery, format, and channel). Requires at least one notifier. (Connection failure is always notified when a notifier is configured, with or without this flag.) |
-| `-notify-on-connect-failure` | `PGWD_NOTIFY_ON_CONNECT_FAILURE` | Legacy: connection failure is **always** notified when a notifier is configured; this flag is no longer required. Kept for backward compatibility; if set, still requires at least one notifier at startup. |
 | `-db-default-threshold-percent` | `PGWD_DB_DEFAULT_THRESHOLD_PERCENT` | Retained for config compatibility. Default: 80. No longer fills total/active thresholds. |
 | `-db-threshold-levels` | `PGWD_DB_THRESHOLD_LEVELS` | When both total and active are 0: comma-separated percentages for 3-tier alerts (e.g. 75,85,95). Levels: attention (1st), alert (2nd), danger (3rd). Only highest breached level fires. Default: 75,85,95. |
 | `-test-max-connections` | `PGWD_TEST_MAX_CONNECTIONS` | Override server `max_connections` for level-mode calculations and display (testing only). When set, notifications use this value instead of the server’s; stats (total/active/idle) remain real. Notifications show “(test override)” so you can simulate e.g. a low limit and trigger alerts without a real low max_connections. |
@@ -931,7 +930,6 @@ All notifiers share HTTP retry settings under `notifications.retry` (or `-notifi
 | **"no thresholds set and could not default from server..."** | pgwd could not read `max_connections` from the server (error or 0). Use `-test-max-connections N` to override, or `-dry-run`, or `-force-notification`. With a normal Postgres, only `-db-url` and a notifier should be enough (defaults to 3-tier levels 75,85,95%). |
 | **"no notifier configured"** | Set a notification channel: Slack, Loki, `-kube-loki`, PagerDuty, Teams, or generic webhook (or use `-dry-run`). |
 | **"force-notification requires at least one notifier"** | Use `-force-notification` together with at least one configured notifier. |
-| **"notify-on-connect-failure requires at least one notifier"** | You set `-notify-on-connect-failure` but have no notifier. Add a notification channel. (Connect failure is always notified when a notifier is configured; the flag is optional.) |
 | **"load kubeconfig" / cluster unreachable** | When using `-kube-postgres` or `-kube-loki`, ensure a valid kubeconfig exists (`KUBECONFIG` env or `~/.kube/config`). pgwd uses client-go; no kubectl binary required. |
 | **"when using -db-threshold-stale, -db-stale-age must be > 0"** | Set `-db-stale-age N` (e.g. 600) when using `-db-threshold-stale`. |
 | **Slack/Loki not receiving alerts** | Run once with `-force-notification` to send a test message. Check webhook URL, network/firewall, and that the app can reach Slack/Loki. |

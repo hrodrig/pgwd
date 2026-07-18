@@ -10,7 +10,6 @@
 #   client                    → -client
 #   interval                  → -interval
 #   dry_run                   → -dry-run
-#   notify_on_connect_failure → -notify-on-connect-failure
 #   databases[].url           → (config only). Override: -db-url + -interval 0 = one-shot against that URL only.
 #   databases[].stale_age     → -db-stale-age (when single target)
 #   databases[].threshold.*   → -db-threshold-* (when single target)
@@ -33,7 +32,6 @@ client: "prod-db-primary"
 interval: 60
 dry_run: true
 log_level: info    # info (default) or debug; debug = verbose dry-run stats
-notify_on_connect_failure: false
 
 # Optional anonymous usage (daemon mode only; interval > 0):
 # enable_collector: false       # opt-in — default off

@@ -94,7 +94,6 @@ Documented operator-facing gaps; planned hardening is in [ROADMAP.md](ROADMAP.md
 | `-enable-collector` | `PGWD_ENABLE_COLLECTOR` | Opt-in anonymous daemon telemetry (default off). |
 | `-enable-update-check` | `PGWD_ENABLE_UPDATE_CHECK` | Opt-out GitHub release check (default on). |
 | `-force-notification` | `PGWD_FORCE_NOTIFICATION` | Send a test event regardless of thresholds. |
-| `-notify-on-connect-failure` | `PGWD_NOTIFY_ON_CONNECT_FAILURE` | Legacy; currently always-on when notifiers configured. |
 | `-log-level <level>` | `PGWD_LOG_LEVEL` | `info` (default) or `debug`. |
 | `-test-max-connections <n>` | `PGWD_TEST_MAX_CONNECTIONS` | Override server `max_connections` for testing alerts. |
 | `-validate-k8s-access` | `PGWD_VALIDATE_K8S_ACCESS` | Connectivity probe, then exit. |
@@ -220,7 +219,6 @@ When `databases:` is non-empty in the config file, each entry is one Postgres ta
 | `enable_update_check` | bool | true | Opt-out GitHub release check on daemon startup. |
 | `dry_run` | bool | false | |
 | `force_notification` | bool | false | |
-| `notify_on_connect_failure` | bool | false | Legacy. |
 | `test_max_connections` | int | 0 | |
 | `validate_k8s_access` | bool | false | |
 | `log_level` | string | `info` | |
@@ -281,7 +279,6 @@ All config keys map to `PGWD_<UPPER_SNAKE>` equivalents. Notifier env vars:
 - Generic enabled (or webhook URL set) → `webhook_url` required; `body_template` must compile; rendered output must be valid JSON on send.
 - Notification retry: `max_attempts` ≥ 0; backoffs ≥ 0 (defaults applied when zero).
 - `-force-notification` requires at least one notifier (not compatible with `-dry-run`).
-- `-notify-on-connect-failure` requires at least one notifier.
 - When `-kube-postgres` or `-kube-loki` is set, a valid **kubeconfig** must be loadable (client-go; no kubectl binary required).
 - Threshold levels: 3 comma-separated percentages, 1-100, ascending.
 - `-test-max-connections` > 0 overrides server value for defaults and display.
@@ -291,7 +288,7 @@ All config keys map to `PGWD_<UPPER_SNAKE>` equivalents. Notifier env vars:
 ### Startup sequence
 
 1. Load config (file, or defaults + env if no file; then CLI flags)
-2. Validate config (including deprecation warnings for ignored `notify_on_connect_failure`, and non-loopback `http://` notifier URLs)
+2. Validate config (including non-loopback `http://` notifier URLs)
 3. If `interval > 0` (daemon): optional collector telemetry and/or GitHub update check — see [§3 Daemon startup: anonymous usage](#daemon-startup-anonymous-usage-09x)
 4. If `-kube-postgres`, start port-forward; resolve DB URL via `kube.password_from_secret` or operator-supplied DSN (**`DISCOVER_MY_PASSWORD` removed in 0.9.x** — config error) — see [docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)
 5. If `-kube-loki`, start port-forward, set `LokiURL` to `localhost:port`
@@ -416,7 +413,7 @@ All notifier senders (Slack, Loki, PagerDuty, Teams, generic webhook) use shared
 
 ### Connect failure notification
 
-- Always-on when any notifier is configured (no extra flag; `-notify-on-connect-failure` is legacy/no-op)
+- Always-on when any notifier is configured
 - **Not suppressed by `-dry-run`** — real HTTP notifications are sent
 - Maps SQLSTATE 53300 → event type `too_many_clients`
 - Maps any other connection error → `connect_failure`

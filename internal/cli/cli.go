@@ -142,7 +142,6 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.IntVar(&cfg.KubeLokiLocalPort, "kube-loki-local-port", cfg.KubeLokiLocalPort, "Local port for Loki port-forward (default 3100) (PGWD_KUBE_LOKI_LOCAL_PORT)")
 	flag.IntVar(&cfg.KubeLokiRemotePort, "kube-loki-remote-port", cfg.KubeLokiRemotePort, "Remote port on the Loki service (default 3100) (PGWD_KUBE_LOKI_REMOTE_PORT)")
 	flag.StringVar(&cfg.Client, "client", cfg.Client, "Client name for this monitor instance — REQUIRED (PGWD_CLIENT); identifies which monitor sent the alert")
-	flag.BoolVar(&cfg.NotifyOnConnectFailure, "notify-on-connect-failure", cfg.NotifyOnConnectFailure, "Send an alert to notifiers when Postgres connection fails (infrastructure alert) (PGWD_NOTIFY_ON_CONNECT_FAILURE)")
 	flag.IntVar(&cfg.TestMaxConnections, "test-max-connections", cfg.TestMaxConnections, "Override server max_connections for defaults and display (for testing alerts; 0 = use server) (PGWD_TEST_MAX_CONNECTIONS)")
 	flag.BoolVar(&cfg.ValidateK8sAccess, "validate-k8s-access", cfg.ValidateK8sAccess, "Validate cluster connectivity and list pods, then exit. Use -kube-context to select context. (PGWD_VALIDATE_K8S_ACCESS)")
 	flag.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "Log level: info (default) or debug. Debug = verbose dry-run stats every interval (PGWD_LOG_LEVEL)")
@@ -169,6 +168,8 @@ func rejectRemovedThresholdFlags() {
 			log.Fatalf("pgwd: -db-threshold-total was removed in v1.0; use -db-threshold-levels (e.g. -db-threshold-levels 75,85,95)")
 		case strings.HasPrefix(arg, "-db-threshold-active"):
 			log.Fatalf("pgwd: -db-threshold-active was removed in v1.0; use -db-threshold-levels (e.g. -db-threshold-levels 75,85,95)")
+		case strings.HasPrefix(arg, "-notify-on-connect-failure"):
+			log.Fatalf("pgwd: -notify-on-connect-failure was removed in v1.0; connect failure notifications are always sent when notifiers are configured")
 		}
 	}
 }

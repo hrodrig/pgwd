@@ -1,6 +1,6 @@
 # Sequence diagrams — audit vs code
 
-Last audit: 2026-07-13 (0.9.x: DISCOVER removed, `password_from_secret`, collector daemon startup, TLS warnings, strict exit 4).
+Last audit: 2026-07-18 (1.0: removed notify-on-connect-failure surface, connect failure remains always-on, validator/env cleanup).
 
 ## 01 — Startup and config validation
 
@@ -16,7 +16,6 @@ Last audit: 2026-07-13 (0.9.x: DISCOVER removed, `password_from_secret`, collect
 | validate DB URL present | `validateDBURL()` 112–116 |
 | validate stale-age if threshold-stale | `validateStale()` 118–122 |
 | validate at least one notifier (or dry-run) | `validateNotifiers()` 124–133 |
-| validate force-notification / notify-on-connect-failure require notifier | `validateNotifiers()` |
 | signal.NotifyContext(SIGINT, SIGTERM) | 590 |
 | opt -kube-postgres: password_from_secret or DSN, port-forward | `setupKube()` — no `pods/exec`; DISCOVER fails fast |
 | opt interval > 0: collector / update check | `startCollector()` after `validateConfig()` |

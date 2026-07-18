@@ -19,6 +19,9 @@ func Validate(cfg *config.Config) error {
 	if err := ValidateRemovedThresholdEnv(); err != nil {
 		return err
 	}
+	if err := ValidateRemovedNotifyOnConnectFailureEnv(); err != nil {
+		return err
+	}
 	if err := ValidateDatabases(cfg); err != nil {
 		return err
 	}
@@ -28,7 +31,6 @@ func Validate(cfg *config.Config) error {
 	if err := ValidateClient(cfg); err != nil {
 		return err
 	}
-	WarnDeprecationStartup(cfg)
 	WarnNotifierTLS(cfg)
 	if err := ValidateStale(cfg); err != nil {
 		return err
@@ -52,13 +54,6 @@ func Validate(cfg *config.Config) error {
 		return err
 	}
 	return nil
-}
-
-// WarnDeprecationStartup prints stderr warnings for deprecated config surfaces.
-func WarnDeprecationStartup(cfg *config.Config) {
-	if cfg.NotifyOnConnectFailure {
-		fmt.Fprintln(os.Stderr, "pgwd: -notify-on-connect-failure is ignored; connect failure notifications are always enabled when notifiers are configured (removal in v1.0)")
-	}
 }
 
 // WarnNotifierTLS logs a startup warning when notifier URLs use plain HTTP (non-loopback).
@@ -95,6 +90,14 @@ func ValidateRemovedThresholdEnv() error {
 	}
 	if _, ok := os.LookupEnv("PGWD_DB_THRESHOLD_ACTIVE"); ok {
 		return fmt.Errorf("pgwd: PGWD_DB_THRESHOLD_ACTIVE was removed in v1.0; use PGWD_DB_THRESHOLD_LEVELS (e.g. 75,85,95)")
+	}
+	return nil
+}
+
+// ValidateRemovedNotifyOnConnectFailureEnv rejects removed connect-failure env vars.
+func ValidateRemovedNotifyOnConnectFailureEnv() error {
+	if _, ok := os.LookupEnv("PGWD_NOTIFY_ON_CONNECT_FAILURE"); ok {
+		return fmt.Errorf("pgwd: PGWD_NOTIFY_ON_CONNECT_FAILURE was removed in v1.0; connect failure notifications are always sent when notifiers are configured")
 	}
 	return nil
 }

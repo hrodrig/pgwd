@@ -23,7 +23,7 @@ func TestFromEnv_Defaults(t *testing.T) {
 	prefixes := []string{"PGWD_DB_URL", "PGWD_KUBE_POSTGRES", "PGWD_KUBE_LOKI", "PGWD_KUBE_LOCAL_PORT", "PGWD_KUBE_LOKI_LOCAL_PORT", "PGWD_KUBE_LOKI_REMOTE_PORT", "PGWD_KUBE_PASSWORD_VAR", "PGWD_KUBE_PASSWORD_CONTAINER",
 		"PGWD_DB_THRESHOLD_IDLE",
 		"PGWD_DB_STALE_AGE", "PGWD_DB_THRESHOLD_STALE", "PGWD_NOTIFICATIONS_SLACK_WEBHOOK", "PGWD_NOTIFICATIONS_LOKI_URL", "PGWD_NOTIFICATIONS_LOKI_LABELS", "PGWD_NOTIFICATIONS_LOKI_ORG_ID", "PGWD_NOTIFICATIONS_LOKI_BEARER_TOKEN",
-		"PGWD_INTERVAL", "PGWD_DRY_RUN", "PGWD_FORCE_NOTIFICATION", "PGWD_NOTIFY_ON_CONNECT_FAILURE", "PGWD_DB_DEFAULT_THRESHOLD_PERCENT", "PGWD_VALIDATE_K8S_ACCESS"}
+		"PGWD_INTERVAL", "PGWD_DRY_RUN", "PGWD_FORCE_NOTIFICATION", "PGWD_DB_DEFAULT_THRESHOLD_PERCENT", "PGWD_VALIDATE_K8S_ACCESS"}
 	for _, p := range prefixes {
 		os.Unsetenv(p)
 	}
@@ -40,8 +40,8 @@ func TestFromEnv_Defaults(t *testing.T) {
 	if cfg.DefaultThresholdPercent != 80 {
 		t.Errorf("DefaultThresholdPercent default: got %d", cfg.DefaultThresholdPercent)
 	}
-	if cfg.DryRun || cfg.ForceNotification || cfg.NotifyOnConnectFailure || cfg.ValidateK8sAccess {
-		t.Errorf("DryRun=%v ForceNotification=%v NotifyOnConnectFailure=%v ValidateK8sAccess=%v", cfg.DryRun, cfg.ForceNotification, cfg.NotifyOnConnectFailure, cfg.ValidateK8sAccess)
+	if cfg.DryRun || cfg.ForceNotification || cfg.ValidateK8sAccess {
+		t.Errorf("DryRun=%v ForceNotification=%v ValidateK8sAccess=%v", cfg.DryRun, cfg.ForceNotification, cfg.ValidateK8sAccess)
 	}
 }
 
@@ -432,7 +432,6 @@ func TestApplyEnv_Behaviour(t *testing.T) {
 	t.Setenv("PGWD_INTERVAL", "60")
 	t.Setenv("PGWD_DRY_RUN", "true")
 	t.Setenv("PGWD_FORCE_NOTIFICATION", "yes")
-	t.Setenv("PGWD_NOTIFY_ON_CONNECT_FAILURE", "1")
 	t.Setenv("PGWD_TEST_MAX_CONNECTIONS", "200")
 	t.Setenv("PGWD_VALIDATE_K8S_ACCESS", "true")
 	t.Setenv("PGWD_LOG_LEVEL", "debug")
@@ -448,9 +447,6 @@ func TestApplyEnv_Behaviour(t *testing.T) {
 	}
 	if !cfg.ForceNotification {
 		t.Error("ForceNotification: expected true")
-	}
-	if !cfg.NotifyOnConnectFailure {
-		t.Error("NotifyOnConnectFailure: expected true")
 	}
 	if cfg.TestMaxConnections != 200 {
 		t.Errorf("TestMaxConnections: got %d", cfg.TestMaxConnections)

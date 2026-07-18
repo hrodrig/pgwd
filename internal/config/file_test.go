@@ -92,6 +92,31 @@ interval: 60
 	}
 }
 
+func TestFromFile_RemovedNotifyOnConnectFailureRejected(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "pgwd.conf")
+	content := `
+client: monitor-01
+notify_on_connect_failure: true
+interval: 60
+databases:
+  - url: postgres://user:pass@host:5432/prod
+`
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, loaded, err := FromFile(path)
+	if err == nil {
+		t.Fatal("expected error for removed notify_on_connect_failure key")
+	}
+	if loaded {
+		t.Error("expected loaded=false on error")
+	}
+	if !strings.Contains(err.Error(), "notify_on_connect_failure") {
+		t.Errorf("error %q should mention notify_on_connect_failure", err)
+	}
+}
+
 func TestFromFile_RemovedThresholdsRejected(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "pgwd.conf")

@@ -14,6 +14,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 ### Removed
 
 - **Config key `db:`:** removed. Use **`databases:`** with one entry for a single Postgres target. Loading a file that still has `db:` fails with a migration hint.
+- **Connect-failure legacy surface:** removed **`-notify-on-connect-failure`**, **`PGWD_NOTIFY_ON_CONNECT_FAILURE`**, and YAML **`notify_on_connect_failure`**. Connect failure notifications are always sent when notifiers are configured.
 - **Legacy total/active thresholds:** removed **`-db-threshold-total`**, **`-db-threshold-active`**, **`PGWD_DB_THRESHOLD_TOTAL`**, **`PGWD_DB_THRESHOLD_ACTIVE`**, and YAML **`threshold.total`** / **`threshold.active`**. Use **`-db-threshold-levels`** instead.
 
 ## [0.9.0] - 2026-07-13

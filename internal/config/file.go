@@ -33,15 +33,16 @@ type fileConfigDB struct {
 
 // fileConfig mirrors the YAML structure: databases, kube, notifications, and top-level keys.
 type fileConfig struct {
-	Client                 string         `yaml:"client"`
-	DryRun                 bool           `yaml:"dry_run"`
-	LogLevel               string         `yaml:"log_level"`
-	Interval               int            `yaml:"interval"`
-	Strict                 bool           `yaml:"strict"`
-	NotifyOnConnectFailure bool           `yaml:"notify_on_connect_failure"`
-	EnableCollector        bool           `yaml:"enable_collector"`
-	EnableUpdateCheck      *bool          `yaml:"enable_update_check"`
-	Databases              []fileConfigDB `yaml:"databases"`
+	Client            string `yaml:"client"`
+	DryRun            bool   `yaml:"dry_run"`
+	LogLevel          string `yaml:"log_level"`
+	Interval          int    `yaml:"interval"`
+	Strict            bool   `yaml:"strict"`
+	EnableCollector   bool   `yaml:"enable_collector"`
+	EnableUpdateCheck *bool  `yaml:"enable_update_check"`
+	// RemovedNotifyOnConnectFailure detects legacy notify_on_connect_failure (removed in v1.0). Non-nil → FromFile error.
+	RemovedNotifyOnConnectFailure *bool          `yaml:"notify_on_connect_failure"`
+	Databases                     []fileConfigDB `yaml:"databases"`
 	// RemovedDB detects legacy top-level db: (removed in v1.0). Non-nil → FromFile error.
 	RemovedDB *fileConfigDB `yaml:"db"`
 	Sqlite    struct {
@@ -140,6 +141,9 @@ func FromFile(path string) (Config, bool, error) {
 			return Config{}, false, fmt.Errorf(`threshold.total and threshold.active were removed in v1.0; use threshold.levels (e.g. "75,85,95")`)
 		}
 	}
+	if fc.RemovedNotifyOnConnectFailure != nil {
+		return Config{}, false, fmt.Errorf("config key 'notify_on_connect_failure' was removed in v1.0; connect failure notifications are always sent when notifiers are configured")
+	}
 	if fc.RemovedDB != nil {
 		return Config{}, false, fmt.Errorf("config key 'db:' was removed in v1.0; use 'databases:' with one entry — see contrib/pgwd.conf.example")
 	}
@@ -175,7 +179,6 @@ func fileConfigToConfig(fc fileConfig) Config {
 		LokiLabels:               fc.Notifications.Loki.Labels,
 		LokiOrgID:                fc.Notifications.Loki.OrgID,
 		LokiBearerToken:          fc.Notifications.Loki.BearerToken,
-		NotifyOnConnectFailure:   fc.NotifyOnConnectFailure,
 		SqlitePath:               fc.Sqlite.Path,
 		SqliteMaxMetrics:         fc.Sqlite.MaxMetrics,
 		SqliteStaleAge:           fc.Sqlite.StaleAge,

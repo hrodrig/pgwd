@@ -98,7 +98,6 @@ type Config struct {
 	DryRun                  bool
 	Strict                  bool   // exit 4 when notifier delivery fails for a threshold event
 	ForceNotification       bool   // send a test notification regardless of thresholds (to validate delivery/format)
-	NotifyOnConnectFailure  bool   // when Postgres connection fails, send an alert to notifiers (infrastructure alert)
 	DefaultThresholdPercent int    // retained for config compatibility; no longer fills total/active thresholds
 	ThresholdLevels         string // comma-separated percentages for 3-tier alerts, e.g. "75,85,95" (attention/alert/danger). Used when level mode is active.
 	// TestMaxConnections: if > 0, use instead of server max_connections for defaults and display (for testing alerts).
@@ -357,9 +356,6 @@ func applyEnvBehaviour(cfg *Config) {
 	if _, ok := os.LookupEnv("PGWD_FORCE_NOTIFICATION"); ok {
 		cfg.ForceNotification = envBool("FORCE_NOTIFICATION", false)
 	}
-	if _, ok := os.LookupEnv("PGWD_NOTIFY_ON_CONNECT_FAILURE"); ok {
-		cfg.NotifyOnConnectFailure = envBool("NOTIFY_ON_CONNECT_FAILURE", false)
-	}
 	if v := envInt("TEST_MAX_CONNECTIONS", -1); v >= 0 {
 		cfg.TestMaxConnections = v
 	}
@@ -403,7 +399,6 @@ func FromEnv() Config {
 		LogLevel:                 env("LOG_LEVEL", "info"),
 		DryRun:                   envBool("DRY_RUN", false),
 		ForceNotification:        envBool("FORCE_NOTIFICATION", false),
-		NotifyOnConnectFailure:   envBool("NOTIFY_ON_CONNECT_FAILURE", false),
 		DefaultThresholdPercent:  envInt("DB_DEFAULT_THRESHOLD_PERCENT", 80),
 		ThresholdLevels:          env("DB_THRESHOLD_LEVELS", DefaultThresholdLevels),
 		TestMaxConnections:       envInt("TEST_MAX_CONNECTIONS", 0),
