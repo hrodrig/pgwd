@@ -31,7 +31,7 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 
 ### Why connection limits matter
 
-PostgreSQL enforces a configured ceiling (`max_connections`). Slots reserved for privileged roles (`superuser_reserved_connections`, and on PostgreSQL 16+ `reserved_connections`) reduce how many ordinary application connections can succeed before the server starts refusing new sessions. When the limit is hit, clients fail to connect with SQLSTATE **53300** (“too many clients”). Under high concurrency, each backend is still a process: memory (`shared_buffers` plus per-session/`work_mem` pressure), CPU, and I/O can degrade even before hard rejection—or the OS can OOM.
+PostgreSQL enforces a configured ceiling (`max_connections`). Slots reserved for privileged roles (`superuser_reserved_connections`, and on PostgreSQL 16+ `reserved_connections`) reduce how many ordinary application connections can succeed before the server starts refusing new sessions. When the limit is hit, clients fail to connect with SQLSTATE **53300** (“too many clients”). Size connection pools and reserved slots so applications fail loudly before total exhaustion rather than silently degrading. Under high concurrency, each backend is still a process: memory (`shared_buffers` plus per-session/`work_mem` pressure), CPU, and I/O can degrade even before hard rejection—or the OS can OOM.
 
 **pgwd** watches connection pressure (and connect failures) so you can alert before or when saturation happens. It does **not** replace connection poolers or careful sizing. For hardware/app heuristics, reserved slots, WAL/standby notes, and developer pool pitfalls, see **[PostgreSQL connection limits and saturation](docs/postgresql-connection-limits.md)**.
 
