@@ -85,7 +85,7 @@ help:
 	@echo ""
 	@echo "$(CYAN)Examples:$(RESET)"
 	@echo "  make build"
-	@echo "  make build VERSION=v0.6.4"
+	@echo "  make build VERSION=v1.0.0"
 	@echo "  GOBIN=/usr/local/bin make install"
 	@echo "  make release-check"
 
