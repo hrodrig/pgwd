@@ -26,7 +26,7 @@ The release tarball (`pgwd_v*_openbsd_amd64.tar.gz`) includes the rc.d script at
 
 ```bash
 # Extract and install binary
-tar xzf pgwd_v0.5.10_openbsd_amd64.tar.gz
+tar xzf pgwd_v1.0.0_openbsd_amd64.tar.gz
 doas install -m755 pgwd /usr/local/bin/
 
 # Copy rc.d script (from tarball)
@@ -35,7 +35,7 @@ doas install -m555 share/openbsd/rc.d/pgwd /etc/rc.d/pgwd
 # Config (required; tarball includes etc/pgwd/pgwd.conf.example)
 doas mkdir -p /etc/pgwd
 doas cp etc/pgwd/pgwd.conf.example /etc/pgwd/pgwd.conf
-doas vi /etc/pgwd/pgwd.conf  # edit client, db.url, etc.
+doas vi /etc/pgwd/pgwd.conf  # edit client, databases[].url, etc.
 
 # Enable and start
 doas rcctl enable pgwd
@@ -82,10 +82,10 @@ interval: 60
 dry_run: false
 
 # Deprecated: DISCOVER_MY_PASSWORD removed in 0.9.x — use Secret-backed password in URL
-db:
-  url: "postgres://postgres:YOUR_PASSWORD@localhost:25432/mydb"
-  threshold:
-    levels: "75,85,95"
+databases:
+  - url: "postgres://postgres:YOUR_PASSWORD@localhost:25432/mydb"
+    threshold:
+      levels: "75,85,95"
 
 kube:
   context: "my-context"       # Use context name from kubeconfig, not cluster name
@@ -105,7 +105,7 @@ notifications:
 
 **Grafana:** Loki logs include a `client` label. Filter by `{app="pgwd", client="pgwd-vps-01"}` to see logs from this instance.
 
-**Troubleshooting:** If you see "context X does not exist", use the **context** name from `kubectl config get-contexts`, not the cluster name. The `db.url` host must be `localhost` and the port must match `kube.local_port`.
+**Troubleshooting:** If you see "context X does not exist", use the **context** name from `kubectl config get-contexts`, not the cluster name. The database URL host must be `localhost` and the port must match `kube.local_port`.
 
 ## Commands
 

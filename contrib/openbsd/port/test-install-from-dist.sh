@@ -2,7 +2,7 @@
 # Install pgwd like the OpenBSD port (do-install + @rcscript) without a full /usr/ports tree.
 # Use on lab VMs that only have the port skeleton + local distfile.
 #
-#   doas sh test-install-from-dist.sh /tmp/pgwd_v0.6.7_openbsd_amd64.tar.gz
+#   doas sh test-install-from-dist.sh /tmp/pgwd_v1.0.0_openbsd_amd64.tar.gz
 #
 # Optional second arg: directory containing files/pgwd (default: script dir, then files/)
 

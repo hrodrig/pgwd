@@ -42,7 +42,7 @@ After `make install` (or `make reinstall`), verify the installed binary:
 pgwd -version
 ```
 
-If `make install` reports that an older package is already installed (for example `pgwd-0.5.10`), use:
+If `make install` reports that an older package is already installed (for example `pgwd-0.6.8`), use:
 
 ```bash
 make reinstall
@@ -54,7 +54,7 @@ This deinstalls the previous package and registers the new one cleanly.
 
 The port normally fetches **DISTFILES** from **MASTER_SITES** (GitHub releases). To build or test **install** / **plist** against a tarball you built locally (no matching release on GitHub yet):
 
-1. **Match the filename** in **DISTFILES** for your architecture (e.g. `pgwd_v0.6.4_freebsd_amd64.tar.gz` when **PORTVERSION** is `0.6.4`). From the pgwd repo root, **`make port-freebsd-sync`** updates **PORTVERSION** in this **Makefile** from the **`VERSION`** file.
+1. **Match the filename** in **DISTFILES** for your architecture (e.g. `pgwd_v1.0.0_freebsd_amd64.tar.gz` when **PORTVERSION** is `1.0.0`). From the pgwd repo root, **`make port-freebsd-sync`** updates **PORTVERSION** in this **Makefile** from the **`VERSION`** file.
 
    To generate that exact tarball layout/name locally (without running the full snapshot matrix), run from repo root:
 
@@ -62,7 +62,7 @@ The port normally fetches **DISTFILES** from **MASTER_SITES** (GitHub releases).
    make dist-freebsd
    ```
 
-   Output goes to `dist/pgwd_v<version>_freebsd_<arch>.tar.gz` using `VERSION` (for example `dist/pgwd_v0.6.4_freebsd_amd64.tar.gz`).
+   Output goes to `dist/pgwd_v<version>_freebsd_<arch>.tar.gz` using `VERSION` (for example `dist/pgwd_v1.0.0_freebsd_amd64.tar.gz`).
 
 2. **Option A — copy into DISTDIR:** From the port directory:
 
@@ -79,7 +79,7 @@ The port normally fetches **DISTFILES** from **MASTER_SITES** (GitHub releases).
    ```bash
    cd ~/ports/sysutils/pgwd
    mkdir -p /tmp/pgwd-dist
-   cp /path/to/pgwd/dist/pgwd_v0.6.4_freebsd_amd64.tar.gz /tmp/pgwd-dist/
+   cp /path/to/pgwd/dist/pgwd_v1.0.0_freebsd_amd64.tar.gz /tmp/pgwd-dist/
    make makesum MASTER_SITES=file:///tmp/pgwd-dist/
    make fetch MASTER_SITES=file:///tmp/pgwd-dist/
    make install
@@ -102,7 +102,7 @@ pgwd reads `/etc/pgwd/pgwd.conf` by default. Copy the example and edit:
 ```bash
 mkdir -p /etc/pgwd
 cp /usr/local/etc/pgwd/pgwd.conf.example /etc/pgwd/pgwd.conf
-vi /etc/pgwd/pgwd.conf   # client, db.url, notifications, etc.
+vi /etc/pgwd/pgwd.conf   # client, databases[].url, notifications, etc.
 ```
 
 ## Daemon (rc.d)
@@ -206,10 +206,10 @@ interval: 60
 dry_run: false
 
 # Deprecated: DISCOVER_MY_PASSWORD removed in 0.9.x — use Secret-backed password in URL
-db:
-  url: "postgres://postgres:YOUR_PASSWORD@localhost:25432/mydb"
-  threshold:
-    levels: "75,85,95"
+databases:
+  - url: "postgres://postgres:YOUR_PASSWORD@localhost:25432/mydb"
+    threshold:
+      levels: "75,85,95"
 
 kube:
   context: "my-context"

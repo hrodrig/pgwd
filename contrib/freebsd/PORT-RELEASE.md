@@ -11,7 +11,7 @@ Steps to create or update the pgwd port for a new release.
 
 **`ONLY_FOR_ARCHS`** in the port **`Makefile`** must match assets on the GitHub release for that **`PORTVERSION`**:
 
-| FreeBSD `ARCH` | Release tarball suffix | In release today (v0.6.7) |
+| FreeBSD `ARCH` | Release tarball suffix | In release today (v1.0.0) |
 |----------------|------------------------|---------------------------|
 | amd64 | `_freebsd_amd64` | yes |
 | aarch64 | `_freebsd_arm64` | yes |
@@ -23,7 +23,7 @@ QA for Bugzilla: document the FreeBSD version and arch you tested (e.g. FreeBSD 
 
 1. **Bump version** in `contrib/freebsd/Makefile`:
    ```bash
-   # Edit PORTVERSION=	0.5.10  →  new version
+   # Edit PORTVERSION=	1.0.0  →  new version
    ```
 
 2. **Commit and release** pgwd (tag, `make release`). The GitHub release must include **`pgwd_vX.Y.Z_freebsd_amd64.tar.gz`** and **`pgwd_vX.Y.Z_freebsd_arm64.tar.gz`** (see **Supported architectures**). Goreleaser does not publish **freebsd/riscv64** today.
@@ -41,7 +41,7 @@ QA for Bugzilla: document the FreeBSD version and arch you tested (e.g. FreeBSD 
 1. **Create/checkout branch:**
    ```bash
    cd ~/ports
-   git checkout -b add-pgwd-port   # or update-pgwd-0.5.11 for updates
+   git checkout -b add-pgwd-port   # or update-pgwd-1.0.0 for updates
    ```
 
 2. **Update files** (if not already copied):
@@ -77,7 +77,7 @@ QA for Bugzilla: document the FreeBSD version and arch you tested (e.g. FreeBSD 
 7. **Commit:**
    ```bash
    git add sysutils/pgwd/
-   git commit -m "New port: sysutils/pgwd - Postgres Watch Dog"   # or "Update sysutils/pgwd to 0.5.11"
+   git commit -m "New port: sysutils/pgwd - Postgres Watch Dog"   # or "Update sysutils/pgwd to 1.0.0"
    ```
 
 8. **Submit to Bugzilla:**
@@ -100,7 +100,7 @@ QA for Bugzilla: document the FreeBSD version and arch you tested (e.g. FreeBSD 
 
 | Variable | Example |
 |----------|---------|
-| PORTVERSION | 0.6.7 |
+| PORTVERSION | 1.0.0 |
 | ONLY_FOR_ARCHS | amd64 aarch64 |
 | DISTFILES | pgwd_v${PORTVERSION}_freebsd_${ARCH:S/aarch64/arm64/}.tar.gz |
 | MASTER_SITES | https://github.com/hrodrig/pgwd/releases/download/v${PORTVERSION}/ |
