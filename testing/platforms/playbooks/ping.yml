@@ -1,6 +1,7 @@
 ---
-# ping.yml — Ansible's ping module (not ICMP). On success each host reports "pong";
-# it verifies SSH, the inventory, and that the remote Python interpreter works.
+# ping.yml — Ansible's ping module (not ICMP), then Postgres TCP preflight.
+# On success each host reports "pong"; it verifies SSH, inventory, remote Python,
+# and that postgres_instances are reachable from the targets (fail fast).
 - name: pgwd platform connectivity check
   hosts: all
   gather_facts: false
@@ -9,3 +10,6 @@
   tasks:
     - name: ansible.builtin.ping (success shows pong)
       ansible.builtin.ping:
+
+- name: "pgwd platform connectivity: Postgres preflight"
+  ansible.builtin.import_playbook: preflight.yml

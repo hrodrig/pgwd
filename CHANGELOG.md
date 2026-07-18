@@ -6,6 +6,31 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-07-18
+
+Stable API release: remove remaining pre-1.0 config/flag surface, document exit codes **2**/**3**, and ship operator positioning docs (compare, upgrade, connection-limits).
+
+### Added
+
+- **Exit codes 2 and 3:** single-target connect failure exits **2** (after `Ping`); one-shot stats/query failure exits **3**. Daemon mode does not exit on query errors. Exit **4** (`-strict`) unchanged. See SPECIFICATIONS.md § Exit codes.
+- **Brand mark:** [`docs/logo.svg`](docs/logo.svg) (and `docs/logo.png`) — cyan **`pg`** monogram + green live status dot; README header uses the SVG.
+
+### Removed
+
+- **Config key `db:`:** removed. Use **`databases:`** with one entry for a single Postgres target. Loading a file that still has `db:` fails with a migration hint.
+- **Connect-failure legacy surface:** removed **`-notify-on-connect-failure`**, **`PGWD_NOTIFY_ON_CONNECT_FAILURE`**, and YAML **`notify_on_connect_failure`**. Connect failure notifications are always sent when notifiers are configured.
+- **Legacy total/active thresholds:** removed **`-db-threshold-total`**, **`-db-threshold-active`**, **`PGWD_DB_THRESHOLD_TOTAL`**, **`PGWD_DB_THRESHOLD_ACTIVE`**, and YAML **`threshold.total`** / **`threshold.active`**. Use **`-db-threshold-levels`** instead.
+
+### Changed
+
+- **Cosign v3 signing:** checksum signatures use a single **`checksums.txt.sigstore.json`** bundle (`cosign sign-blob --bundle`); verify with `cosign verify-blob --bundle …`. `make snapshot` skips signing (no local OIDC).
+
+### Documentation
+
+- **[docs/postgresql-connection-limits.md](docs/postgresql-connection-limits.md)** — practical guide to connection saturation and sizing heuristics; README short problem blurb + link.
+- **[docs/compare.md](docs/compare.md)** — transparent comparison vs postgres_exporter, pgwatch, SaaS, cloud alarms, DIY, Nagios; README § Compare.
+- **[docs/UPGRADE-0.9-to-1.0.md](docs/UPGRADE-0.9-to-1.0.md)** — migration guide for 1.0 breaking removals.
+
 ## [0.9.0] - 2026-07-13
 
 Pre-1.0 security and operator polish: removes insecure Kubernetes password discovery (`pods/exec`), hardens `/metrics` and CSV export, adds ready-to-use config profiles and optional daemon telemetry, and documents single- and multi-database deployment patterns.
@@ -474,7 +499,8 @@ Pre-1.0 security and operator polish: removes insecure Kubernetes password disco
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/hrodrig/pgwd/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/hrodrig/pgwd/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/hrodrig/pgwd/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/hrodrig/pgwd/compare/v0.6.10...v0.7.0

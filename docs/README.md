@@ -4,6 +4,8 @@
 
 **Canonical index:** **[ROADMAP.md](../ROADMAP.md)** at repo root.
 
+**Brand:** [`logo.svg`](./logo.svg) / [`logo.png`](./logo.png) — hybrid **`pg`** + live status dot (landing favicon uses the same mark).
+
 Release bands from **v0.7.0** to **v1.0.0**. Behavior contract: [SPECIFICATIONS.md](../SPECIFICATIONS.md). Release notes: [CHANGELOG.md](../CHANGELOG.md).
 
 | Band | Plan | Theme |
@@ -11,15 +13,23 @@ Release bands from **v0.7.0** to **v1.0.0**. Behavior contract: [SPECIFICATIONS.
 | **0.7.x** | [plan-0.7.x.md](./plan-0.7.x.md) | ✅ v0.7.0 — PagerDuty, Teams, generic webhook, HTTP retry |
 | **0.8.x** | [plan-0.8.x.md](./plan-0.8.x.md) | ✅ v0.8.0 — Syft SBOM, Cosign signing |
 | **0.9.x** | [plan-0.9.x.md](./plan-0.9.x.md) | ✅ v0.9.0 — DISCOVER removal, profiles, collector, operator docs |
-| **1.0.x** | [plan-1.0.x.md](./plan-1.0.x.md) | Breaking stable API, deprecations removed |
+| **1.0.x** | [plan-1.0.x.md](./plan-1.0.x.md) | ✅ v1.0.0 — stable API, compare / upgrade / connection-limits docs |
 
 ## Upgrading
 
+**[Upgrading from 0.9.x to 1.0.0](./UPGRADE-0.9-to-1.0.md)** — Breaking removals (`db:`, total/active thresholds, `notify-on-connect-failure`), migration examples, verify steps.
+
 **[Upgrading from 0.5.x to 0.6.x](./UPGRADE-0.5-to-0.6.md)** — Checklist and links for moving from **0.5.10** (or earlier **0.5.x**) to **0.6.x**: config/CLI/env breaks introduced in **0.5.10**, optional **0.6.x** features (metrics store, HTTP, CSV export), and **Helm** moving to [pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted). For the raw rename table, see the [README breaking-changes section](../README.md#breaking-changes-upgrade-from-05x).
+
+**[Compare pgwd vs alternatives](./compare.md)** — Honest matrix (exporter, pgwatch, SaaS, cloud alarms, DIY, Nagios). Product choice; for deploy recipes see use cases below.
 
 **[Operator use cases](./use-cases.md)** — Scenario matrix: single/multi database, in/out of Kubernetes, cron vs daemon, different credentials per target. Profiles under `contrib/profiles/`.
 
 **[Kubernetes passwords — migration from DISCOVER_MY_PASSWORD](./kubernetes-passwords.md)** — Single-DB outside-cluster credentials (`password_from_secret`, wrapper, RBAC). Multi-DB: [use-cases.md](./use-cases.md).
+
+## Operations
+
+**[PostgreSQL connection limits and saturation](./postgresql-connection-limits.md)** — Why `max_connections` matters, reserved slots, memory/CPU/WAL considerations, illustrative sizing heuristics for hardware and app types, developer pool pitfalls, and how pgwd fits.
 
 ## Loki and Grafana alerts
 

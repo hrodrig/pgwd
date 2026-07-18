@@ -101,9 +101,9 @@ func TestMain_Help(t *testing.T) {
 }
 
 func TestMain_MissingClient(t *testing.T) {
-	// Config with db-url but no client: should fail validation
+	// Config with databases url but no client: should fail validation
 	configPath := filepath.Join(t.TempDir(), "pgwd.conf")
-	if err := os.WriteFile(configPath, []byte("db:\n  url: postgres://localhost/test\n"), 0600); err != nil {
+	if err := os.WriteFile(configPath, []byte("databases:\n  - url: postgres://localhost/test\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
 	_, stderr, code := runBinary("-config", configPath)
@@ -112,6 +112,20 @@ func TestMain_MissingClient(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "client") {
 		t.Errorf("pgwd with missing client: stderr %q should mention client", stderr)
+	}
+}
+
+func TestMain_LegacyDBRemoved(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "pgwd.conf")
+	if err := os.WriteFile(configPath, []byte("client: x\ndb:\n  url: postgres://localhost/test\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, stderr, code := runBinary("-config", configPath, "-dry-run")
+	if code == 0 {
+		t.Errorf("legacy db: want non-zero exit, got 0")
+	}
+	if !strings.Contains(stderr, "db:") {
+		t.Errorf("stderr %q should mention removed db:", stderr)
 	}
 }
 
@@ -127,5 +141,19 @@ func TestMain_MissingDBURL(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "database") && !strings.Contains(stderr, "db") {
 		t.Errorf("pgwd with missing db url: stderr %q should mention database/db", stderr)
+	}
+}
+
+func TestMain_ConnectFailureExit2(t *testing.T) {
+	_, stderr, code := runBinary(
+		"-client", "exit2-test",
+		"-db-url", "postgres://127.0.0.1:1/nope?sslmode=disable",
+		"-dry-run",
+	)
+	if code != 2 {
+		t.Errorf("connect failure: exit %d, want 2; stderr=%q", code, stderr)
+	}
+	if !strings.Contains(stderr, "postgres connect failed") {
+		t.Errorf("stderr %q should mention connect failed", stderr)
 	}
 }

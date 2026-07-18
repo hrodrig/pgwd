@@ -73,27 +73,6 @@ func StateAndThresholdFromEvents(events []notify.Event) (state, threshold string
 	return state, threshold
 }
 
-// ApplySingleThresholdDefaults sets ThresholdTotal/Active from DefaultThresholdPercent of maxConn when 0.
-func ApplySingleThresholdDefaults(cfg *config.Config, maxConn int) {
-	percent := cfg.DefaultThresholdPercent
-	if percent < 1 {
-		percent = 1
-	}
-	if percent > 100 {
-		percent = 100
-	}
-	threshold := (maxConn * percent) / 100
-	if threshold < 1 {
-		threshold = 1
-	}
-	if cfg.ThresholdTotal == 0 {
-		cfg.ThresholdTotal = threshold
-	}
-	if cfg.ThresholdActive == 0 {
-		cfg.ThresholdActive = threshold
-	}
-}
-
 // ValidateThresholdConfig returns an error when thresholds cannot be resolved (level mode, no thresholds, maxConn issues).
 func ValidateThresholdConfig(cfg *config.Config, maxConn int, maxConnErr error) error {
 	if cfg.UsesLevelMode() && maxConn == 0 {
@@ -106,12 +85,12 @@ func ValidateThresholdConfig(cfg *config.Config, maxConn int, maxConnErr error) 
 		return nil
 	}
 	if maxConnErr != nil {
-		return fmt.Errorf("no thresholds set and could not default from server (total/active default to default-threshold-percent of max_connections). Set -threshold-total and/or -threshold-active, or use -dry-run or -force-notification: %w", maxConnErr)
+		return fmt.Errorf("no thresholds set and could not default from server. Set -db-threshold-levels, -db-threshold-idle, or -db-threshold-stale with -db-stale-age, or use -dry-run or -force-notification: %w", maxConnErr)
 	}
 	if maxConn == 0 {
-		return fmt.Errorf("no thresholds set and could not default from server (server returned max_connections=0). Set -threshold-total and/or -threshold-active, or use -dry-run or -force-notification")
+		return fmt.Errorf("no thresholds set and could not default from server (server returned max_connections=0). Set -db-threshold-levels, -db-threshold-idle, or -db-threshold-stale with -db-stale-age, or use -dry-run or -force-notification")
 	}
-	return fmt.Errorf("no thresholds set. Set -threshold-total and/or -threshold-active, or use -dry-run or -force-notification")
+	return fmt.Errorf("no thresholds set. Set -db-threshold-levels, -db-threshold-idle, or -db-threshold-stale with -db-stale-age, or use -dry-run or -force-notification")
 }
 
 // BaseEvent builds a notify.Event from stats and context labels.
@@ -160,32 +139,4 @@ func CollectLevelModeEvent(ev notify.Event, cfg *config.Config, stats postgres.C
 	e.Level = LevelToLabel(highestLevel)
 	e.Message = fmt.Sprintf("%s connections %d >= %d (%d%% of max) — %s", Title(threshold), val, thresholdValue, levels[highestLevel-1], e.Level)
 	return &e
-}
-
-// CollectExplicitThresholdEvents produces events when total/active exceed explicit thresholds.
-func CollectExplicitThresholdEvents(ev notify.Event, cfg *config.Config, stats postgres.ConnectionStats, maxConn int) []notify.Event {
-	var events []notify.Event
-	levels := config.ParseThresholdLevels(config.DefaultThresholdLevels)
-	addLevel := maxConn > 0 && len(levels) >= 3
-	if cfg.ThresholdTotal > 0 && stats.Total >= cfg.ThresholdTotal {
-		e := ev
-		e.Threshold = "total"
-		e.ThresholdValue = cfg.ThresholdTotal
-		e.Message = fmt.Sprintf("Total connections %d >= %d", stats.Total, cfg.ThresholdTotal)
-		if addLevel {
-			e.Level = LevelToLabel(LevelFromPercent(stats.Total*100/maxConn, levels))
-		}
-		events = append(events, e)
-	}
-	if cfg.ThresholdActive > 0 && stats.Active >= cfg.ThresholdActive {
-		e := ev
-		e.Threshold = "active"
-		e.ThresholdValue = cfg.ThresholdActive
-		e.Message = fmt.Sprintf("Active connections %d >= %d", stats.Active, cfg.ThresholdActive)
-		if addLevel {
-			e.Level = LevelToLabel(LevelFromPercent(stats.Active*100/maxConn, levels))
-		}
-		events = append(events, e)
-	}
-	return events
 }

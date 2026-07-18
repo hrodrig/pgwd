@@ -1,6 +1,6 @@
 # Sequence diagrams — audit vs code
 
-Last audit: 2026-07-13 (0.9.x: DISCOVER removed, `password_from_secret`, collector daemon startup, TLS warnings, strict exit 4).
+Last audit: 2026-07-18 (1.0: removed notify-on-connect-failure surface, connect failure remains always-on, validator/env cleanup).
 
 ## 01 — Startup and config validation
 
@@ -16,7 +16,6 @@ Last audit: 2026-07-13 (0.9.x: DISCOVER removed, `password_from_secret`, collect
 | validate DB URL present | `validateDBURL()` 112–116 |
 | validate stale-age if threshold-stale | `validateStale()` 118–122 |
 | validate at least one notifier (or dry-run) | `validateNotifiers()` 124–133 |
-| validate force-notification / notify-on-connect-failure require notifier | `validateNotifiers()` |
 | signal.NotifyContext(SIGINT, SIGTERM) | 590 |
 | opt -kube-postgres: password_from_secret or DSN, port-forward | `setupKube()` — no `pods/exec`; DISCOVER fails fast |
 | opt interval > 0: collector / update check | `startCollector()` after `validateConfig()` |
@@ -108,7 +107,7 @@ Last audit: 2026-07-13 (0.9.x: DISCOVER removed, `password_from_secret`, collect
 | build connect_failure event (message + run context) | 255–269 `notify.Event{ Threshold: "connect_failure", Cluster, Client, Namespace, Database }` |
 | loop Send to Slack/Loki | 271–278 |
 | opt at least one Send ok → log Notification sent | 279–281 |
-| log.Fatal, exit 1 | 565 `log.Fatal("postgres connect failed...")` (message omits error detail intentionally) |
+| log + exit 2 | `exitConnectFailureIf` / `handleConnectFailure` after Pool or Ping fail (message omits error detail intentionally) |
 
 **Verdict:** Matches.
 

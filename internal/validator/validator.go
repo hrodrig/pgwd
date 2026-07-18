@@ -15,8 +15,13 @@ import (
 )
 
 // Validate runs all config validations. Returns the first error encountered.
-// WarnDeprecatedThresholds is called during validation (writes to stderr).
 func Validate(cfg *config.Config) error {
+	if err := ValidateRemovedThresholdEnv(); err != nil {
+		return err
+	}
+	if err := ValidateRemovedNotifyOnConnectFailureEnv(); err != nil {
+		return err
+	}
 	if err := ValidateDatabases(cfg); err != nil {
 		return err
 	}
@@ -26,7 +31,6 @@ func Validate(cfg *config.Config) error {
 	if err := ValidateClient(cfg); err != nil {
 		return err
 	}
-	WarnDeprecationStartup(cfg)
 	WarnNotifierTLS(cfg)
 	if err := ValidateStale(cfg); err != nil {
 		return err
@@ -50,17 +54,6 @@ func Validate(cfg *config.Config) error {
 		return err
 	}
 	return nil
-}
-
-// WarnDeprecationStartup prints stderr warnings for deprecated config surfaces.
-func WarnDeprecationStartup(cfg *config.Config) {
-	WarnDeprecatedThresholds(cfg)
-	if cfg.LoadedLegacyDBConfig {
-		fmt.Fprintln(os.Stderr, "pgwd: migrate legacy 'db:' to 'databases:' with one entry before v1.0 — see contrib/profiles/ and contrib/pgwd.conf.example")
-	}
-	if cfg.NotifyOnConnectFailure {
-		fmt.Fprintln(os.Stderr, "pgwd: -notify-on-connect-failure is ignored; connect failure notifications are always enabled when notifiers are configured (removal in v1.0)")
-	}
 }
 
 // WarnNotifierTLS logs a startup warning when notifier URLs use plain HTTP (non-loopback).
@@ -90,11 +83,23 @@ func warnHTTPNotifierURL(channel, rawURL string) {
 	fmt.Fprintf(os.Stderr, "pgwd: notifier %s uses http:// — prefer https:// for production traffic\n", channel)
 }
 
-// WarnDeprecatedThresholds prints a deprecation warning when legacy thresholds are used.
-func WarnDeprecatedThresholds(cfg *config.Config) {
-	if cfg.ThresholdTotal > 0 || cfg.ThresholdActive > 0 {
-		fmt.Fprintln(os.Stderr, "pgwd: -db-threshold-total and -db-threshold-active are deprecated and will be removed in v1.0.0; use -db-threshold-levels instead (e.g. -db-threshold-levels 75,85,95)")
+// ValidateRemovedThresholdEnv rejects removed threshold env vars.
+func ValidateRemovedThresholdEnv() error {
+	if _, ok := os.LookupEnv("PGWD_DB_THRESHOLD_TOTAL"); ok {
+		return fmt.Errorf("pgwd: PGWD_DB_THRESHOLD_TOTAL was removed in v1.0; use PGWD_DB_THRESHOLD_LEVELS (e.g. 75,85,95)")
 	}
+	if _, ok := os.LookupEnv("PGWD_DB_THRESHOLD_ACTIVE"); ok {
+		return fmt.Errorf("pgwd: PGWD_DB_THRESHOLD_ACTIVE was removed in v1.0; use PGWD_DB_THRESHOLD_LEVELS (e.g. 75,85,95)")
+	}
+	return nil
+}
+
+// ValidateRemovedNotifyOnConnectFailureEnv rejects removed connect-failure env vars.
+func ValidateRemovedNotifyOnConnectFailureEnv() error {
+	if _, ok := os.LookupEnv("PGWD_NOTIFY_ON_CONNECT_FAILURE"); ok {
+		return fmt.Errorf("pgwd: PGWD_NOTIFY_ON_CONNECT_FAILURE was removed in v1.0; connect failure notifications are always sent when notifiers are configured")
+	}
+	return nil
 }
 
 // ValidateDatabases checks databases config when UsesDatabases.
@@ -102,8 +107,8 @@ func ValidateDatabases(cfg *config.Config) error {
 	if !cfg.UsesDatabases() {
 		return nil
 	}
-	if cfg.KubePostgres != "" {
-		return fmt.Errorf("pgwd: kube-postgres is not supported with databases (multi-DB); use db (single) or add per-db kube in a future release")
+	if cfg.KubePostgres != "" && len(cfg.Databases) > 1 {
+		return fmt.Errorf("pgwd: kube-postgres is not supported with multiple databases: entries; use a single databases: entry with kube, or omit kube for multi-DB direct URLs")
 	}
 	for i, t := range cfg.Databases {
 		if t.URL == "" {
@@ -191,12 +196,19 @@ func validateNotifyRetry(cfg *config.Config) error {
 	return nil
 }
 
-// ValidateKubePostgres ensures db-url is set when kube-postgres is used.
+// ValidateKubePostgres ensures a DB URL is set when kube-postgres is used
+// (top-level -db-url / PGWD_DB_URL, or a single databases: entry).
 func ValidateKubePostgres(cfg *config.Config) error {
-	if cfg.KubePostgres == "" || cfg.DBURL != "" {
+	if cfg.KubePostgres == "" {
 		return nil
 	}
-	return fmt.Errorf("pgwd: kube-postgres requires PGWD_DB_URL or -db-url (use host localhost and the same port as -kube-local-port)")
+	if cfg.DBURL != "" {
+		return nil
+	}
+	if len(cfg.Databases) == 1 && cfg.Databases[0].URL != "" {
+		return nil
+	}
+	return fmt.Errorf("pgwd: kube-postgres requires PGWD_DB_URL, -db-url, or a single databases: entry (use host localhost and the same port as -kube-local-port)")
 }
 
 // ValidateKubePostgresFormat validates kube-postgres format (namespace/type/name).

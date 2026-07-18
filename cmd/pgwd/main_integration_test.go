@@ -75,7 +75,7 @@ func TestMain_DryRunWithSQLite(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "metrics.db")
 	sqliteConf := filepath.Join(dir, "pgwd.conf")
-	conf := "client: sqlite-dry\nsqlite:\n  path: " + dbPath + "\ndb:\n  url: " + dsn + "\n"
+	conf := "client: sqlite-dry\nsqlite:\n  path: " + dbPath + "\ndatabases:\n  - url: " + dsn + "\n"
 	if err := os.WriteFile(sqliteConf, []byte(conf), 0600); err != nil {
 		t.Fatal(err)
 	}

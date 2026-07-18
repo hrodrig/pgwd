@@ -3,10 +3,14 @@
 <a id="top"></a>
 
 <p align="center">
-  <strong>🐕</strong> <em>Watch your PostgreSQL connections</em>
+  <img src="docs/logo.svg" alt="pgwd" width="96" height="96">
 </p>
 
-[![Version](https://img.shields.io/badge/version-0.9.0-blue)](https://github.com/hrodrig/pgwd/releases)
+<p align="center">
+  <em>Watch your PostgreSQL connections</em>
+</p>
+
+[![Version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![CI](https://github.com/hrodrig/pgwd/actions/workflows/ci.yml/badge.svg)](https://github.com/hrodrig/pgwd/actions)
 [![codecov](https://codecov.io/gh/hrodrig/pgwd/graph/badge.svg)](https://codecov.io/gh/hrodrig/pgwd)
@@ -25,17 +29,24 @@
 
 Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via **Slack** and/or **Loki** when configured thresholds are exceeded. It can also alert on **stale connections** (connections that stay open and never close).
 
+### Why connection limits matter
+
+PostgreSQL enforces a configured ceiling (`max_connections`). Slots reserved for privileged roles (`superuser_reserved_connections`, and on PostgreSQL 16+ `reserved_connections`) reduce how many ordinary application connections can succeed before the server starts refusing new sessions. When the limit is hit, clients fail to connect with SQLSTATE **53300** (“too many clients”). Size connection pools and reserved slots so applications fail loudly before total exhaustion rather than silently degrading. Under high concurrency, each backend is still a process: memory (`shared_buffers` plus per-session/`work_mem` pressure), CPU, and I/O can degrade even before hard rejection—or the OS can OOM.
+
+**pgwd** watches connection pressure (and connect failures) so you can alert before or when saturation happens. It does **not** replace connection poolers or careful sizing. For hardware/app heuristics, reserved slots, WAL/standby notes, and developer pool pitfalls, see **[PostgreSQL connection limits and saturation](docs/postgresql-connection-limits.md)**.
+
 **Self-hosted deployment (Docker Compose, Helm, Kubernetes manifests):** **[pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted)** — production paths, env layout, and observability stacks live there; this repo ships the application binary, packages, and container image only.
 
 **GitHub repo traffic (history beyond 14 days):** sibling tool **[gghstats](https://github.com/hrodrig/gghstats)** — [live stats for pgwd](https://gghstats.hermesrodriguez.com/hrodrig/pgwd) (clone badge above).
 
-**Documentation:** [ROADMAP.md](ROADMAP.md), [Operator use cases](docs/use-cases.md), [SPECIFICATIONS.md](SPECIFICATIONS.md) (behavior contract), [Kubernetes passwords / DISCOVER migration](docs/kubernetes-passwords.md), [docs/](docs/README.md) (band plans, sequence diagrams, upgrades), `man pgwd`. **Scanning:** [tools/README.md](tools/README.md).
+**Documentation:** [ROADMAP.md](ROADMAP.md), [Operator use cases](docs/use-cases.md), [Connection limits](docs/postgresql-connection-limits.md), [SPECIFICATIONS.md](SPECIFICATIONS.md) (behavior contract), [Kubernetes passwords / DISCOVER migration](docs/kubernetes-passwords.md), [docs/](docs/README.md) (band plans, sequence diagrams, upgrades), `man pgwd`. **Scanning:** [tools/README.md](tools/README.md).
 
 ![Terminal demo](docs/demo.gif)
 
 ## Table of contents
 
 - [Quick start](#quick-start)
+- [Compare](#compare)
 - [Configuration: CLI vs environment](#configuration-cli-vs-environment)
 - [Usage examples](#usage-examples)
 - [Typical scenarios](#typical-scenarios)
@@ -74,7 +85,7 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 # See all options
 pgwd -h
 
-# Minimal: check once, alert to Slack (3-tier levels 75/85/95% by default; or use -db-default-threshold-percent)
+# Minimal: check once, alert to Slack (3-tier levels 75/85/95% by default)
 pgwd -db-url "postgres://user:pass@localhost:5432/mydb" \
      -notifications-slack-webhook "https://hooks.slack.com/services/..."
 
@@ -82,14 +93,18 @@ pgwd -db-url "postgres://user:pass@localhost:5432/mydb" \
 pgwd -db-url "postgres://..." -notifications-slack-webhook "https://..." -db-threshold-levels 70,85,90
 ```
 
+### Breaking changes (upgrade from 0.9.x)
+
+**1.0.0** removes legacy `db:`, total/active thresholds, and `notify-on-connect-failure`. Migration checklist: **[docs/UPGRADE-0.9-to-1.0.md](docs/UPGRADE-0.9-to-1.0.md)**.
+
 ### Breaking changes (upgrade from 0.5.x)
 
 If you use CLI flags or env vars for notifications or DB thresholds, update your scripts:
 
 | Old | New |
 |-----|-----|
-| `-threshold-total` | `-db-threshold-total` |
-| `-threshold-active` | `-db-threshold-active` |
+| `-threshold-total` | removed; use `-db-threshold-levels` |
+| `-threshold-active` | removed; use `-db-threshold-levels` |
 | `-threshold-idle` | `-db-threshold-idle` |
 | `-threshold-stale` | `-db-threshold-stale` |
 | `-threshold-levels` | `-db-threshold-levels` |
@@ -105,8 +120,8 @@ If you use CLI flags or env vars for notifications or DB thresholds, update your
 | `PGWD_LOKI_LABELS` | `PGWD_NOTIFICATIONS_LOKI_LABELS` |
 | `PGWD_LOKI_ORG_ID` | `PGWD_NOTIFICATIONS_LOKI_ORG_ID` |
 | `PGWD_LOKI_BEARER_TOKEN` | `PGWD_NOTIFICATIONS_LOKI_BEARER_TOKEN` |
-| `PGWD_THRESHOLD_TOTAL` | `PGWD_DB_THRESHOLD_TOTAL` |
-| `PGWD_THRESHOLD_ACTIVE` | `PGWD_DB_THRESHOLD_ACTIVE` |
+| `PGWD_THRESHOLD_TOTAL` | removed; use `PGWD_DB_THRESHOLD_LEVELS` |
+| `PGWD_THRESHOLD_ACTIVE` | removed; use `PGWD_DB_THRESHOLD_LEVELS` |
 | `PGWD_THRESHOLD_IDLE` | `PGWD_DB_THRESHOLD_IDLE` |
 | `PGWD_THRESHOLD_STALE` | `PGWD_DB_THRESHOLD_STALE` |
 | `PGWD_THRESHOLD_LEVELS` | `PGWD_DB_THRESHOLD_LEVELS` |
@@ -129,7 +144,7 @@ pgwd loads settings from (in order): **config file** → **environment variables
 | Environment | `PGWD_*` |
 | CLI | `-flag` |
 
-**Config file** (YAML) — keys match `-flag` and `PGWD_*` env vars. See `contrib/pgwd.conf.example` (or **`pgwd --print-sample-config > /etc/pgwd/pgwd.conf`** when the example file is not on disk). Use `databases:` for one or more Postgres (canonical). Legacy `db:` is deprecated and will be removed in v1.0. For kube.postgres, use `db:` until per-db kube support exists.
+**Config file** (YAML) — keys match `-flag` and `PGWD_*` env vars. See `contrib/pgwd.conf.example` (or **`pgwd --print-sample-config > /etc/pgwd/pgwd.conf`** when the example file is not on disk). Use **`databases:`** for one or more Postgres (required even for a single target). Legacy top-level **`db:`** was removed in v1.0. For kube.postgres, use a single `databases:` entry with a URL that kube port-forward rewrites (multi-DB + kube is not supported).
 
 ```bash
 # Use default path /etc/pgwd/pgwd.conf
@@ -171,9 +186,9 @@ The ingest host is [collect.gghstats.com](https://collect.gghstats.com) (shared 
 
 ```json
 {
-  "version": "0.9.0",
+  "version": "1.0.0",
   "commit": "abc1234",
-  "build_date": "2026-07-13T12:00:00Z",
+  "build_date": "2026-07-18T12:00:00Z",
   "hash": "a1b2c3d4e5f67890",
   "features": {
     "multi_db": false,
@@ -230,7 +245,7 @@ pgwd -db-threshold-levels 5,10,15 -dry-run
 
 | Threshold | Use when you care about… | Example |
 |-----------|---------------------------|--------|
-| **levels** (3-tier) | % of `max_connections` — attention / alert / danger (default for total/active) | `-db-threshold-levels 75,85,95` (default) or `-db-threshold-levels 70,85,90` |
+| **levels** (3-tier) | % of `max_connections` — attention / alert / danger (default mode) | `-db-threshold-levels 75,85,95` (default) or `-db-threshold-levels 70,85,90` |
 | **idle** | Pool size / connections sitting idle | `-db-threshold-idle 40` |
 | **stale** | Connections open too long (leaks, never closed) | `-db-stale-age 600 -db-threshold-stale 1` |
 
@@ -327,7 +342,7 @@ pgwd -db-url "postgres://..." -notifications-loki-url "http://localhost:3100/lok
 | **Pre-production test** | `-dry-run` and low thresholds to see current counts without sending alerts. |
 | **Validate notifications** | `-force-notification` with Slack/Loki: sends one test message regardless of thresholds. Use one-shot to confirm delivery, format, and how messages look. (If the connection to Postgres fails, pgwd always sends a connect-failure alert when a notifier is configured.) |
 | **Test alerts without low max_connections** | Use `-test-max-connections N` (e.g. 20) with `-force-notification` or low thresholds: thresholds and messages use N as “max_connections”, while stats stay real. Notifications show “(test override)” so total can exceed N. See [docs/testing-alert-levels.md](docs/testing-alert-levels.md) for a procedure to trigger attention/alert/danger against production without changing Postgres config. |
-| **Zero config (use defaults)** | Only set `-db-url` and a notifier; pgwd uses 3-tier levels (75,85,95%) by default. Use `-db-threshold-levels` to customize or `-db-default-threshold-percent` when using explicit thresholds. |
+| **Zero config (use defaults)** | Only set `-db-url` and a notifier; pgwd uses 3-tier levels (75,85,95%) by default. Use `-db-threshold-levels` to customize; `-db-default-threshold-percent` is retained for compatibility only. |
 | **Multiple environments** | Set `PGWD_*` in env per environment; override `-db-url` or `-notifications-loki-labels` per deploy. |
 | **Postgres in Kubernetes** | **pgwd inside K8s:** Use direct URLs (`postgres://...@postgres.namespace.svc.cluster.local:5432/mydb`). **pgwd outside K8s:** Use `-kube-postgres namespace/svc/name`; requires kubeconfig (no kubectl binary). |
 | **Alert when Postgres is unreachable** | If you configure a notifier (Slack/Loki), pgwd **always** sends an alert when the connection fails (e.g. refused, timeout, or "too many clients"). No extra flag needed. |
@@ -588,8 +603,6 @@ All parameters can be set via **config file**, **CLI**, or **environment variabl
 | `-kube-password-container` | `PGWD_KUBE_PASSWORD_CONTAINER` | **Deprecated** (removed 0.9.x). Container name for legacy password discovery. |
 | `-validate-k8s-access` | `PGWD_VALIDATE_K8S_ACCESS` | Validate cluster connectivity and list pods, then exit. Use `-kube-context` to select context. No DB or notifier required. |
 | `-client` | `PGWD_CLIENT` | **Required.** Custom name for this monitor instance (e.g. prod-db-primary). Identifies which monitor sent the alert when multiple instances run. Cluster name is computed from kubeconfig when using `-kube-postgres`; not configurable. |
-| `-db-threshold-total` | `PGWD_DB_THRESHOLD_TOTAL` | Alert when total connections ≥ N. **Deprecated:** use `-db-threshold-levels`; will be removed in v1.0.0. |
-| `-db-threshold-active` | `PGWD_DB_THRESHOLD_ACTIVE` | Alert when active connections ≥ N. **Deprecated:** use `-db-threshold-levels`; will be removed in v1.0.0. |
 | `-db-threshold-idle` | `PGWD_DB_THRESHOLD_IDLE` | Alert when idle connections ≥ N |
 | `-db-stale-age` | `PGWD_DB_STALE_AGE` | Consider connection stale if open longer than N seconds (requires `-db-threshold-stale`) |
 | `-db-threshold-stale` | `PGWD_DB_THRESHOLD_STALE` | Alert when stale connections (open > stale-age) ≥ N |
@@ -621,14 +634,13 @@ All parameters can be set via **config file**, **CLI**, or **environment variabl
 | `-enable-update-check` | `PGWD_ENABLE_UPDATE_CHECK` | Check GitHub for newer releases on daemon startup (default true) |
 | `-dry-run` | `PGWD_DRY_RUN` | Only print stats, do not send notifications |
 | `-force-notification` | `PGWD_FORCE_NOTIFICATION` | Always send at least one notification: test event when connected (to validate delivery, format, and channel). Requires at least one notifier. (Connection failure is always notified when a notifier is configured, with or without this flag.) |
-| `-notify-on-connect-failure` | `PGWD_NOTIFY_ON_CONNECT_FAILURE` | Legacy: connection failure is **always** notified when a notifier is configured; this flag is no longer required. Kept for backward compatibility; if set, still requires at least one notifier at startup. |
-| `-db-default-threshold-percent` | `PGWD_DB_DEFAULT_THRESHOLD_PERCENT` | When one of total/active is 0, set it to this % of max_connections (1–100). Default: 80. Ignored when using db-threshold-levels mode. |
+| `-db-default-threshold-percent` | `PGWD_DB_DEFAULT_THRESHOLD_PERCENT` | Retained for config compatibility. Default: 80. No longer fills total/active thresholds. |
 | `-db-threshold-levels` | `PGWD_DB_THRESHOLD_LEVELS` | When both total and active are 0: comma-separated percentages for 3-tier alerts (e.g. 75,85,95). Levels: attention (1st), alert (2nd), danger (3rd). Only highest breached level fires. Default: 75,85,95. |
-| `-test-max-connections` | `PGWD_TEST_MAX_CONNECTIONS` | Override server `max_connections` for threshold defaults and display (testing only). When set, defaults and notifications use this value instead of the server’s; stats (total/active/idle) remain real. Notifications show “(test override)” so you can simulate e.g. a low limit and trigger alerts without a real low max_connections. |
+| `-test-max-connections` | `PGWD_TEST_MAX_CONNECTIONS` | Override server `max_connections` for level-mode calculations and display (testing only). When set, notifications use this value instead of the server’s; stats (total/active/idle) remain real. Notifications show “(test override)” so you can simulate e.g. a low limit and trigger alerts without a real low max_connections. |
 
 **Stale connections:** A connection is "stale" if it has been open longer than `stale-age` seconds (based on `backend_start` in `pg_stat_activity`). Use this to detect leaks or connections that are never closed. When using `threshold-stale`, `stale-age` must be set and > 0.
 
-**Default thresholds:** If you do not set `-db-threshold-total` or `-db-threshold-active` (leave both 0), pgwd uses **3-tier level mode** with **`-db-threshold-levels`** (default **75,85,95**). At 75% of max_connections → attention (yellow); at 85% → alert (orange); at 95% → danger (red). Only the highest breached level fires. Use `-db-threshold-levels 70,80,90` to customize. If you set one of total/active explicitly, the other defaults from **`-db-default-threshold-percent`** (default 80). Idle and stale have no default (0 = disabled). The DB user must be able to read `max_connections` (any normal role can).
+**Default thresholds:** pgwd uses **3-tier level mode** with **`-db-threshold-levels`** (default **75,85,95**) unless you choose idle/stale thresholds. At 75% of `max_connections` → attention (yellow); at 85% → alert (orange); at 95% → danger (red). Only the highest breached level fires. Use `-db-threshold-levels 70,80,90` to customize. `-db-default-threshold-percent` is retained for compatibility but no longer fills threshold values. Idle and stale have no default (0 = disabled). The DB user must be able to read `max_connections` (any normal role can).
 
 [↑ Back to top](#top)
 
@@ -767,12 +779,11 @@ cosign verify ghcr.io/hrodrig/pgwd:v0.8.0 \
   --certificate-identity-regexp '^https://github\.com/hrodrig/pgwd/\.github/workflows/release\.yml@refs/tags/v'
 ```
 
-**Verify release checksums** (download `checksums.txt`, `checksums.txt.sig`, and `checksums.txt.pem` from the release assets):
+**Verify release checksums** (download `checksums.txt` and `checksums.txt.sigstore.json` from the release assets; Cosign v3+ bundle):
 
 ```bash
 cosign verify-blob \
-  --certificate checksums.txt.pem \
-  --signature checksums.txt.sig \
+  --bundle checksums.txt.sigstore.json \
   checksums.txt
 ```
 
@@ -842,9 +853,34 @@ Using **127.0.0.1** and host port **5433** avoids hitting a local Postgres on 54
 
 ## Behavior and exit
 
-- **One-shot** (`interval` 0 or unset): runs one check, sends alerts if thresholds are exceeded, then exits. Exit code 0 on success; non-zero on fatal errors (e.g. DB connection failure).
-- **Daemon** (`interval` greater than 0): runs every `interval` seconds until interrupted (Ctrl+C or SIGTERM). Exits with 0 after a clean shutdown.
+- **One-shot** (`interval` 0 or unset): runs one check, sends alerts if thresholds are exceeded, then exits.
+- **Daemon** (`interval` greater than 0): runs every `interval` seconds until interrupted (Ctrl+C or SIGTERM). Exits with 0 after a clean shutdown. Query errors during a tick are logged; the process keeps running.
 - **Dry run**: same as above but no HTTP calls to notifiers; only logs stats to stdout.
+
+| Exit | Meaning |
+|------|---------|
+| **0** | Success |
+| **1** | Config validation error |
+| **2** | Postgres connection failure (single-target; multi-DB logs and skips the target) |
+| **3** | Stats/query error — one-shot single-target only |
+| **4** | Notifier delivery failure when **`-strict`** is set |
+
+Full contract: [SPECIFICATIONS.md — Exit codes](SPECIFICATIONS.md#exit-codes).
+
+## Compare
+
+Honest positioning vs common options (connection watchdog vs full metrics stack / SaaS / DIY):
+
+| Need | Prefer |
+|------|--------|
+| Connection / stale / long-query alerts, single binary, Slack/Loki/PagerDuty | **pgwd** |
+| Broad Postgres metrics + PromQL + Grafana | **postgres_exporter** (+ Alertmanager) |
+| Rich dashboards / monitoring suite | **pgwatch** |
+| Full APM / hosted observability | **Datadog / New Relic** (etc.) |
+| Cloud-only managed DB alarms | **CloudWatch / GCP / Azure** alarms |
+| Zero deps, custom scripts | **cron + psql** |
+
+Full matrix and “when not pgwd”: **[docs/compare.md](docs/compare.md)**. Deployment scenarios: **[docs/use-cases.md](docs/use-cases.md)**.
 
 ## Help
 
@@ -919,7 +955,6 @@ All notifiers share HTTP retry settings under `notifications.retry` (or `-notifi
 | **"no thresholds set and could not default from server..."** | pgwd could not read `max_connections` from the server (error or 0). Use `-test-max-connections N` to override, or `-dry-run`, or `-force-notification`. With a normal Postgres, only `-db-url` and a notifier should be enough (defaults to 3-tier levels 75,85,95%). |
 | **"no notifier configured"** | Set a notification channel: Slack, Loki, `-kube-loki`, PagerDuty, Teams, or generic webhook (or use `-dry-run`). |
 | **"force-notification requires at least one notifier"** | Use `-force-notification` together with at least one configured notifier. |
-| **"notify-on-connect-failure requires at least one notifier"** | You set `-notify-on-connect-failure` but have no notifier. Add a notification channel. (Connect failure is always notified when a notifier is configured; the flag is optional.) |
 | **"load kubeconfig" / cluster unreachable** | When using `-kube-postgres` or `-kube-loki`, ensure a valid kubeconfig exists (`KUBECONFIG` env or `~/.kube/config`). pgwd uses client-go; no kubectl binary required. |
 | **"when using -db-threshold-stale, -db-stale-age must be > 0"** | Set `-db-stale-age N` (e.g. 600) when using `-db-threshold-stale`. |
 | **Slack/Loki not receiving alerts** | Run once with `-force-notification` to send a test message. Check webhook URL, network/firewall, and that the app can reach Slack/Loki. |
@@ -1439,15 +1474,15 @@ See [contrib/solaris/README.md](contrib/solaris/README.md) for details.
 
 **Canonical roadmap:** **[ROADMAP.md](ROADMAP.md)** — current release, release bands (0.8 → 1.0), calendar, key decisions, document map.
 
-Summary: **v0.9.0** (security + operator polish) → **1.0.0** (breaking stable). Behavior contract: [SPECIFICATIONS.md](SPECIFICATIONS.md). Shipped releases: [CHANGELOG.md](CHANGELOG.md).
+Summary: **v1.0.0** (breaking stable API + compare docs). Behavior contract: [SPECIFICATIONS.md](SPECIFICATIONS.md). Shipped releases: [CHANGELOG.md](CHANGELOG.md).
 
 | Band | Status | Plan |
 |------|--------|------|
 | **0.9.x** | ✅ Ready Jul 2026 | [plan-0.9.x.md](docs/plan-0.9.x.md) · [CHANGELOG](CHANGELOG.md#090---2026-07-13) |
-| **1.0.0** | 📋 Planned | [plan-1.0.x.md](docs/plan-1.0.x.md) |
+| **1.0.0** | ✅ Ready Jul 2026 | [plan-1.0.x.md](docs/plan-1.0.x.md) · [CHANGELOG](CHANGELOG.md#100---2026-07-18) |
 
 <details>
-<summary>Shipped history (0.4 – 0.9.0)</summary>
+<summary>Shipped history (0.4 – 1.0.0)</summary>
 
 | Version | Target | Scope |
 |---------|--------|-------|
@@ -1460,6 +1495,7 @@ Summary: **v0.9.0** (security + operator polish) → **1.0.0** (breaking stable)
 | **0.7.0** | Jul 2026 ✅ | PagerDuty, Teams, generic webhook, HTTP retry |
 | **0.8.0** | Jul 2026 ✅ | Syft SBOM, Cosign signing, supply chain docs |
 | **0.9.0** | Jul 2026 ✅ | DISCOVER removed, profiles, collector, metrics/CSV hardening, operator docs |
+| **1.0.0** | Jul 2026 ✅ | Stable API; remove `db:` / total-active thresholds / notify-on-connect flag; exit 2/3; compare docs |
 
 </details>
 

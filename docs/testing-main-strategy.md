@@ -18,7 +18,7 @@
 `main.go` (~876 lines, 45+ functions) contains:
 
 - **Pure logic**: levelFromPercent, levelToLabel, title, allStringsEqual, stateAndThresholdFromEvents
-- **Config logic**: applySingleThresholdDefaults, validateThresholdConfig, collectLevelModeEvent, collectExplicitThresholdEvents, baseEvent
+- **Config logic**: validateThresholdConfig, collectLevelModeEvent, baseEvent
 - **Validation**: validateConfig and 9 helpers — all use `log.Fatal` (hard to unit-test)
 - **Integration**: setupKube, doRunCheck, applyHysteresisFilter, etc. — need pool, store, kube
 
@@ -37,10 +37,8 @@ Create `internal/checker` with functions that have **zero external deps** (no DB
 | `title(s)`                       | `Title`                        | "", "hello", "HELLO" |
 | `allStringsEqual(sl, v)`         | `AllStringsEqual`              | [], [""], [a,a,a], [a,b] |
 | `stateAndThresholdFromEvents`    | `StateAndThresholdFromEvents`  | empty events, connect_failure, danger, alert, attention |
-| `applySingleThresholdDefaults`   | `ApplySingleThresholdDefaults`| percent 0/50/100, maxConn 100, thresholds 0 |
 | `validateThresholdConfig`       | `ValidateThresholdConfig`     | level mode + maxConn 0, no thresholds, dry-run |
 | `collectLevelModeEvent`          | `CollectLevelModeEvent`       | levels [75,85,95], total/active % combinations |
-| `collectExplicitThresholdEvents` | `CollectExplicitThresholdEvents` | total/active thresholds exceeded |
 | `baseEvent`                      | `BaseEvent`                    | stats, maxConn, override, labels |
 
 **Effort:** Low. Copy functions, fix imports, add `*_test.go`. `main.go` imports checker and delegates.

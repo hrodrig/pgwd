@@ -27,8 +27,15 @@ import (
 	"github.com/hrodrig/pgwd/internal/validator"
 )
 
-// ExitStrictNotify is returned when -strict is set and notifier delivery failed.
-const ExitStrictNotify = 4
+// Process exit codes (see SPECIFICATIONS.md § Exit codes).
+const (
+	ExitConnectFailure = 2 // Postgres connection failure (or too many clients)
+	ExitQueryError     = 3 // Postgres query error during stats collection
+	ExitStrictNotify   = 4 // -strict and notifier delivery failed
+)
+
+// exitFunc is os.Exit; tests may replace it to avoid killing the test process.
+var exitFunc = os.Exit
 
 func init() {
 	run.SetKubeHelpers(kube.ClusterName, kube.ParseKubePostgres)
@@ -87,12 +94,11 @@ func handlePrintSampleConfig() {
 // those sources (see config.FinalizeAfterFlags). When true, the caller should
 // printVersion and exit without starting the monitor.
 func parseFlags(cfg *config.Config) (showVersion bool) {
+	rejectRemovedThresholdFlags()
 	showVersionFlag := flag.Bool("version", false, "print version and exit")
 	configPath := config.ConfigPath()
 	flag.StringVar(&configPath, "config", configPath, "Config file path (PGWD_CONFIG); default /etc/pgwd/pgwd.conf")
 	flag.StringVar(&cfg.DBURL, "db-url", cfg.DBURL, "PostgreSQL connection URL (PGWD_DB_URL)")
-	flag.IntVar(&cfg.ThresholdTotal, "db-threshold-total", cfg.ThresholdTotal, "Alert when total connections >= N (PGWD_DB_THRESHOLD_TOTAL). Deprecated: use -db-threshold-levels; will be removed in v1.0.0.")
-	flag.IntVar(&cfg.ThresholdActive, "db-threshold-active", cfg.ThresholdActive, "Alert when active connections >= N (PGWD_DB_THRESHOLD_ACTIVE). Deprecated: use -db-threshold-levels; will be removed in v1.0.0.")
 	flag.IntVar(&cfg.ThresholdIdle, "db-threshold-idle", cfg.ThresholdIdle, "Alert when idle connections >= N (PGWD_DB_THRESHOLD_IDLE)")
 	flag.IntVar(&cfg.StaleAge, "db-stale-age", cfg.StaleAge, "Consider connection stale if open longer than N seconds (PGWD_DB_STALE_AGE)")
 	flag.IntVar(&cfg.ThresholdStale, "db-threshold-stale", cfg.ThresholdStale, "Alert when stale connections (open > stale-age) >= N (PGWD_DB_THRESHOLD_STALE)")
@@ -127,8 +133,8 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.BoolVar(&cfg.EnableCollector, "enable-collector", cfg.EnableCollector, "Send anonymous usage telemetry on daemon startup (PGWD_ENABLE_COLLECTOR; default false)")
 	flag.BoolVar(&cfg.EnableUpdateCheck, "enable-update-check", cfg.EnableUpdateCheck, "Check GitHub for newer pgwd releases on daemon startup (PGWD_ENABLE_UPDATE_CHECK; default true)")
 	flag.BoolVar(&cfg.ForceNotification, "force-notification", cfg.ForceNotification, "Always send a test notification to validate delivery/format (PGWD_FORCE_NOTIFICATION)")
-	flag.IntVar(&cfg.DefaultThresholdPercent, "db-default-threshold-percent", cfg.DefaultThresholdPercent, "When one of total/active is 0, set it to this % of max_connections (1-100, default 80) (PGWD_DB_DEFAULT_THRESHOLD_PERCENT)")
-	flag.StringVar(&cfg.ThresholdLevels, "db-threshold-levels", cfg.ThresholdLevels, "When both total and active are 0: comma-separated percentages for 3-tier alerts, e.g. 75,85,95 (attention/alert/danger). Only highest level fires. (PGWD_DB_THRESHOLD_LEVELS)")
+	flag.IntVar(&cfg.DefaultThresholdPercent, "db-default-threshold-percent", cfg.DefaultThresholdPercent, "Retained for config compatibility; not used for alerting when -db-threshold-levels is active (PGWD_DB_DEFAULT_THRESHOLD_PERCENT)")
+	flag.StringVar(&cfg.ThresholdLevels, "db-threshold-levels", cfg.ThresholdLevels, "Comma-separated percentages for 3-tier alerts, e.g. 75,85,95 (attention/alert/danger). Only the highest breached level fires. (PGWD_DB_THRESHOLD_LEVELS)")
 	flag.StringVar(&cfg.KubePostgres, "kube-postgres", cfg.KubePostgres, "Connect via port-forward (client-go): namespace/type/name (e.g. default/svc/postgres) (PGWD_KUBE_POSTGRES)")
 	flag.StringVar(&cfg.KubeLoki, "kube-loki", cfg.KubeLoki, "Connect to Loki via port-forward when Loki is inside the cluster: namespace/type/name (e.g. monitoring/svc/loki) (PGWD_KUBE_LOKI)")
 	flag.StringVar(&cfg.KubeContext, "kube-context", cfg.KubeContext, "Kubectl context to use (empty = current context) (PGWD_KUBE_CONTEXT)")
@@ -136,7 +142,6 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.IntVar(&cfg.KubeLokiLocalPort, "kube-loki-local-port", cfg.KubeLokiLocalPort, "Local port for Loki port-forward (default 3100) (PGWD_KUBE_LOKI_LOCAL_PORT)")
 	flag.IntVar(&cfg.KubeLokiRemotePort, "kube-loki-remote-port", cfg.KubeLokiRemotePort, "Remote port on the Loki service (default 3100) (PGWD_KUBE_LOKI_REMOTE_PORT)")
 	flag.StringVar(&cfg.Client, "client", cfg.Client, "Client name for this monitor instance — REQUIRED (PGWD_CLIENT); identifies which monitor sent the alert")
-	flag.BoolVar(&cfg.NotifyOnConnectFailure, "notify-on-connect-failure", cfg.NotifyOnConnectFailure, "Send an alert to notifiers when Postgres connection fails (infrastructure alert) (PGWD_NOTIFY_ON_CONNECT_FAILURE)")
 	flag.IntVar(&cfg.TestMaxConnections, "test-max-connections", cfg.TestMaxConnections, "Override server max_connections for defaults and display (for testing alerts; 0 = use server) (PGWD_TEST_MAX_CONNECTIONS)")
 	flag.BoolVar(&cfg.ValidateK8sAccess, "validate-k8s-access", cfg.ValidateK8sAccess, "Validate cluster connectivity and list pods, then exit. Use -kube-context to select context. (PGWD_VALIDATE_K8S_ACCESS)")
 	flag.StringVar(&cfg.LogLevel, "log-level", cfg.LogLevel, "Log level: info (default) or debug. Debug = verbose dry-run stats every interval (PGWD_LOG_LEVEL)")
@@ -154,6 +159,19 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 		}
 	}
 	return *showVersionFlag
+}
+
+func rejectRemovedThresholdFlags() {
+	for _, arg := range os.Args[1:] {
+		switch {
+		case strings.HasPrefix(arg, "-db-threshold-total"):
+			log.Fatalf("pgwd: -db-threshold-total was removed in v1.0; use -db-threshold-levels (e.g. -db-threshold-levels 75,85,95)")
+		case strings.HasPrefix(arg, "-db-threshold-active"):
+			log.Fatalf("pgwd: -db-threshold-active was removed in v1.0; use -db-threshold-levels (e.g. -db-threshold-levels 75,85,95)")
+		case strings.HasPrefix(arg, "-notify-on-connect-failure"):
+			log.Fatalf("pgwd: -notify-on-connect-failure was removed in v1.0; connect failure notifications are always sent when notifiers are configured")
+		}
+	}
 }
 
 // validateConfig runs validator.Validate on the merged config (file, env, flags).
@@ -331,6 +349,7 @@ func Run() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
+	cfg.PromoteSingleDatabaseForKube()
 	if !cfg.UsesDatabases() {
 		defer setupKube(ctx, &cfg)()
 		defer setupKubeLoki(ctx, &cfg)()
@@ -453,8 +472,36 @@ func setupHTTPIfConfigured(cfg *config.Config, st store.MetricsStorer) func() {
 func exitStrictIf(cfg *config.Config, deliveryFailed bool) {
 	if cfg.Strict && deliveryFailed {
 		log.Printf("pgwd: strict mode: notifier delivery failed")
-		os.Exit(ExitStrictNotify)
+		exitFunc(ExitStrictNotify)
 	}
+}
+
+// exitConnectFailureIf exits with ExitConnectFailure for single-target connect failure.
+func exitConnectFailureIf(targets []config.DatabaseTarget) {
+	if len(targets) == 1 {
+		log.Printf("postgres connect failed (check database URL, connectivity, and credentials)")
+		exitFunc(ExitConnectFailure)
+	}
+}
+
+// exitQueryErrorIf exits with ExitQueryError on one-shot single-target stats query failure.
+// Daemon mode (interval > 0) logs and continues so a transient query error does not kill the process.
+func exitQueryErrorIf(cfg *config.Config, targets []config.DatabaseTarget, queryFailed bool) {
+	if !queryFailed || cfg.Interval > 0 || len(targets) != 1 {
+		return
+	}
+	log.Printf("postgres stats query failed")
+	exitFunc(ExitQueryError)
+}
+
+// handleConnectFailure notifies (if configured) then exits 2 for single-target, or logs for multi-DB.
+func handleConnectFailure(ctx context.Context, senders []notify.Sender, targetCfg *config.Config, cluster, client, ns, db string, connectErr error, targets []config.DatabaseTarget) {
+	exitStrictIf(targetCfg, run.NotifyConnectFailure(ctx, senders, targetCfg, cluster, client, ns, db, connectErr))
+	if len(targets) == 1 {
+		exitConnectFailureIf(targets)
+		return
+	}
+	log.Printf("postgres connect failed [%s]: %v", client, connectErr)
 }
 
 // runOneTarget connects to one database target, applies threshold defaults, and
@@ -466,22 +513,26 @@ func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Conf
 
 	pool, err := postgres.Pool(ctx, t.URL)
 	if err != nil {
-		exitStrictIf(targetCfg, run.NotifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err))
-		if len(targets) == 1 {
-			log.Fatal("postgres connect failed (check database URL, connectivity, and credentials)")
-		}
-		log.Printf("postgres connect failed [%s]: %v", t.Client, err)
+		handleConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err, targets)
 		return
 	}
 	defer pool.Close()
 
+	// pgxpool.New is lazy; Ping forces a real connection so connect failures map to exit 2.
+	if err := pool.Ping(ctx); err != nil {
+		handleConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err, targets)
+		return
+	}
+
 	if err := run.ApplyThresholdDefaults(ctx, pool, targetCfg); err != nil {
 		exitStrictIf(targetCfg, run.NotifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err))
 		log.Printf("threshold config error [%s]: %v", t.Client, err)
+		exitQueryErrorIf(targetCfg, targets, true)
 		return
 	}
-	runFn := run.MakeRunFunc(ctx, pool, targetCfg, senders, st, runCluster, runClient, runNamespace, runDatabase)
-	exitStrictIf(targetCfg, runFn())
+	outcome := run.MakeRunFunc(ctx, pool, targetCfg, senders, st, runCluster, runClient, runNamespace, runDatabase)()
+	exitStrictIf(targetCfg, outcome.DeliveryFailed)
+	exitQueryErrorIf(targetCfg, targets, outcome.QueryFailed)
 }
 
 // runTickerLoop repeats runOneTarget for every target every cfg.Interval seconds

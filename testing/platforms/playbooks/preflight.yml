@@ -1,0 +1,50 @@
+---
+# preflight.yml — fail fast if Postgres from inventory is unreachable.
+# One representative target + unique host:port (multi-DB URLs often share the same TCP endpoint).
+- name: pgwd preflight — Postgres reachable
+  hosts: all
+  gather_facts: false
+  become: false
+  any_errors_fatal: true
+
+  tasks:
+    - name: Assert postgres_instances is configured
+      ansible.builtin.assert:
+        that:
+          - postgres_instances is defined
+          - postgres_instances | length > 0
+        fail_msg: >-
+          postgres_instances missing or empty in inventory.
+          Set reachable Postgres URLs under all.vars before full-cycle.
+      run_once: true
+
+    - name: Build unique Postgres TCP endpoints
+      ansible.builtin.set_fact:
+        pgwd_postgres_tcp: "{{ pgwd_postgres_tcp | default([]) + [ep] }}"
+      when: ep.key not in (pgwd_postgres_tcp | default([]) | map(attribute='key') | list)
+      loop: "{{ postgres_instances }}"
+      loop_control:
+        label: "{{ item.client | default(item.url | urlsplit('hostname')) }}"
+      vars:
+        ep:
+          key: "{{ (item.url | urlsplit('hostname')) ~ ':' ~ ((item.url | urlsplit('port') | default(5432, true)) | string) }}"
+          host: "{{ item.url | urlsplit('hostname') }}"
+          port: "{{ item.url | urlsplit('port') | default(5432, true) }}"
+          sample_client: "{{ item.client | default('?') }}"
+      run_once: true
+
+    - name: Wait for Postgres TCP (unique endpoints, one host)
+      ansible.builtin.wait_for:
+        host: "{{ item.host }}"
+        port: "{{ item.port }}"
+        timeout: 5
+        connect_timeout: 3
+        msg: >-
+          Postgres unreachable from {{ inventory_hostname }}:
+          {{ item.host }}:{{ item.port }}
+          (e.g. client={{ item.sample_client }}).
+          Start the test DB (or fix inventory URLs) before install/daemon.
+      loop: "{{ pgwd_postgres_tcp }}"
+      loop_control:
+        label: "{{ item.key }}"
+      run_once: true

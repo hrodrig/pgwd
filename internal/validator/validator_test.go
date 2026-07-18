@@ -19,7 +19,8 @@ func TestValidateDatabases(t *testing.T) {
 		{"no databases", &config.Config{}, false, ""},
 		{"databases with url", &config.Config{Databases: []config.DatabaseTarget{{URL: "postgres://x/db"}}}, false, ""},
 		{"databases missing url", &config.Config{Databases: []config.DatabaseTarget{{URL: ""}}}, true, "databases[0] missing url"},
-		{"databases + kube-postgres", &config.Config{Databases: []config.DatabaseTarget{{URL: "x"}}, KubePostgres: "default/svc/pg"}, true, "kube-postgres is not supported with databases"},
+		{"single databases + kube-postgres", &config.Config{Databases: []config.DatabaseTarget{{URL: "postgres://x/db"}}, KubePostgres: "default/svc/pg"}, false, ""},
+		{"multi databases + kube-postgres", &config.Config{Databases: []config.DatabaseTarget{{URL: "x"}, {URL: "y"}}, KubePostgres: "default/svc/pg"}, true, "kube-postgres is not supported with multiple databases"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -122,7 +123,6 @@ func TestValidateNotifiers(t *testing.T) {
 		{"has pagerduty", &config.Config{PagerDutyRoutingKey: "rk"}, false, ""},
 		{"no notifier no dry-run", &config.Config{}, true, "no notifier"},
 		{"force-notification no notifier", &config.Config{ForceNotification: true, DryRun: true}, true, "force-notification requires"},
-		{"notify-on-connect-failure no notifier", &config.Config{NotifyOnConnectFailure: true, DryRun: true}, false, ""},
 		{"pagerduty enabled missing key", &config.Config{PagerDutyEnabled: true, DryRun: true}, true, "routing_key is required"},
 		{"teams enabled missing webhook", &config.Config{TeamsEnabled: true, DryRun: true}, true, "webhook_url is required"},
 		{"generic enabled missing url", &config.Config{GenericEnabled: true, DryRun: true}, true, "webhook_url is required"},
@@ -152,6 +152,7 @@ func TestValidateKubePostgres(t *testing.T) {
 		{"no kube-postgres", &config.Config{}, false, ""},
 		{"kube-postgres with url", &config.Config{KubePostgres: "default/svc/pg", DBURL: "postgres://localhost:5432/db"}, false, ""},
 		{"kube-postgres without url", &config.Config{KubePostgres: "default/svc/pg", DBURL: ""}, true, "kube-postgres requires"},
+		{"kube-postgres with single databases entry", &config.Config{KubePostgres: "default/svc/pg", Databases: []config.DatabaseTarget{{URL: "postgres://localhost:5432/db"}}}, false, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -288,6 +289,28 @@ func TestValidate_Integration(t *testing.T) {
 				t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestValidateRemovedThresholdEnv(t *testing.T) {
+	t.Run("total", func(t *testing.T) {
+		t.Setenv("PGWD_DB_THRESHOLD_TOTAL", "80")
+		if err := ValidateRemovedThresholdEnv(); err == nil || !strings.Contains(err.Error(), "PGWD_DB_THRESHOLD_TOTAL") {
+			t.Fatalf("expected removed total env error, got %v", err)
+		}
+	})
+	t.Run("active", func(t *testing.T) {
+		t.Setenv("PGWD_DB_THRESHOLD_ACTIVE", "50")
+		if err := ValidateRemovedThresholdEnv(); err == nil || !strings.Contains(err.Error(), "PGWD_DB_THRESHOLD_ACTIVE") {
+			t.Fatalf("expected removed active env error, got %v", err)
+		}
+	})
+}
+
+func TestValidateRemovedNotifyOnConnectFailureEnv(t *testing.T) {
+	t.Setenv("PGWD_NOTIFY_ON_CONNECT_FAILURE", "true")
+	if err := ValidateRemovedNotifyOnConnectFailureEnv(); err == nil || !strings.Contains(err.Error(), "PGWD_NOTIFY_ON_CONNECT_FAILURE") {
+		t.Fatalf("expected removed notify-on-connect-failure env error, got %v", err)
 	}
 }
 

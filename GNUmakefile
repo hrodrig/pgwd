@@ -55,7 +55,7 @@ help:
 	@echo "  $(GREEN)test-e2e-kube$(RESET)      E2E test with kind cluster (requires kind, kubectl, Docker)"
 	@echo "  $(GREEN)test-platforms$(RESET)     Multi-platform tests via Ansible (requires VMs; see testing/platforms/)"
 	@echo "                         Target one platform: make test-platforms PLATFORM=pgwd-ubuntu"
-	@echo "  $(GREEN)test-platforms-ping$(RESET)  Ansible builtin ping (pong on success); SSH + Python; same inventory"
+	@echo "  $(GREEN)test-platforms-ping$(RESET)  Ansible ping (pong) + Postgres TCP preflight; same inventory"
 	@echo ""
 	@echo "$(YELLOW)Quality:$(RESET)"
 	@echo "  $(GREEN)lint$(RESET)               Check gofmt, go vet, and gocyclo"
@@ -354,12 +354,13 @@ port-openbsd-sync:
 
 # Snapshot build (no tag required), outputs to dist/. No Docker required (dockers_v2 disabled for snapshots in .goreleaser.yaml).
 # Snapshot version comes from VERSION (e.g. VERSION=0.6.4 => snapshot 0.6.4-next), independent from reachable git tags.
+# --skip=sign: keyless cosign needs GHA OIDC; local snapshot is for platform/package testing only.
 snapshot:
 	@ver_raw=$$(cat VERSION 2>/dev/null | tr -d '\n\r'); \
 	[ -n "$$ver_raw" ] || { echo "Error: VERSION file is required for snapshot"; exit 1; }; \
 	ver=$${ver_raw#v}; \
 	echo "$$ver" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$$' || { echo "Error: VERSION must be semantic MAJOR.MINOR.PATCH (got: $$ver_raw)"; exit 1; }; \
-	PGWD_SNAPSHOT_VERSION="$$ver-next" goreleaser release --snapshot --clean
+	PGWD_SNAPSHOT_VERSION="$$ver-next" goreleaser release --snapshot --clean --skip=sign
 
 # Build only the FreeBSD distfile tarball expected by contrib/freebsd/Makefile DISTFILES.
 # Uses VERSION file (v prefix optional) and current machine arch (aarch64 -> arm64).

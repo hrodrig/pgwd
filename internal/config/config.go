@@ -17,8 +17,6 @@ type DatabaseTarget struct {
 	Client                   string // empty = derive from base client + "-" + db name from URL
 	StaleAge                 int
 	DefaultThresholdPercent  int
-	ThresholdTotal           int
-	ThresholdActive          int
 	ThresholdIdle            int
 	ThresholdStale           int
 	ThresholdLevels          string
@@ -56,11 +54,9 @@ type Config struct {
 	Client string
 
 	// Thresholds (0 = disabled)
-	ThresholdTotal  int // Deprecated: use ThresholdLevels; will be removed in v1.0.0
-	ThresholdActive int // Deprecated: use ThresholdLevels; will be removed in v1.0.0
-	ThresholdIdle   int
-	StaleAge        int // seconds; connections open longer than this are "stale"
-	ThresholdStale  int // alert when count of stale connections >= this
+	ThresholdIdle  int
+	StaleAge       int // seconds; connections open longer than this are "stale"
+	ThresholdStale int // alert when count of stale connections >= this
 	// Long-running query alerts (state=active, query_start age). Requires a metrics store for cooldown timestamps.
 	LongQueryMinSeconds      int // 0 = disabled; min query runtime in seconds to count as "long"
 	LongQueryCooldownSeconds int // min time between long_query notifications per target (default when min set: 3600)
@@ -102,9 +98,8 @@ type Config struct {
 	DryRun                  bool
 	Strict                  bool   // exit 4 when notifier delivery fails for a threshold event
 	ForceNotification       bool   // send a test notification regardless of thresholds (to validate delivery/format)
-	NotifyOnConnectFailure  bool   // when Postgres connection fails, send an alert to notifiers (infrastructure alert)
-	DefaultThresholdPercent int    // when threshold-total/active are set, used for the one left at 0 (1-100, default 80)
-	ThresholdLevels         string // comma-separated percentages for 3-tier alerts, e.g. "75,85,95" (attention/alert/danger). Used when both total and active are 0.
+	DefaultThresholdPercent int    // retained for config compatibility; no longer fills total/active thresholds
+	ThresholdLevels         string // comma-separated percentages for 3-tier alerts, e.g. "75,85,95" (attention/alert/danger). Used when level mode is active.
 	// TestMaxConnections: if > 0, use instead of server max_connections for defaults and display (for testing alerts).
 	TestMaxConnections int
 	// ValidateK8sAccess: if true, validate cluster connectivity and list pods, then exit. Uses KubeContext if set.
@@ -127,7 +122,6 @@ type Config struct {
 	ConfirmAlert int // consecutive "bad" checks before sending alert (default 1)
 	ConfirmOk    int // consecutive "ok" checks before resolution notification (default 1)
 
-	LoadedLegacyDBConfig     bool   // set when YAML used deprecated top-level db: (not databases:)
 	LoadedFromFile           bool   // set when config was loaded from YAML file
 	EnableCollector          bool   // opt-in anonymous daemon telemetry (default false)
 	EnableUpdateCheck        bool   // opt-out GitHub release check (default true when unset)
@@ -313,12 +307,6 @@ func applyEnvKube(cfg *Config) {
 }
 
 func applyEnvThresholds(cfg *Config) {
-	if v := envInt("DB_THRESHOLD_TOTAL", -1); v >= 0 {
-		cfg.ThresholdTotal = v
-	}
-	if v := envInt("DB_THRESHOLD_ACTIVE", -1); v >= 0 {
-		cfg.ThresholdActive = v
-	}
 	if v := envInt("DB_THRESHOLD_IDLE", -1); v >= 0 {
 		cfg.ThresholdIdle = v
 	}
@@ -368,9 +356,6 @@ func applyEnvBehaviour(cfg *Config) {
 	if _, ok := os.LookupEnv("PGWD_FORCE_NOTIFICATION"); ok {
 		cfg.ForceNotification = envBool("FORCE_NOTIFICATION", false)
 	}
-	if _, ok := os.LookupEnv("PGWD_NOTIFY_ON_CONNECT_FAILURE"); ok {
-		cfg.NotifyOnConnectFailure = envBool("NOTIFY_ON_CONNECT_FAILURE", false)
-	}
 	if v := envInt("TEST_MAX_CONNECTIONS", -1); v >= 0 {
 		cfg.TestMaxConnections = v
 	}
@@ -402,8 +387,6 @@ func FromEnv() Config {
 		KubeLokiLocalPort:        envInt("KUBE_LOKI_LOCAL_PORT", 3100),
 		KubeLokiRemotePort:       envInt("KUBE_LOKI_REMOTE_PORT", 3100),
 		Client:                   env("CLIENT", ""),
-		ThresholdTotal:           envInt("DB_THRESHOLD_TOTAL", 0),
-		ThresholdActive:          envInt("DB_THRESHOLD_ACTIVE", 0),
 		ThresholdIdle:            envInt("DB_THRESHOLD_IDLE", 0),
 		StaleAge:                 envInt("DB_STALE_AGE", 0),
 		ThresholdStale:           envInt("DB_THRESHOLD_STALE", 0),
@@ -416,7 +399,6 @@ func FromEnv() Config {
 		LogLevel:                 env("LOG_LEVEL", "info"),
 		DryRun:                   envBool("DRY_RUN", false),
 		ForceNotification:        envBool("FORCE_NOTIFICATION", false),
-		NotifyOnConnectFailure:   envBool("NOTIFY_ON_CONNECT_FAILURE", false),
 		DefaultThresholdPercent:  envInt("DB_DEFAULT_THRESHOLD_PERCENT", 80),
 		ThresholdLevels:          env("DB_THRESHOLD_LEVELS", DefaultThresholdLevels),
 		TestMaxConnections:       envInt("TEST_MAX_CONNECTIONS", 0),
@@ -441,8 +423,6 @@ func FromEnv() Config {
 // Non-nil values override the config.
 func (c *Config) OverrideWith(overrides struct {
 	DBURL                   *string
-	ThresholdTotal          *int
-	ThresholdActive         *int
 	ThresholdIdle           *int
 	StaleAge                *int
 	ThresholdStale          *int
@@ -455,20 +435,14 @@ func (c *Config) OverrideWith(overrides struct {
 	DefaultThresholdPercent *int
 	ThresholdLevels         *string
 }) {
-	c.applyOverridesThresholds(overrides.DBURL, overrides.ThresholdTotal, overrides.ThresholdActive, overrides.ThresholdIdle, overrides.StaleAge, overrides.ThresholdStale)
+	c.applyOverridesThresholds(overrides.DBURL, overrides.ThresholdIdle, overrides.StaleAge, overrides.ThresholdStale)
 	c.applyOverridesNotifiers(overrides.SlackWebhook, overrides.LokiURL, overrides.LokiLabels)
 	c.applyOverridesBehaviour(overrides.Interval, overrides.DryRun, overrides.ForceNotification, overrides.DefaultThresholdPercent, overrides.ThresholdLevels)
 }
 
-func (c *Config) applyOverridesThresholds(dbURL *string, total, active, idle, staleAge, stale *int) {
+func (c *Config) applyOverridesThresholds(dbURL *string, idle, staleAge, stale *int) {
 	if dbURL != nil {
 		c.DBURL = *dbURL
-	}
-	if total != nil {
-		c.ThresholdTotal = *total
-	}
-	if active != nil {
-		c.ThresholdActive = *active
 	}
 	if idle != nil {
 		c.ThresholdIdle = *idle
@@ -535,15 +509,14 @@ func ParseThresholdLevels(s string) []int {
 	return out
 }
 
-// UsesLevelMode returns true when both threshold-total and threshold-active are 0 and ThresholdLevels is valid (3+ percentages).
+// UsesLevelMode returns true when ThresholdLevels is valid (3+ percentages).
 func (c *Config) UsesLevelMode() bool {
-	return c.ThresholdTotal == 0 && c.ThresholdActive == 0 && len(ParseThresholdLevels(c.ThresholdLevels)) >= 3
+	return len(ParseThresholdLevels(c.ThresholdLevels)) >= 3
 }
 
 // HasAnyThreshold returns true if at least one threshold is set or level mode is active.
 func (c *Config) HasAnyThreshold() bool {
-	return c.ThresholdTotal > 0 || c.ThresholdActive > 0 || c.ThresholdIdle > 0 ||
-		c.ThresholdStale > 0 || c.UsesLevelMode() || c.LongQueryMinSeconds > 0
+	return c.ThresholdIdle > 0 || c.ThresholdStale > 0 || c.UsesLevelMode() || c.LongQueryMinSeconds > 0
 }
 
 // HasAnyNotifier returns true if at least one notification channel is configured.
@@ -578,8 +551,6 @@ func (c *Config) Targets() []DatabaseTarget {
 		Client:                   c.Client,
 		StaleAge:                 c.StaleAge,
 		DefaultThresholdPercent:  c.DefaultThresholdPercent,
-		ThresholdTotal:           c.ThresholdTotal,
-		ThresholdActive:          c.ThresholdActive,
 		ThresholdIdle:            c.ThresholdIdle,
 		ThresholdStale:           c.ThresholdStale,
 		ThresholdLevels:          c.ThresholdLevels,
@@ -589,9 +560,32 @@ func (c *Config) Targets() []DatabaseTarget {
 	}}
 }
 
-// UsesDatabases returns true when config has multiple database targets (from databases: in YAML).
+// UsesDatabases returns true when config has database targets from databases: in YAML.
 func (c *Config) UsesDatabases() bool {
 	return len(c.Databases) > 0
+}
+
+// PromoteSingleDatabaseForKube flattens a one-entry databases: list into single-DB
+// fields so kube.postgres / password_from_secret can rewrite DBURL and port-forward.
+// No-op when kube is unset or databases: has zero or multiple entries.
+func (c *Config) PromoteSingleDatabaseForKube() {
+	if c.KubePostgres == "" || len(c.Databases) != 1 {
+		return
+	}
+	t := c.Databases[0]
+	c.DBURL = t.URL
+	if t.Client != "" {
+		c.Client = t.Client
+	}
+	c.StaleAge = t.StaleAge
+	c.DefaultThresholdPercent = t.DefaultThresholdPercent
+	c.ThresholdIdle = t.ThresholdIdle
+	c.ThresholdStale = t.ThresholdStale
+	c.ThresholdLevels = t.ThresholdLevels
+	c.LongQueryMinSeconds = t.LongQueryMinSeconds
+	c.LongQueryCooldownSeconds = t.LongQueryCooldownSeconds
+	c.LongQueryMinCount = t.LongQueryMinCount
+	c.Databases = nil
 }
 
 // ConfigForTarget returns a Config with base values and target-specific overrides for one check.
@@ -602,8 +596,6 @@ func (c *Config) ConfigForTarget(t DatabaseTarget) *Config {
 	out.Client = t.Client
 	out.StaleAge = t.StaleAge
 	out.DefaultThresholdPercent = t.DefaultThresholdPercent
-	out.ThresholdTotal = t.ThresholdTotal
-	out.ThresholdActive = t.ThresholdActive
 	out.ThresholdIdle = t.ThresholdIdle
 	out.ThresholdStale = t.ThresholdStale
 	out.ThresholdLevels = t.ThresholdLevels

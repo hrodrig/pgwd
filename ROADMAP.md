@@ -1,10 +1,10 @@
 # pgwd roadmap
 
-**Current release:** [v0.9.0](VERSION) (ready on `develop`; tag on `main`) · **Branch:** `develop` · **Target:** [v1.0.0](docs/plan-1.0.x.md) stable API
+**Current release:** [v1.0.0](VERSION) (ready on `develop`; tag from `main` after `make release-check`) · **Branch:** `develop`
 
-**Status (2026-07-13):** **v0.9.0** ready on `develop` (pre-1.0 polish + security). **Active band: 1.0.x 📋 next** (breaking stable API).
+**Status (2026-07-18):** **v1.0.0** ready — breaking stable API + compare / upgrade / connection-limits docs. Distro packaging continues in **1.x** (not a hard tag gate).
 
-This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md) (v0.9.0). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md).
+This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md) (v1.0.0). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md).
 
 ---
 
@@ -20,8 +20,8 @@ This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md]
 flowchart LR
   A["0.6.10 ✅"] --> B["0.7.0 ✅"]
   B --> C["0.8.0 ✅ ready"]
-  C --> D["0.9.0 ✅ ready"]
-  D --> E["1.0.0 breaking stable"]
+  C --> D["0.9.0 ✅"]
+  D --> E["1.0.0 ✅ ready"]
 ```
 
 | Band | Status | Target | Theme | Plan |
@@ -30,7 +30,7 @@ flowchart LR
 | **0.7.x** | ✅ Ready (v0.7.0) | Jul 2026 | PagerDuty, Teams, generic webhook + JWT/HMAC, shared HTTP retry | [plan-0.7.x.md](docs/plan-0.7.x.md) · [CHANGELOG](CHANGELOG.md#070---2026-07-03) |
 | **0.8.0** | ✅ Ready (v0.8.0) | Jul 2026 | Syft SBOM + Cosign keyless signing (GHCR + release artifacts) | [plan-0.8.x.md](docs/plan-0.8.x.md) · [CHANGELOG](CHANGELOG.md#080---2026-07-11) |
 | **0.9.x** | ✅ Ready (v0.9.0) | Jul 2026 | Pre-1.0 polish, DISCOVER removal, profiles, `--strict`, collector, SPEC audit | [plan-0.9.x.md](docs/plan-0.9.x.md) · [CHANGELOG](CHANGELOG.md#090---2026-07-13) |
-| **1.0.0** | 📋 **Active** | Jul 2026 | Breaking stable API, deprecations removed | [plan-1.0.x.md](docs/plan-1.0.x.md) |
+| **1.0.0** | ✅ Ready (v1.0.0) | Jul 2026 | Breaking stable API, compare docs, **start official distro packaging** | [plan-1.0.x.md](docs/plan-1.0.x.md) · [CHANGELOG](CHANGELOG.md#100---2026-07-18) |
 
 **Suggested calendar** (from band plans — **slip OK**; 0.7.x started 2026-07-02):
 
@@ -39,8 +39,8 @@ flowchart LR
 | Jun 17 | v0.6.10 ✅ |
 | Jul 3 | v0.7.0 ✅ |
 | Jul 11 | v0.8.0 ✅ |
-| Jul 13 | v0.9.0 ✅ (develop; tag on `main`) |
-| Jul 14+ | 1.0.0 |
+| Jul 13 | v0.9.0 ✅ |
+| Jul 18 | v1.0.0 ✅ ready (tag from `main` after gates) |
 
 Each band: design → implement → test → `make release-check` → docs → tag from `main`.
 
@@ -85,18 +85,46 @@ Each band: design → implement → test → `make release-check` → docs → t
 
 → [plan-0.9.x.md](docs/plan-0.9.x.md)
 
-### 1.0.0 — breaking stable API
+### 1.0.0 — breaking stable API + operator positioning ✅ (v1.0.0 ready)
 
 **Removed:**
 
 | Surface | Replacement |
 |---------|-------------|
-| `-db-threshold-total` / `-db-threshold-active` | `-db-threshold-levels` (default `75,85,95`) |
-| `-notify-on-connect-failure` | Always-on when notifiers configured |
+| `-db-threshold-total` / `-db-threshold-active` (CLI, env, YAML) | `-db-threshold-levels` (default `75,85,95`) |
+| `-notify-on-connect-failure` / env / YAML | Always-on when notifiers configured |
 | Config key `db:` | `databases:` (even for one target) |
 | `DISCOVER_MY_PASSWORD` | Already gone in 0.9.x |
 
-**Release gate:** 100+ tests ✅, [plan-0.8.x](docs/plan-0.8.x.md) supply chain shipped, `make release-check` green, man page + demo GIF synced.
+**Marketing / transparency (1.0 release gate):**
+
+| Item | Notes |
+|------|--------|
+| **`docs/compare.md`** | pgwd vs common alternatives — honest matrix + “when to pick / when not pgwd” (pattern: [gfire/docs/compare.md](https://github.com/hrodrig/gfire/blob/main/docs/compare.md), [groot README § vs kubectl-gather](https://github.com/hrodrig/groot#groot-vs-kubectl-gather)) |
+| **README § Compare** | Short at-a-glance table + link to full doc |
+| **Landing `/compare`** | Mirror on [pgwd.hermesrodriguez.com](https://pgwd.hermesrodriguez.com) (app repo) for 1.0 announcement |
+| **`docs/use-cases.md`** | Cross-link from compare doc (deployment scenarios already shipped in 0.9.x) |
+
+**Distro packaging (1.x — start with v1.0.0; acceptance may land in later 1.x):**
+
+Aim for **official** packages / ports (not only GitHub Releases / Homebrew tap / GoReleaser `.deb`/`.rpm`). Use existing **`contrib/`** port files as submission seeds where present.
+
+| Target | Path |
+|--------|------|
+| **Debian** / **Ubuntu** | ITP + mentors; sync / universe once in Debian |
+| **Fedora** | Package review → official repos |
+| **Alpine** | aports (`apk`) |
+| **FreeBSD** | Official ports tree (`contrib/freebsd` → Bugzilla) |
+| **OpenBSD** | Official ports (`contrib/openbsd` → ports@) |
+| **NetBSD** | pkgsrc |
+| **DragonFly BSD** | DPorts (`contrib/dragonflybsd`) |
+| **Others** | As demand appears (e.g. Arch AUR → community, openSUSE) |
+
+Acceptance timelines are external (reviewers, freeze windows) — **not** a hard blocker for tagging **v1.0.0**; track progress in [plan-1.0.x.md](docs/plan-1.0.x.md) and GitHub issues.
+
+**Candidates to compare** (verify upstream before each release): Prometheus **`postgres_exporter`** + Grafana/Alertmanager; **pgwatch** / pgwatch3; **hosted APM** (Datadog, New Relic); **cloud RDS/Cloud SQL** connection alarms; **cron + `psql`** / Nagios-style checks. pgwd is **not** a full metrics platform — position as a **read-only connection watchdog** with notifier + hysteresis out of the box.
+
+**Release gate:** 100+ tests ✅, [plan-0.8.x](docs/plan-0.8.x.md) supply chain shipped, `make release-check` green, man page + demo GIF synced, **compare doc reviewed**.
 
 → [plan-1.0.x.md](docs/plan-1.0.x.md)
 
@@ -151,6 +179,7 @@ See [SPECIFICATIONS.md §2](SPECIFICATIONS.md#2-scope).
 - Per-database `kube.postgres` in `databases:`
 - Additional Prometheus series or OpenMetrics (today: text exposition on HTTP `/metrics`)
 - Discord, email, additional channels via same notifier pattern as 0.7.x
+- Finish / expand **official distro** coverage if any 1.x submissions still pending (see [plan-1.0.x.md](docs/plan-1.0.x.md) § Distro packaging)
 
 Track via GitHub issues after 1.0.0.
 
@@ -161,11 +190,13 @@ Track via GitHub issues after 1.0.0.
 | Document | Role |
 |----------|------|
 | **ROADMAP.md** (this file) | Where we are, where we go, band index |
-| **[SPECIFICATIONS.md](SPECIFICATIONS.md)** | Observable behavior contract for **shipped** code (v0.9.0) |
+| **[SPECIFICATIONS.md](SPECIFICATIONS.md)** | Observable behavior contract for **shipped** code (v1.0.0) |
 | **[CHANGELOG.md](CHANGELOG.md)** | What actually shipped per version |
 | **[docs/plan-0.7.x.md](docs/plan-0.7.x.md) … [plan-1.0.x.md](docs/plan-1.0.x.md)** | Implementation checklists per band |
 | **[docs/use-cases.md](docs/use-cases.md)** | Operator scenario matrix (single/multi DB, K8s, credentials) |
+| **[docs/compare.md](docs/compare.md)** | pgwd vs postgres_exporter, pgwatch, hosted APM, cloud alarms, DIY cron |
 | **[docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)** | K8s credentials + DISCOVER migration |
+| **[docs/UPGRADE-0.9-to-1.0.md](docs/UPGRADE-0.9-to-1.0.md)** | Operator upgrade guide (0.9 → 1.0 breaking removals) |
 | **[docs/UPGRADE-0.5-to-0.6.md](docs/UPGRADE-0.5-to-0.6.md)** | Operator upgrade guide (0.5 → 0.6) |
 
 When planning work: start here → open the band plan → update SPEC + CHANGELOG when behavior ships (docs-only changes stay in `[Unreleased]` until the band is tagged).

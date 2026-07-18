@@ -153,14 +153,11 @@ func NotifyConnectFailure(ctx context.Context, senders []notify.Sender, cfg *con
 	return sent == 0
 }
 
-// ApplyThresholdDefaults reads max_connections, fills zero thresholds, and validates config.
+// ApplyThresholdDefaults reads max_connections and validates threshold configuration.
 func ApplyThresholdDefaults(ctx context.Context, pool postgres.Querier, cfg *config.Config) error {
 	maxConn, maxConnErr := postgres.MaxConnections(ctx, pool)
 	if cfg.TestMaxConnections > 0 {
 		maxConn = cfg.TestMaxConnections
-	}
-	if !cfg.UsesLevelMode() && maxConn > 0 {
-		checker.ApplySingleThresholdDefaults(cfg, maxConn)
 	}
 	return checker.ValidateThresholdConfig(cfg, maxConn, maxConnErr)
 }
@@ -220,8 +217,6 @@ func collectEvents(ctx context.Context, pool postgres.Querier, cfg *config.Confi
 		if e := checker.CollectLevelModeEvent(ev, cfg, stats, maxConn); e != nil {
 			events = append(events, *e)
 		}
-	} else {
-		events = append(events, checker.CollectExplicitThresholdEvents(ev, cfg, stats, maxConn)...)
 	}
 	if cfg.ThresholdIdle > 0 && stats.Idle >= cfg.ThresholdIdle {
 		e := ev
@@ -455,14 +450,19 @@ func TrySendResolutionNotification(ctx context.Context, st store.MetricsStorer, 
 	return failed
 }
 
+// CheckOutcome is returned by MakeRunFunc for -strict and process exit codes.
+type CheckOutcome struct {
+	DeliveryFailed bool
+	QueryFailed    bool
+}
+
 // MakeRunFunc returns the per-interval check closure for one target.
-// The returned func reports whether notifier delivery failed (for -strict).
-func MakeRunFunc(ctx context.Context, pool postgres.Querier, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, cluster, client, ns, db string) func() bool {
-	return func() bool {
+func MakeRunFunc(ctx context.Context, pool postgres.Querier, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, cluster, client, ns, db string) func() CheckOutcome {
+	return func() CheckOutcome {
 		res, err := DoRunCheck(ctx, pool, cfg, cluster, client, ns, db)
 		if err != nil {
 			log.Printf("stats: %v", err)
-			return false
+			return CheckOutcome{QueryFailed: true}
 		}
 		if cfg.DryRun && cfg.LogLevel == "debug" {
 			LogDryRunStats(cluster, client, db, res)
@@ -493,7 +493,7 @@ func MakeRunFunc(ctx context.Context, pool postgres.Querier, cfg *config.Config,
 				}
 			}
 		}
-		return deliveryFailed
+		return CheckOutcome{DeliveryFailed: deliveryFailed}
 	}
 }
 

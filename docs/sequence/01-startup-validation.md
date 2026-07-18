@@ -32,8 +32,7 @@ sequenceDiagram
     end
     pgwd->>pgwd: validate: stale-age if threshold-stale
     pgwd->>pgwd: validate: at least one notifier (or dry-run)
-    pgwd->>pgwd: validate: force-notification / notify-on-connect-failure require notifier
-    pgwd->>pgwd: stderr warnings: legacy db:, http:// notifiers, deprecated flags
+    pgwd->>pgwd: stderr warnings: deprecated flags, http:// notifiers
     opt interval > 0 (daemon)
         pgwd->>pgwd: optional collector POST / GitHub update check (see SPEC §3)
     end
@@ -59,7 +58,7 @@ sequenceDiagram
                 pgwd->>pgwd: log Notification sent
             end
         end
-        pgwd->>User: log.Fatalf, exit 1
+        pgwd->>User: log connect failed, exit 2
     end
     Postgres-->>pgwd: pool
     pgwd->>Postgres: MaxConnections(ctx, pool)

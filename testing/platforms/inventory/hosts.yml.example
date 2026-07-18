@@ -40,6 +40,9 @@ all:
 
   children:
     linux_systemd:
+      vars:
+        # Prefer /usr/bin/python3 over discovery of python3.X (breaks after distro upgrades).
+        ansible_python_interpreter: /usr/bin/python3
       hosts:
         pgwd-ubuntu:
           ansible_host: 203.0.113.10
@@ -55,6 +58,8 @@ all:
           # pgwd_local_package: "/tmp/dist/pgwd_v0.6.4_linux_amd64.rpm"
 
     linux_openrc:
+      vars:
+        ansible_python_interpreter: /usr/bin/python3
       hosts:
         pgwd-alpine:
           ansible_host: 203.0.113.10

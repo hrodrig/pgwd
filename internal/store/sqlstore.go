@@ -151,6 +151,10 @@ func QueryAllMetricsFromDSN(ctx context.Context, driver, dsn string) ([]ExportRo
 	}
 	defer db.Close()
 
+	return queryAllMetrics(ctx, db, d)
+}
+
+func queryAllMetrics(ctx context.Context, db *sql.DB, d sqlDialect) ([]ExportRow, error) {
 	colDB := colDatabaseQuoted(d)
 	q := fmt.Sprintf(
 		`SELECT id, ts, client, cluster, namespace, %s, total, active, idle, stale, max_connections, state, threshold FROM metrics ORDER BY id ASC`,

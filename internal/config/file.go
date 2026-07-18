@@ -1,7 +1,7 @@
 package config
 
 import (
-	"log"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -20,30 +20,32 @@ type fileConfigDB struct {
 	StaleAge                int    `yaml:"stale_age"`
 	DefaultThresholdPercent int    `yaml:"default_threshold_percent"`
 	Threshold               struct {
-		Active int    `yaml:"active"`
+		Active *int   `yaml:"active"`
 		Idle   int    `yaml:"idle"`
 		Levels string `yaml:"levels"`
 		Stale  int    `yaml:"stale"`
-		Total  int    `yaml:"total"`
+		Total  *int   `yaml:"total"`
 	} `yaml:"threshold"`
 	LongQueryMinSeconds      int `yaml:"long_query_min_seconds"`
 	LongQueryCooldownSeconds int `yaml:"long_query_cooldown_seconds"`
 	LongQueryMinCount        int `yaml:"long_query_min_count"`
 }
 
-// fileConfig mirrors the YAML structure: db, databases, kube, notifications, and top-level keys.
+// fileConfig mirrors the YAML structure: databases, kube, notifications, and top-level keys.
 type fileConfig struct {
-	Client                 string         `yaml:"client"`
-	DryRun                 bool           `yaml:"dry_run"`
-	LogLevel               string         `yaml:"log_level"`
-	Interval               int            `yaml:"interval"`
-	Strict                 bool           `yaml:"strict"`
-	NotifyOnConnectFailure bool           `yaml:"notify_on_connect_failure"`
-	EnableCollector        bool           `yaml:"enable_collector"`
-	EnableUpdateCheck      *bool          `yaml:"enable_update_check"`
-	Databases              []fileConfigDB `yaml:"databases"`
-	DB                     fileConfigDB   `yaml:"db"`
-	Sqlite                 struct {
+	Client            string `yaml:"client"`
+	DryRun            bool   `yaml:"dry_run"`
+	LogLevel          string `yaml:"log_level"`
+	Interval          int    `yaml:"interval"`
+	Strict            bool   `yaml:"strict"`
+	EnableCollector   bool   `yaml:"enable_collector"`
+	EnableUpdateCheck *bool  `yaml:"enable_update_check"`
+	// RemovedNotifyOnConnectFailure detects legacy notify_on_connect_failure (removed in v1.0). Non-nil → FromFile error.
+	RemovedNotifyOnConnectFailure *bool          `yaml:"notify_on_connect_failure"`
+	Databases                     []fileConfigDB `yaml:"databases"`
+	// RemovedDB detects legacy top-level db: (removed in v1.0). Non-nil → FromFile error.
+	RemovedDB *fileConfigDB `yaml:"db"`
+	Sqlite    struct {
 		Path       string `yaml:"path"`
 		MaxMetrics int    `yaml:"max_metrics"`
 		StaleAge   int    `yaml:"stale_age"`
@@ -134,6 +136,17 @@ func FromFile(path string) (Config, bool, error) {
 	if err := yaml.Unmarshal(data, &fc); err != nil {
 		return Config{}, false, err
 	}
+	for _, d := range fc.Databases {
+		if d.Threshold.Total != nil || d.Threshold.Active != nil {
+			return Config{}, false, fmt.Errorf(`threshold.total and threshold.active were removed in v1.0; use threshold.levels (e.g. "75,85,95")`)
+		}
+	}
+	if fc.RemovedNotifyOnConnectFailure != nil {
+		return Config{}, false, fmt.Errorf("config key 'notify_on_connect_failure' was removed in v1.0; connect failure notifications are always sent when notifiers are configured")
+	}
+	if fc.RemovedDB != nil {
+		return Config{}, false, fmt.Errorf("config key 'db:' was removed in v1.0; use 'databases:' with one entry — see contrib/pgwd.conf.example")
+	}
 	return fileConfigToConfig(fc), true, nil
 }
 
@@ -143,22 +156,20 @@ func fileConfigToConfig(fc fileConfig) Config {
 		updateCheck = *fc.EnableUpdateCheck
 	}
 	c := Config{
-		DBURL:                   fc.DB.URL,
-		Client:                  fc.Client,
-		DefaultThresholdPercent: fc.DB.DefaultThresholdPercent,
-		DryRun:                  fc.DryRun,
-		LogLevel:                fc.LogLevel,
-		Interval:                fc.Interval,
-		Strict:                  fc.Strict,
-		EnableCollector:         fc.EnableCollector,
-		EnableUpdateCheck:       updateCheck,
-		LoadedFromFile:          true,
-		KubePostgres:            fc.Kube.Postgres,
-		KubeContext:             fc.Kube.Context,
-		KubeLocalPort:           fc.Kube.LocalPort,
-		KubeLoki:                fc.Kube.Loki,
-		KubeLokiLocalPort:       fc.Kube.LokiLocalPort,
-		KubeLokiRemotePort:      fc.Kube.LokiRemotePort,
+		Client:             fc.Client,
+		DryRun:             fc.DryRun,
+		LogLevel:           fc.LogLevel,
+		Interval:           fc.Interval,
+		Strict:             fc.Strict,
+		EnableCollector:    fc.EnableCollector,
+		EnableUpdateCheck:  updateCheck,
+		LoadedFromFile:     true,
+		KubePostgres:       fc.Kube.Postgres,
+		KubeContext:        fc.Kube.Context,
+		KubeLocalPort:      fc.Kube.LocalPort,
+		KubeLoki:           fc.Kube.Loki,
+		KubeLokiLocalPort:  fc.Kube.LokiLocalPort,
+		KubeLokiRemotePort: fc.Kube.LokiRemotePort,
 		KubePasswordFromSecret: KubePasswordFromSecret{
 			Namespace: fc.Kube.PasswordFromSecret.Namespace,
 			Name:      fc.Kube.PasswordFromSecret.Name,
@@ -168,7 +179,6 @@ func fileConfigToConfig(fc fileConfig) Config {
 		LokiLabels:               fc.Notifications.Loki.Labels,
 		LokiOrgID:                fc.Notifications.Loki.OrgID,
 		LokiBearerToken:          fc.Notifications.Loki.BearerToken,
-		NotifyOnConnectFailure:   fc.NotifyOnConnectFailure,
 		SqlitePath:               fc.Sqlite.Path,
 		SqliteMaxMetrics:         fc.Sqlite.MaxMetrics,
 		SqliteStaleAge:           fc.Sqlite.StaleAge,
@@ -201,29 +211,14 @@ func fileConfigToConfig(fc fileConfig) Config {
 		RetryMaxAttempts:         fc.Notifications.Retry.MaxAttempts,
 		RetryInitialBackoff:      parseDurationOrZero(fc.Notifications.Retry.InitialBackoff),
 		RetryMaxBackoff:          parseDurationOrZero(fc.Notifications.Retry.MaxBackoff),
-		StaleAge:                 fc.DB.StaleAge,
-		ThresholdTotal:           fc.DB.Threshold.Total,
-		ThresholdActive:          fc.DB.Threshold.Active,
-		ThresholdIdle:            fc.DB.Threshold.Idle,
-		ThresholdStale:           fc.DB.Threshold.Stale,
-		ThresholdLevels:          fc.DB.Threshold.Levels,
-		LongQueryMinSeconds:      fc.DB.LongQueryMinSeconds,
-		LongQueryCooldownSeconds: fc.DB.LongQueryCooldownSeconds,
-		LongQueryMinCount:        fc.DB.LongQueryMinCount,
 	}
 
-	// Normalize to Databases: use databases if present, else wrap db as single target.
 	if len(fc.Databases) > 0 {
 		c.Databases = make([]DatabaseTarget, 0, len(fc.Databases))
 		for _, d := range fc.Databases {
-			t := mergeDBTarget(fc.Client, fc.DB, d)
+			t := mergeDBTarget(fc.Client, fileConfigDB{}, d)
 			c.Databases = append(c.Databases, t)
 		}
-	} else if fc.DB.URL != "" {
-		c.LoadedLegacyDBConfig = true
-		log.Printf("pgwd: config key 'db' is deprecated; use 'databases: [{ url: ... }]' instead. Support will be removed in v1.0.")
-		t := mergeDBTarget(fc.Client, fc.DB, fc.DB)
-		c.Databases = []DatabaseTarget{t}
 	}
 
 	ApplyDefaults(&c)
@@ -238,8 +233,6 @@ func mergeDBTarget(baseClient string, base, over fileConfigDB) DatabaseTarget {
 		Client:                   over.Client,
 		StaleAge:                 orZero(over.StaleAge, base.StaleAge),
 		DefaultThresholdPercent:  orZero(over.DefaultThresholdPercent, base.DefaultThresholdPercent),
-		ThresholdTotal:           orZero(over.Threshold.Total, base.Threshold.Total),
-		ThresholdActive:          orZero(over.Threshold.Active, base.Threshold.Active),
 		ThresholdIdle:            orZero(over.Threshold.Idle, base.Threshold.Idle),
 		ThresholdStale:           orZero(over.Threshold.Stale, base.Threshold.Stale),
 		ThresholdLevels:          orEmpty(over.Threshold.Levels, base.Threshold.Levels),
