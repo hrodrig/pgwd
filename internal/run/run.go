@@ -153,14 +153,11 @@ func NotifyConnectFailure(ctx context.Context, senders []notify.Sender, cfg *con
 	return sent == 0
 }
 
-// ApplyThresholdDefaults reads max_connections, fills zero thresholds, and validates config.
+// ApplyThresholdDefaults reads max_connections and validates threshold configuration.
 func ApplyThresholdDefaults(ctx context.Context, pool postgres.Querier, cfg *config.Config) error {
 	maxConn, maxConnErr := postgres.MaxConnections(ctx, pool)
 	if cfg.TestMaxConnections > 0 {
 		maxConn = cfg.TestMaxConnections
-	}
-	if !cfg.UsesLevelMode() && maxConn > 0 {
-		checker.ApplySingleThresholdDefaults(cfg, maxConn)
 	}
 	return checker.ValidateThresholdConfig(cfg, maxConn, maxConnErr)
 }
@@ -220,8 +217,6 @@ func collectEvents(ctx context.Context, pool postgres.Querier, cfg *config.Confi
 		if e := checker.CollectLevelModeEvent(ev, cfg, stats, maxConn); e != nil {
 			events = append(events, *e)
 		}
-	} else {
-		events = append(events, checker.CollectExplicitThresholdEvents(ev, cfg, stats, maxConn)...)
 	}
 	if cfg.ThresholdIdle > 0 && stats.Idle >= cfg.ThresholdIdle {
 		e := ev

@@ -15,8 +15,10 @@ import (
 )
 
 // Validate runs all config validations. Returns the first error encountered.
-// WarnDeprecatedThresholds is called during validation (writes to stderr).
 func Validate(cfg *config.Config) error {
+	if err := ValidateRemovedThresholdEnv(); err != nil {
+		return err
+	}
 	if err := ValidateDatabases(cfg); err != nil {
 		return err
 	}
@@ -54,7 +56,6 @@ func Validate(cfg *config.Config) error {
 
 // WarnDeprecationStartup prints stderr warnings for deprecated config surfaces.
 func WarnDeprecationStartup(cfg *config.Config) {
-	WarnDeprecatedThresholds(cfg)
 	if cfg.NotifyOnConnectFailure {
 		fmt.Fprintln(os.Stderr, "pgwd: -notify-on-connect-failure is ignored; connect failure notifications are always enabled when notifiers are configured (removal in v1.0)")
 	}
@@ -87,11 +88,15 @@ func warnHTTPNotifierURL(channel, rawURL string) {
 	fmt.Fprintf(os.Stderr, "pgwd: notifier %s uses http:// — prefer https:// for production traffic\n", channel)
 }
 
-// WarnDeprecatedThresholds prints a deprecation warning when legacy thresholds are used.
-func WarnDeprecatedThresholds(cfg *config.Config) {
-	if cfg.ThresholdTotal > 0 || cfg.ThresholdActive > 0 {
-		fmt.Fprintln(os.Stderr, "pgwd: -db-threshold-total and -db-threshold-active are deprecated and will be removed in v1.0.0; use -db-threshold-levels instead (e.g. -db-threshold-levels 75,85,95)")
+// ValidateRemovedThresholdEnv rejects removed threshold env vars.
+func ValidateRemovedThresholdEnv() error {
+	if _, ok := os.LookupEnv("PGWD_DB_THRESHOLD_TOTAL"); ok {
+		return fmt.Errorf("pgwd: PGWD_DB_THRESHOLD_TOTAL was removed in v1.0; use PGWD_DB_THRESHOLD_LEVELS (e.g. 75,85,95)")
 	}
+	if _, ok := os.LookupEnv("PGWD_DB_THRESHOLD_ACTIVE"); ok {
+		return fmt.Errorf("pgwd: PGWD_DB_THRESHOLD_ACTIVE was removed in v1.0; use PGWD_DB_THRESHOLD_LEVELS (e.g. 75,85,95)")
+	}
+	return nil
 }
 
 // ValidateDatabases checks databases config when UsesDatabases.

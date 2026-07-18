@@ -134,41 +134,6 @@ func TestStateAndThresholdFromEvents(t *testing.T) {
 	}
 }
 
-func TestApplySingleThresholdDefaults(t *testing.T) {
-	tests := []struct {
-		name       string
-		percent    int
-		maxConn    int
-		initTotal  int
-		initActive int
-		wantTotal  int
-		wantActive int
-	}{
-		{"80% of 100", 80, 100, 0, 0, 80, 80},
-		{"50% of 200", 50, 200, 0, 0, 100, 100},
-		{"percent clamped to 1", 0, 100, 0, 0, 1, 1},
-		{"percent clamped to 100", 150, 100, 0, 0, 100, 100},
-		{"partial: total set", 80, 100, 50, 0, 50, 80},
-		{"partial: active set", 80, 100, 0, 60, 80, 60},
-		{"both set: no change", 80, 100, 90, 70, 90, 70},
-		{"maxConn 1 → min 1", 80, 1, 0, 0, 1, 1},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := &config.Config{
-				DefaultThresholdPercent: tt.percent,
-				ThresholdTotal:          tt.initTotal,
-				ThresholdActive:         tt.initActive,
-			}
-			ApplySingleThresholdDefaults(cfg, tt.maxConn)
-			if cfg.ThresholdTotal != tt.wantTotal || cfg.ThresholdActive != tt.wantActive {
-				t.Errorf("ApplySingleThresholdDefaults: got total=%d active=%d, want total=%d active=%d",
-					cfg.ThresholdTotal, cfg.ThresholdActive, tt.wantTotal, tt.wantActive)
-			}
-		})
-	}
-}
-
 func TestValidateThresholdConfig(t *testing.T) {
 	errServer := errors.New("server error")
 	tests := []struct {
@@ -180,8 +145,8 @@ func TestValidateThresholdConfig(t *testing.T) {
 	}{
 		{"dry-run: no error", &config.Config{DryRun: true}, 0, nil, false},
 		{"force-notification: no error", &config.Config{ForceNotification: true}, 0, nil, false},
-		{"has threshold total: no error", &config.Config{ThresholdTotal: 10}, 100, nil, false},
-		{"has threshold active: no error", &config.Config{ThresholdActive: 5}, 100, nil, false},
+		{"has idle threshold: no error", &config.Config{ThresholdIdle: 10}, 100, nil, false},
+		{"has stale threshold: no error", &config.Config{ThresholdStale: 5, StaleAge: 60}, 100, nil, false},
 		{"level mode + maxConn 0 + no server err: error", &config.Config{ThresholdLevels: "75,85,95"}, 0, nil, true},
 		{"level mode + maxConn 0 + server err: error", &config.Config{ThresholdLevels: "75,85,95"}, 0, errServer, true},
 		{"no thresholds + maxConn 0: error", &config.Config{}, 0, nil, true},
@@ -245,46 +210,6 @@ func TestCollectLevelModeEvent(t *testing.T) {
 			}
 			if ev.Level != tt.wantLevel {
 				t.Errorf("CollectLevelModeEvent: Level = %q, want %q", ev.Level, tt.wantLevel)
-			}
-		})
-	}
-}
-
-func TestCollectExplicitThresholdEvents(t *testing.T) {
-	cfg := &config.Config{ThresholdTotal: 80, ThresholdActive: 50}
-	base := notify.Event{Cluster: "c", Client: "x"}
-
-	tests := []struct {
-		name       string
-		stats      postgres.ConnectionStats
-		maxConn    int
-		wantCount  int
-		wantTotal  bool
-		wantActive bool
-	}{
-		{"below both", postgres.ConnectionStats{Total: 50, Active: 30, Idle: 20}, 100, 0, false, false},
-		{"total exceeded", postgres.ConnectionStats{Total: 90, Active: 30, Idle: 60}, 100, 1, true, false},
-		{"active exceeded", postgres.ConnectionStats{Total: 50, Active: 60, Idle: 0}, 100, 1, false, true},
-		{"both exceeded", postgres.ConnectionStats{Total: 90, Active: 60, Idle: 30}, 100, 2, true, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			events := CollectExplicitThresholdEvents(base, cfg, tt.stats, tt.maxConn)
-			if len(events) != tt.wantCount {
-				t.Errorf("CollectExplicitThresholdEvents: got %d events, want %d", len(events), tt.wantCount)
-			}
-			hasTotal, hasActive := false, false
-			for _, e := range events {
-				if e.Threshold == "total" {
-					hasTotal = true
-				}
-				if e.Threshold == "active" {
-					hasActive = true
-				}
-			}
-			if hasTotal != tt.wantTotal || hasActive != tt.wantActive {
-				t.Errorf("CollectExplicitThresholdEvents: total=%v active=%v, want total=%v active=%v",
-					hasTotal, hasActive, tt.wantTotal, tt.wantActive)
 			}
 		})
 	}

@@ -20,11 +20,11 @@ type fileConfigDB struct {
 	StaleAge                int    `yaml:"stale_age"`
 	DefaultThresholdPercent int    `yaml:"default_threshold_percent"`
 	Threshold               struct {
-		Active int    `yaml:"active"`
+		Active *int   `yaml:"active"`
 		Idle   int    `yaml:"idle"`
 		Levels string `yaml:"levels"`
 		Stale  int    `yaml:"stale"`
-		Total  int    `yaml:"total"`
+		Total  *int   `yaml:"total"`
 	} `yaml:"threshold"`
 	LongQueryMinSeconds      int `yaml:"long_query_min_seconds"`
 	LongQueryCooldownSeconds int `yaml:"long_query_cooldown_seconds"`
@@ -135,6 +135,11 @@ func FromFile(path string) (Config, bool, error) {
 	if err := yaml.Unmarshal(data, &fc); err != nil {
 		return Config{}, false, err
 	}
+	for _, d := range fc.Databases {
+		if d.Threshold.Total != nil || d.Threshold.Active != nil {
+			return Config{}, false, fmt.Errorf(`threshold.total and threshold.active were removed in v1.0; use threshold.levels (e.g. "75,85,95")`)
+		}
+	}
 	if fc.RemovedDB != nil {
 		return Config{}, false, fmt.Errorf("config key 'db:' was removed in v1.0; use 'databases:' with one entry — see contrib/pgwd.conf.example")
 	}
@@ -225,8 +230,6 @@ func mergeDBTarget(baseClient string, base, over fileConfigDB) DatabaseTarget {
 		Client:                   over.Client,
 		StaleAge:                 orZero(over.StaleAge, base.StaleAge),
 		DefaultThresholdPercent:  orZero(over.DefaultThresholdPercent, base.DefaultThresholdPercent),
-		ThresholdTotal:           orZero(over.Threshold.Total, base.Threshold.Total),
-		ThresholdActive:          orZero(over.Threshold.Active, base.Threshold.Active),
 		ThresholdIdle:            orZero(over.Threshold.Idle, base.Threshold.Idle),
 		ThresholdStale:           orZero(over.Threshold.Stale, base.Threshold.Stale),
 		ThresholdLevels:          orEmpty(over.Threshold.Levels, base.Threshold.Levels),

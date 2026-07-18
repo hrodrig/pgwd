@@ -14,7 +14,6 @@ This document is the source of truth for **observable behavior** and test expect
 - Database targets: single-DB (`-db-url`) or multi-DB (`databases:` in config).
 - Kubernetes: optional **port-forward** to Postgres via `-kube-postgres` (client-go; kubeconfig required, no kubectl binary). Also optional **port-forward to Loki** via `-kube-loki`.
 - Thresholds:
-  - **Explicit** — `-db-threshold-total` / `-db-threshold-active` / `-db-threshold-idle` / `-db-threshold-stale`
   - **3-tier level mode** — `-db-threshold-levels` (default `75,85,95`): attention, alert, danger.
   - **Long-running query alerts** — `-db-long-query-min-seconds` (requires a metrics store for cooldown).
 - Notifications: **Slack** Incoming Webhook, **Loki** push API (with org ID, bearer token, kube port-forward), **PagerDuty** Events v2, **Microsoft Teams** incoming webhook, **generic webhook** (custom headers, HMAC, JSON template). Shared HTTP retry/backoff for all outbound notifier calls.
@@ -162,7 +161,7 @@ When `databases:` is non-empty in the config file, each entry is one Postgres ta
 | `client` | string | `base_client + "-" + dbname` | Monitor identity. Must be unique across entries when same DB name appears on different hosts (SQLite keys on `(client, cluster, database)`). |
 | `stale_age` | int | `config.StaleAge` | Seconds. 0 = no stale detection. |
 | `default_threshold_percent` | int | `config.DefaultThresholdPercent` | 1-100. |
-| `threshold_total`, `threshold_active`, `threshold_idle`, `threshold_stale` | int | Config-level values | Per-target override. |
+| `threshold_idle`, `threshold_stale` | int | Config-level values | Per-target override. |
 | `threshold_levels` | string | Config-level value | e.g. `75,85,95`. |
 | `long_query_min_seconds` | int | Config-level value | 0 = disabled. |
 | `long_query_cooldown_seconds` | int | Config-level value | Default 3600 when min is set. |
@@ -185,8 +184,6 @@ When `databases:` is non-empty in the config file, each entry is one Postgres ta
 | `kube.loki_local_port` | int | `3100` | |
 | `kube.loki_remote_port` | int | `3100` | |
 | `client` | string | — | **Required.** Monitor identity label. |
-| `databases[].threshold.total` | int | 0 | **Deprecated** (v1.0) — use `threshold.levels`. |
-| `databases[].threshold.active` | int | 0 | **Deprecated** (v1.0) — use `threshold.levels`. |
 | `databases[].threshold.idle` | int | 0 | |
 | `databases[].stale_age` | int | 0 | Seconds. |
 | `databases[].threshold.stale` | int | 0 | |
@@ -300,7 +297,7 @@ All config keys map to `PGWD_<UPPER_SNAKE>` equivalents. Notifier env vars:
 5. If `-kube-loki`, start port-forward, set `LokiURL` to `localhost:port`
 6. Connect to Postgres
 7. Query `max_connections`
-8. Apply threshold defaults from `-db-default-threshold-percent` (when not in level mode)
+8. Evaluate level mode, idle, stale, and long-query alerts
 9. If `-force-notification`, send test event to all notifiers
 10. Enter daemon loop or run once
 
@@ -317,8 +314,8 @@ Queried from `pg_stat_activity`:
 
 1. **Stale connections** — if `threshold_stale > 0` and `stale_age > 0`
 2. **Long-running queries** — if `long_query_min_seconds > 0` (requires metrics store; cooldown per target)
-3. **Level mode** — if both `threshold_total` and `threshold_active` are 0 and `threshold_levels` is valid: evaluate percentages against `max_connections`
-4. **Explicit thresholds** — total, active, idle individual comparisons
+3. **Level mode** — if `threshold_levels` is valid: evaluate percentages against `max_connections`
+4. **Idle** — if `threshold_idle > 0`
 5. **Force notification** — always emits a `test` event when `-force-notification` is set (and connected)
 
 ### Hysteresis (confirm-alert / confirm-ok)
@@ -357,8 +354,6 @@ When Postgres connection fails:
 | `connect_failure` | Postgres connect error (non-53300) |
 | `too_many_clients` | Postgres SQLSTATE 53300 |
 | `resolution` | Threshold clear after confirm_ok |
-| `total` | Total connections ≥ threshold-total |
-| `active` | Active connections ≥ threshold-active |
 | `idle` | Idle connections ≥ threshold-idle |
 | `stale` | Stale connections ≥ threshold-stale |
 | `long_query` | Long-running queries ≥ min count |

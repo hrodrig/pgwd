@@ -21,7 +21,7 @@ func setEnv(key, value string) func() {
 func TestFromEnv_Defaults(t *testing.T) {
 	// Clear pgwd-related env so we get real defaults
 	prefixes := []string{"PGWD_DB_URL", "PGWD_KUBE_POSTGRES", "PGWD_KUBE_LOKI", "PGWD_KUBE_LOCAL_PORT", "PGWD_KUBE_LOKI_LOCAL_PORT", "PGWD_KUBE_LOKI_REMOTE_PORT", "PGWD_KUBE_PASSWORD_VAR", "PGWD_KUBE_PASSWORD_CONTAINER",
-		"PGWD_DB_THRESHOLD_TOTAL", "PGWD_DB_THRESHOLD_ACTIVE", "PGWD_DB_THRESHOLD_IDLE",
+		"PGWD_DB_THRESHOLD_IDLE",
 		"PGWD_DB_STALE_AGE", "PGWD_DB_THRESHOLD_STALE", "PGWD_NOTIFICATIONS_SLACK_WEBHOOK", "PGWD_NOTIFICATIONS_LOKI_URL", "PGWD_NOTIFICATIONS_LOKI_LABELS", "PGWD_NOTIFICATIONS_LOKI_ORG_ID", "PGWD_NOTIFICATIONS_LOKI_BEARER_TOKEN",
 		"PGWD_INTERVAL", "PGWD_DRY_RUN", "PGWD_FORCE_NOTIFICATION", "PGWD_NOTIFY_ON_CONNECT_FAILURE", "PGWD_DB_DEFAULT_THRESHOLD_PERCENT", "PGWD_VALIDATE_K8S_ACCESS"}
 	for _, p := range prefixes {
@@ -31,8 +31,8 @@ func TestFromEnv_Defaults(t *testing.T) {
 	if cfg.DBURL != "" {
 		t.Errorf("DBURL default: got %q", cfg.DBURL)
 	}
-	if cfg.ThresholdTotal != 0 || cfg.ThresholdActive != 0 || cfg.ThresholdIdle != 0 {
-		t.Errorf("threshold defaults: total=%d active=%d idle=%d", cfg.ThresholdTotal, cfg.ThresholdActive, cfg.ThresholdIdle)
+	if cfg.ThresholdIdle != 0 {
+		t.Errorf("threshold defaults: idle=%d", cfg.ThresholdIdle)
 	}
 	if cfg.Interval != 0 {
 		t.Errorf("Interval default: got %d", cfg.Interval)
@@ -55,17 +55,12 @@ func TestFromEnv_ValidateK8sAccess(t *testing.T) {
 
 func TestFromEnv_Values(t *testing.T) {
 	defer setEnv("PGWD_DB_URL", "postgres://localhost/mydb")()
-	defer setEnv("PGWD_DB_THRESHOLD_TOTAL", "90")()
-	defer setEnv("PGWD_DB_THRESHOLD_ACTIVE", "50")()
 	defer setEnv("PGWD_INTERVAL", "120")()
 	defer setEnv("PGWD_DB_DEFAULT_THRESHOLD_PERCENT", "70")()
 	defer setEnv("PGWD_DRY_RUN", "true")()
 	cfg := FromEnv()
 	if cfg.DBURL != "postgres://localhost/mydb" {
 		t.Errorf("DBURL: got %q", cfg.DBURL)
-	}
-	if cfg.ThresholdTotal != 90 || cfg.ThresholdActive != 50 {
-		t.Errorf("thresholds: total=%d active=%d", cfg.ThresholdTotal, cfg.ThresholdActive)
 	}
 	if cfg.Interval != 120 {
 		t.Errorf("Interval: got %d", cfg.Interval)
@@ -85,12 +80,10 @@ func TestHasAnyThreshold(t *testing.T) {
 		want bool
 	}{
 		{"none", Config{}, false},
-		{"total", Config{ThresholdTotal: 80}, true},
-		{"active", Config{ThresholdActive: 50}, true},
 		{"idle", Config{ThresholdIdle: 40}, true},
 		{"stale", Config{ThresholdStale: 1}, true},
-		{"level mode", Config{ThresholdTotal: 0, ThresholdActive: 0, ThresholdLevels: "75,85,95"}, true},
-		{"all", Config{ThresholdTotal: 1, ThresholdActive: 1, ThresholdIdle: 1, ThresholdStale: 1}, true},
+		{"level mode", Config{ThresholdLevels: "75,85,95"}, true},
+		{"all", Config{ThresholdIdle: 1, ThresholdStale: 1}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -137,11 +130,9 @@ func TestUsesLevelMode(t *testing.T) {
 		c    Config
 		want bool
 	}{
-		{Config{ThresholdTotal: 0, ThresholdActive: 0, ThresholdLevels: "75,85,95"}, true},
-		{Config{ThresholdTotal: 80, ThresholdActive: 0, ThresholdLevels: "75,85,95"}, false},
-		{Config{ThresholdTotal: 0, ThresholdActive: 50, ThresholdLevels: "75,85,95"}, false},
-		{Config{ThresholdTotal: 0, ThresholdActive: 0, ThresholdLevels: "75,85"}, false},
-		{Config{ThresholdTotal: 0, ThresholdActive: 0, ThresholdLevels: ""}, false},
+		{Config{ThresholdLevels: "75,85,95"}, true},
+		{Config{ThresholdLevels: "75,85"}, false},
+		{Config{ThresholdLevels: ""}, false},
 	}
 	for _, tt := range tests {
 		if got := tt.c.UsesLevelMode(); got != tt.want {
@@ -178,17 +169,14 @@ func TestHasAnyNotifier(t *testing.T) {
 func TestOverrideWith(t *testing.T) {
 	c := Config{
 		DBURL:                   "postgres://old",
-		ThresholdTotal:          10,
+		ThresholdIdle:           10,
 		SlackWebhook:            "https://old",
 		DefaultThresholdPercent: 80,
 	}
 	db := "postgres://new"
-	total := 20
 	percent := 90
 	c.OverrideWith(struct {
 		DBURL                   *string
-		ThresholdTotal          *int
-		ThresholdActive         *int
 		ThresholdIdle           *int
 		StaleAge                *int
 		ThresholdStale          *int
@@ -201,13 +189,10 @@ func TestOverrideWith(t *testing.T) {
 		DefaultThresholdPercent *int
 		ThresholdLevels         *string
 	}{
-		DBURL: &db, ThresholdTotal: &total, DefaultThresholdPercent: &percent,
+		DBURL: &db, DefaultThresholdPercent: &percent,
 	})
 	if c.DBURL != "postgres://new" {
 		t.Errorf("DBURL after override: got %q", c.DBURL)
-	}
-	if c.ThresholdTotal != 20 {
-		t.Errorf("ThresholdTotal after override: got %d", c.ThresholdTotal)
 	}
 	if c.DefaultThresholdPercent != 90 {
 		t.Errorf("DefaultThresholdPercent after override: got %d", c.DefaultThresholdPercent)
@@ -268,8 +253,6 @@ func TestApplyEnv_Kube(t *testing.T) {
 }
 
 func TestApplyEnv_Thresholds(t *testing.T) {
-	t.Setenv("PGWD_DB_THRESHOLD_TOTAL", "100")
-	t.Setenv("PGWD_DB_THRESHOLD_ACTIVE", "50")
 	t.Setenv("PGWD_DB_THRESHOLD_IDLE", "30")
 	t.Setenv("PGWD_DB_STALE_AGE", "3600")
 	t.Setenv("PGWD_DB_THRESHOLD_STALE", "5")
@@ -279,12 +262,6 @@ func TestApplyEnv_Thresholds(t *testing.T) {
 	var cfg Config
 	ApplyEnv(&cfg)
 
-	if cfg.ThresholdTotal != 100 {
-		t.Errorf("ThresholdTotal: got %d", cfg.ThresholdTotal)
-	}
-	if cfg.ThresholdActive != 50 {
-		t.Errorf("ThresholdActive: got %d", cfg.ThresholdActive)
-	}
 	if cfg.ThresholdIdle != 30 {
 		t.Errorf("ThresholdIdle: got %d", cfg.ThresholdIdle)
 	}
@@ -497,17 +474,17 @@ func TestApplyEnv_LogLevelNormalized(t *testing.T) {
 
 func TestApplyEnv_DoesNotOverrideUnsetVars(t *testing.T) {
 	cfg := Config{
-		DBURL:          "postgres://keep-me",
-		ThresholdTotal: 42,
-		SlackWebhook:   "https://keep",
+		DBURL:         "postgres://keep-me",
+		ThresholdIdle: 42,
+		SlackWebhook:  "https://keep",
 	}
 	ApplyEnv(&cfg)
 
 	if cfg.DBURL != "postgres://keep-me" {
 		t.Errorf("DBURL should be preserved when env unset: got %q", cfg.DBURL)
 	}
-	if cfg.ThresholdTotal != 42 {
-		t.Errorf("ThresholdTotal should be preserved: got %d", cfg.ThresholdTotal)
+	if cfg.ThresholdIdle != 42 {
+		t.Errorf("ThresholdIdle should be preserved: got %d", cfg.ThresholdIdle)
 	}
 	if cfg.SlackWebhook != "https://keep" {
 		t.Errorf("SlackWebhook should be preserved: got %q", cfg.SlackWebhook)
@@ -681,8 +658,6 @@ func TestTargets_SingleDBMode(t *testing.T) {
 		Client:                  "prod-monitor",
 		StaleAge:                300,
 		DefaultThresholdPercent: 80,
-		ThresholdTotal:          100,
-		ThresholdActive:         50,
 		ThresholdIdle:           20,
 		ThresholdStale:          3,
 		ThresholdLevels:         "75,85,95",
@@ -704,12 +679,6 @@ func TestTargets_SingleDBMode(t *testing.T) {
 	}
 	if tgt.DefaultThresholdPercent != cfg.DefaultThresholdPercent {
 		t.Errorf("DefaultThresholdPercent: got %d", tgt.DefaultThresholdPercent)
-	}
-	if tgt.ThresholdTotal != cfg.ThresholdTotal {
-		t.Errorf("ThresholdTotal: got %d", tgt.ThresholdTotal)
-	}
-	if tgt.ThresholdActive != cfg.ThresholdActive {
-		t.Errorf("ThresholdActive: got %d", tgt.ThresholdActive)
 	}
 	if tgt.ThresholdIdle != cfg.ThresholdIdle {
 		t.Errorf("ThresholdIdle: got %d", tgt.ThresholdIdle)
@@ -794,8 +763,6 @@ func TestConfigForTarget(t *testing.T) {
 		Client:                  "base-client",
 		StaleAge:                100,
 		DefaultThresholdPercent: 80,
-		ThresholdTotal:          50,
-		ThresholdActive:         25,
 		ThresholdIdle:           10,
 		ThresholdStale:          2,
 		ThresholdLevels:         "75,85,95",
@@ -811,8 +778,6 @@ func TestConfigForTarget(t *testing.T) {
 		Client:                   "target-client",
 		StaleAge:                 600,
 		DefaultThresholdPercent:  90,
-		ThresholdTotal:           200,
-		ThresholdActive:          100,
 		ThresholdIdle:            50,
 		ThresholdStale:           10,
 		ThresholdLevels:          "60,70,80",
@@ -828,8 +793,6 @@ func TestConfigForTarget(t *testing.T) {
 	assertStrField(t, "Client", got.Client, target.Client)
 	assertIntField(t, "StaleAge", got.StaleAge, target.StaleAge)
 	assertIntField(t, "DefaultThresholdPercent", got.DefaultThresholdPercent, target.DefaultThresholdPercent)
-	assertIntField(t, "ThresholdTotal", got.ThresholdTotal, target.ThresholdTotal)
-	assertIntField(t, "ThresholdActive", got.ThresholdActive, target.ThresholdActive)
 	assertIntField(t, "ThresholdIdle", got.ThresholdIdle, target.ThresholdIdle)
 	assertIntField(t, "ThresholdStale", got.ThresholdStale, target.ThresholdStale)
 	assertStrField(t, "ThresholdLevels", got.ThresholdLevels, target.ThresholdLevels)

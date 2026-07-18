@@ -92,6 +92,32 @@ interval: 60
 	}
 }
 
+func TestFromFile_RemovedThresholdsRejected(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "pgwd.conf")
+	content := `
+client: monitor-01
+interval: 60
+databases:
+  - url: postgres://user:pass@host:5432/prod
+    threshold:
+      total: 80
+`
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, loaded, err := FromFile(path)
+	if err == nil {
+		t.Fatal("expected error for removed threshold.total")
+	}
+	if loaded {
+		t.Error("expected loaded=false on error")
+	}
+	if !strings.Contains(err.Error(), "threshold.total and threshold.active were removed in v1.0") {
+		t.Errorf("error %q should mention removed threshold fields", err)
+	}
+}
+
 func TestFromFile_DatabasesSingle(t *testing.T) {
 	// Canonical single-DB: databases with one entry (no deprecated db).
 	dir := t.TempDir()

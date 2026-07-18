@@ -233,7 +233,7 @@ func TestDoRunCheck_levelMode(t *testing.T) {
 	}
 }
 
-func TestApplyThresholdDefaults_explicit(t *testing.T) {
+func TestApplyThresholdDefaults_levelMode(t *testing.T) {
 	ctx := context.Background()
 	q := &fakeQuerier{
 		queryRow: func(_ context.Context, _ string, _ ...any) pgx.Row {
@@ -243,7 +243,7 @@ func TestApplyThresholdDefaults_explicit(t *testing.T) {
 			}}
 		},
 	}
-	cfg := &config.Config{ThresholdTotal: 150}
+	cfg := &config.Config{ThresholdLevels: "75,85,95"}
 	if err := ApplyThresholdDefaults(ctx, q, cfg); err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +325,7 @@ func TestDoRunCheck_staleThreshold(t *testing.T) {
 func TestDoRunCheck_idleThreshold(t *testing.T) {
 	ctx := context.Background()
 	q := statsQuerierMock(100, 10, 10, 20, 0, 0)
-	cfg := &config.Config{ThresholdIdle: 5, ThresholdTotal: 1000, ThresholdActive: 1000}
+	cfg := &config.Config{ThresholdIdle: 5}
 	res, err := DoRunCheck(ctx, q, cfg, "", "c", "", "db")
 	if err != nil {
 		t.Fatal(err)

@@ -291,6 +291,21 @@ func TestValidate_Integration(t *testing.T) {
 	}
 }
 
+func TestValidateRemovedThresholdEnv(t *testing.T) {
+	t.Run("total", func(t *testing.T) {
+		t.Setenv("PGWD_DB_THRESHOLD_TOTAL", "80")
+		if err := ValidateRemovedThresholdEnv(); err == nil || !strings.Contains(err.Error(), "PGWD_DB_THRESHOLD_TOTAL") {
+			t.Fatalf("expected removed total env error, got %v", err)
+		}
+	})
+	t.Run("active", func(t *testing.T) {
+		t.Setenv("PGWD_DB_THRESHOLD_ACTIVE", "50")
+		if err := ValidateRemovedThresholdEnv(); err == nil || !strings.Contains(err.Error(), "PGWD_DB_THRESHOLD_ACTIVE") {
+			t.Fatalf("expected removed active env error, got %v", err)
+		}
+	})
+}
+
 func TestWarnNotifierTLS(t *testing.T) {
 	r, w, _ := os.Pipe()
 	old := os.Stderr

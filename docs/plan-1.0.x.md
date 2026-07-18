@@ -14,19 +14,19 @@
 
 | Removed | Replacement |
 |---------|-------------|
-| `-db-threshold-total` / `-db-threshold-active` | `-db-threshold-levels` (3-tier, default `75,85,95`) |
+| `-db-threshold-levels` | `75,85,95` (3-tier default) |
 | `-notify-on-connect-failure` flag | Always-on when notifiers configured |
 | `PGWD_NOTIFY_ON_CONNECT_FAILURE` env var | Always-on |
 | Config key `notify_on_connect_failure` | Removed |
 | `db:` config key (single-DB) | `databases:` array (even for one target) |
-| Legacy flag names `-threshold-total` / `-threshold-active` | Removed (if any alias remains) |
+| Legacy flag names `-threshold-total` / `-threshold-active` | Removed |
 
 **Already removed in 0.9.x (not 1.0):** `DISCOVER_MY_PASSWORD`, `-kube-password-var`, `-kube-password-container`, `GetPasswordFromPod` / `pods/exec`. Migration: [kubernetes-passwords.md](./kubernetes-passwords.md).
 
 ### Migration
 
 - Single-DB: wrap existing `db:` block as one `databases:` entry (see [UPGRADE-0.5-to-0.6.md](./UPGRADE-0.5-to-0.6.md) patterns; add 1.0 section or new `UPGRADE-0.9-to-1.0.md`)
-- Explicit total/active thresholds: switch to `-db-threshold-levels` or `-db-threshold-idle` / `-db-threshold-stale` as needed
+- Use `-db-threshold-levels`, `-db-threshold-idle`, or `-db-threshold-stale` as needed
 
 ---
 

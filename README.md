@@ -78,7 +78,7 @@ Go CLI that checks PostgreSQL connection counts (active/idle) and notifies via *
 # See all options
 pgwd -h
 
-# Minimal: check once, alert to Slack (3-tier levels 75/85/95% by default; or use -db-default-threshold-percent)
+# Minimal: check once, alert to Slack (3-tier levels 75/85/95% by default)
 pgwd -db-url "postgres://user:pass@localhost:5432/mydb" \
      -notifications-slack-webhook "https://hooks.slack.com/services/..."
 
@@ -92,8 +92,8 @@ If you use CLI flags or env vars for notifications or DB thresholds, update your
 
 | Old | New |
 |-----|-----|
-| `-threshold-total` | `-db-threshold-total` |
-| `-threshold-active` | `-db-threshold-active` |
+| `-threshold-total` | removed; use `-db-threshold-levels` |
+| `-threshold-active` | removed; use `-db-threshold-levels` |
 | `-threshold-idle` | `-db-threshold-idle` |
 | `-threshold-stale` | `-db-threshold-stale` |
 | `-threshold-levels` | `-db-threshold-levels` |
@@ -109,8 +109,8 @@ If you use CLI flags or env vars for notifications or DB thresholds, update your
 | `PGWD_LOKI_LABELS` | `PGWD_NOTIFICATIONS_LOKI_LABELS` |
 | `PGWD_LOKI_ORG_ID` | `PGWD_NOTIFICATIONS_LOKI_ORG_ID` |
 | `PGWD_LOKI_BEARER_TOKEN` | `PGWD_NOTIFICATIONS_LOKI_BEARER_TOKEN` |
-| `PGWD_THRESHOLD_TOTAL` | `PGWD_DB_THRESHOLD_TOTAL` |
-| `PGWD_THRESHOLD_ACTIVE` | `PGWD_DB_THRESHOLD_ACTIVE` |
+| `PGWD_THRESHOLD_TOTAL` | removed; use `PGWD_DB_THRESHOLD_LEVELS` |
+| `PGWD_THRESHOLD_ACTIVE` | removed; use `PGWD_DB_THRESHOLD_LEVELS` |
 | `PGWD_THRESHOLD_IDLE` | `PGWD_DB_THRESHOLD_IDLE` |
 | `PGWD_THRESHOLD_STALE` | `PGWD_DB_THRESHOLD_STALE` |
 | `PGWD_THRESHOLD_LEVELS` | `PGWD_DB_THRESHOLD_LEVELS` |
@@ -234,7 +234,7 @@ pgwd -db-threshold-levels 5,10,15 -dry-run
 
 | Threshold | Use when you care about… | Example |
 |-----------|---------------------------|--------|
-| **levels** (3-tier) | % of `max_connections` — attention / alert / danger (default for total/active) | `-db-threshold-levels 75,85,95` (default) or `-db-threshold-levels 70,85,90` |
+| **levels** (3-tier) | % of `max_connections` — attention / alert / danger (default mode) | `-db-threshold-levels 75,85,95` (default) or `-db-threshold-levels 70,85,90` |
 | **idle** | Pool size / connections sitting idle | `-db-threshold-idle 40` |
 | **stale** | Connections open too long (leaks, never closed) | `-db-stale-age 600 -db-threshold-stale 1` |
 
@@ -331,7 +331,7 @@ pgwd -db-url "postgres://..." -notifications-loki-url "http://localhost:3100/lok
 | **Pre-production test** | `-dry-run` and low thresholds to see current counts without sending alerts. |
 | **Validate notifications** | `-force-notification` with Slack/Loki: sends one test message regardless of thresholds. Use one-shot to confirm delivery, format, and how messages look. (If the connection to Postgres fails, pgwd always sends a connect-failure alert when a notifier is configured.) |
 | **Test alerts without low max_connections** | Use `-test-max-connections N` (e.g. 20) with `-force-notification` or low thresholds: thresholds and messages use N as “max_connections”, while stats stay real. Notifications show “(test override)” so total can exceed N. See [docs/testing-alert-levels.md](docs/testing-alert-levels.md) for a procedure to trigger attention/alert/danger against production without changing Postgres config. |
-| **Zero config (use defaults)** | Only set `-db-url` and a notifier; pgwd uses 3-tier levels (75,85,95%) by default. Use `-db-threshold-levels` to customize or `-db-default-threshold-percent` when using explicit thresholds. |
+| **Zero config (use defaults)** | Only set `-db-url` and a notifier; pgwd uses 3-tier levels (75,85,95%) by default. Use `-db-threshold-levels` to customize; `-db-default-threshold-percent` is retained for compatibility only. |
 | **Multiple environments** | Set `PGWD_*` in env per environment; override `-db-url` or `-notifications-loki-labels` per deploy. |
 | **Postgres in Kubernetes** | **pgwd inside K8s:** Use direct URLs (`postgres://...@postgres.namespace.svc.cluster.local:5432/mydb`). **pgwd outside K8s:** Use `-kube-postgres namespace/svc/name`; requires kubeconfig (no kubectl binary). |
 | **Alert when Postgres is unreachable** | If you configure a notifier (Slack/Loki), pgwd **always** sends an alert when the connection fails (e.g. refused, timeout, or "too many clients"). No extra flag needed. |
@@ -592,8 +592,6 @@ All parameters can be set via **config file**, **CLI**, or **environment variabl
 | `-kube-password-container` | `PGWD_KUBE_PASSWORD_CONTAINER` | **Deprecated** (removed 0.9.x). Container name for legacy password discovery. |
 | `-validate-k8s-access` | `PGWD_VALIDATE_K8S_ACCESS` | Validate cluster connectivity and list pods, then exit. Use `-kube-context` to select context. No DB or notifier required. |
 | `-client` | `PGWD_CLIENT` | **Required.** Custom name for this monitor instance (e.g. prod-db-primary). Identifies which monitor sent the alert when multiple instances run. Cluster name is computed from kubeconfig when using `-kube-postgres`; not configurable. |
-| `-db-threshold-total` | `PGWD_DB_THRESHOLD_TOTAL` | Alert when total connections ≥ N. **Deprecated:** use `-db-threshold-levels`; will be removed in v1.0.0. |
-| `-db-threshold-active` | `PGWD_DB_THRESHOLD_ACTIVE` | Alert when active connections ≥ N. **Deprecated:** use `-db-threshold-levels`; will be removed in v1.0.0. |
 | `-db-threshold-idle` | `PGWD_DB_THRESHOLD_IDLE` | Alert when idle connections ≥ N |
 | `-db-stale-age` | `PGWD_DB_STALE_AGE` | Consider connection stale if open longer than N seconds (requires `-db-threshold-stale`) |
 | `-db-threshold-stale` | `PGWD_DB_THRESHOLD_STALE` | Alert when stale connections (open > stale-age) ≥ N |
@@ -626,13 +624,13 @@ All parameters can be set via **config file**, **CLI**, or **environment variabl
 | `-dry-run` | `PGWD_DRY_RUN` | Only print stats, do not send notifications |
 | `-force-notification` | `PGWD_FORCE_NOTIFICATION` | Always send at least one notification: test event when connected (to validate delivery, format, and channel). Requires at least one notifier. (Connection failure is always notified when a notifier is configured, with or without this flag.) |
 | `-notify-on-connect-failure` | `PGWD_NOTIFY_ON_CONNECT_FAILURE` | Legacy: connection failure is **always** notified when a notifier is configured; this flag is no longer required. Kept for backward compatibility; if set, still requires at least one notifier at startup. |
-| `-db-default-threshold-percent` | `PGWD_DB_DEFAULT_THRESHOLD_PERCENT` | When one of total/active is 0, set it to this % of max_connections (1–100). Default: 80. Ignored when using db-threshold-levels mode. |
+| `-db-default-threshold-percent` | `PGWD_DB_DEFAULT_THRESHOLD_PERCENT` | Retained for config compatibility. Default: 80. No longer fills total/active thresholds. |
 | `-db-threshold-levels` | `PGWD_DB_THRESHOLD_LEVELS` | When both total and active are 0: comma-separated percentages for 3-tier alerts (e.g. 75,85,95). Levels: attention (1st), alert (2nd), danger (3rd). Only highest breached level fires. Default: 75,85,95. |
-| `-test-max-connections` | `PGWD_TEST_MAX_CONNECTIONS` | Override server `max_connections` for threshold defaults and display (testing only). When set, defaults and notifications use this value instead of the server’s; stats (total/active/idle) remain real. Notifications show “(test override)” so you can simulate e.g. a low limit and trigger alerts without a real low max_connections. |
+| `-test-max-connections` | `PGWD_TEST_MAX_CONNECTIONS` | Override server `max_connections` for level-mode calculations and display (testing only). When set, notifications use this value instead of the server’s; stats (total/active/idle) remain real. Notifications show “(test override)” so you can simulate e.g. a low limit and trigger alerts without a real low max_connections. |
 
 **Stale connections:** A connection is "stale" if it has been open longer than `stale-age` seconds (based on `backend_start` in `pg_stat_activity`). Use this to detect leaks or connections that are never closed. When using `threshold-stale`, `stale-age` must be set and > 0.
 
-**Default thresholds:** If you do not set `-db-threshold-total` or `-db-threshold-active` (leave both 0), pgwd uses **3-tier level mode** with **`-db-threshold-levels`** (default **75,85,95**). At 75% of max_connections → attention (yellow); at 85% → alert (orange); at 95% → danger (red). Only the highest breached level fires. Use `-db-threshold-levels 70,80,90` to customize. If you set one of total/active explicitly, the other defaults from **`-db-default-threshold-percent`** (default 80). Idle and stale have no default (0 = disabled). The DB user must be able to read `max_connections` (any normal role can).
+**Default thresholds:** pgwd uses **3-tier level mode** with **`-db-threshold-levels`** (default **75,85,95**) unless you choose idle/stale thresholds. At 75% of `max_connections` → attention (yellow); at 85% → alert (orange); at 95% → danger (red). Only the highest breached level fires. Use `-db-threshold-levels 70,80,90` to customize. `-db-default-threshold-percent` is retained for compatibility but no longer fills threshold values. Idle and stale have no default (0 = disabled). The DB user must be able to read `max_connections` (any normal role can).
 
 [↑ Back to top](#top)
 

@@ -94,12 +94,11 @@ func handlePrintSampleConfig() {
 // those sources (see config.FinalizeAfterFlags). When true, the caller should
 // printVersion and exit without starting the monitor.
 func parseFlags(cfg *config.Config) (showVersion bool) {
+	rejectRemovedThresholdFlags()
 	showVersionFlag := flag.Bool("version", false, "print version and exit")
 	configPath := config.ConfigPath()
 	flag.StringVar(&configPath, "config", configPath, "Config file path (PGWD_CONFIG); default /etc/pgwd/pgwd.conf")
 	flag.StringVar(&cfg.DBURL, "db-url", cfg.DBURL, "PostgreSQL connection URL (PGWD_DB_URL)")
-	flag.IntVar(&cfg.ThresholdTotal, "db-threshold-total", cfg.ThresholdTotal, "Alert when total connections >= N (PGWD_DB_THRESHOLD_TOTAL). Deprecated: use -db-threshold-levels; will be removed in v1.0.0.")
-	flag.IntVar(&cfg.ThresholdActive, "db-threshold-active", cfg.ThresholdActive, "Alert when active connections >= N (PGWD_DB_THRESHOLD_ACTIVE). Deprecated: use -db-threshold-levels; will be removed in v1.0.0.")
 	flag.IntVar(&cfg.ThresholdIdle, "db-threshold-idle", cfg.ThresholdIdle, "Alert when idle connections >= N (PGWD_DB_THRESHOLD_IDLE)")
 	flag.IntVar(&cfg.StaleAge, "db-stale-age", cfg.StaleAge, "Consider connection stale if open longer than N seconds (PGWD_DB_STALE_AGE)")
 	flag.IntVar(&cfg.ThresholdStale, "db-threshold-stale", cfg.ThresholdStale, "Alert when stale connections (open > stale-age) >= N (PGWD_DB_THRESHOLD_STALE)")
@@ -134,8 +133,8 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.BoolVar(&cfg.EnableCollector, "enable-collector", cfg.EnableCollector, "Send anonymous usage telemetry on daemon startup (PGWD_ENABLE_COLLECTOR; default false)")
 	flag.BoolVar(&cfg.EnableUpdateCheck, "enable-update-check", cfg.EnableUpdateCheck, "Check GitHub for newer pgwd releases on daemon startup (PGWD_ENABLE_UPDATE_CHECK; default true)")
 	flag.BoolVar(&cfg.ForceNotification, "force-notification", cfg.ForceNotification, "Always send a test notification to validate delivery/format (PGWD_FORCE_NOTIFICATION)")
-	flag.IntVar(&cfg.DefaultThresholdPercent, "db-default-threshold-percent", cfg.DefaultThresholdPercent, "When one of total/active is 0, set it to this % of max_connections (1-100, default 80) (PGWD_DB_DEFAULT_THRESHOLD_PERCENT)")
-	flag.StringVar(&cfg.ThresholdLevels, "db-threshold-levels", cfg.ThresholdLevels, "When both total and active are 0: comma-separated percentages for 3-tier alerts, e.g. 75,85,95 (attention/alert/danger). Only highest level fires. (PGWD_DB_THRESHOLD_LEVELS)")
+	flag.IntVar(&cfg.DefaultThresholdPercent, "db-default-threshold-percent", cfg.DefaultThresholdPercent, "Retained for config compatibility; not used for alerting when -db-threshold-levels is active (PGWD_DB_DEFAULT_THRESHOLD_PERCENT)")
+	flag.StringVar(&cfg.ThresholdLevels, "db-threshold-levels", cfg.ThresholdLevels, "Comma-separated percentages for 3-tier alerts, e.g. 75,85,95 (attention/alert/danger). Only the highest breached level fires. (PGWD_DB_THRESHOLD_LEVELS)")
 	flag.StringVar(&cfg.KubePostgres, "kube-postgres", cfg.KubePostgres, "Connect via port-forward (client-go): namespace/type/name (e.g. default/svc/postgres) (PGWD_KUBE_POSTGRES)")
 	flag.StringVar(&cfg.KubeLoki, "kube-loki", cfg.KubeLoki, "Connect to Loki via port-forward when Loki is inside the cluster: namespace/type/name (e.g. monitoring/svc/loki) (PGWD_KUBE_LOKI)")
 	flag.StringVar(&cfg.KubeContext, "kube-context", cfg.KubeContext, "Kubectl context to use (empty = current context) (PGWD_KUBE_CONTEXT)")
@@ -161,6 +160,17 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 		}
 	}
 	return *showVersionFlag
+}
+
+func rejectRemovedThresholdFlags() {
+	for _, arg := range os.Args[1:] {
+		switch {
+		case strings.HasPrefix(arg, "-db-threshold-total"):
+			log.Fatalf("pgwd: -db-threshold-total was removed in v1.0; use -db-threshold-levels (e.g. -db-threshold-levels 75,85,95)")
+		case strings.HasPrefix(arg, "-db-threshold-active"):
+			log.Fatalf("pgwd: -db-threshold-active was removed in v1.0; use -db-threshold-levels (e.g. -db-threshold-levels 75,85,95)")
+		}
+	}
 }
 
 // validateConfig runs validator.Validate on the merged config (file, env, flags).

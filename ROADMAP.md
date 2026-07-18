@@ -91,7 +91,7 @@ Each band: design → implement → test → `make release-check` → docs → t
 
 | Surface | Replacement |
 |---------|-------------|
-| `-db-threshold-total` / `-db-threshold-active` | `-db-threshold-levels` (default `75,85,95`) |
+| `-db-threshold-levels` | `75,85,95` (default) |
 | `-notify-on-connect-failure` | Always-on when notifiers configured |
 | Config key `db:` | `databases:` (even for one target) |
 | `DISCOVER_MY_PASSWORD` | Already gone in 0.9.x |
