@@ -26,7 +26,7 @@ sequenceDiagram
     opt at least one Send ok
         pgwd->>pgwd: log Notification sent
     end
-    pgwd->>User: log.Fatal("postgres connect failed..."), exit 1
+    pgwd->>User: log "postgres connect failed...", exit 2
 ```
 
 **Slack:** connect_failure is sent with attachment color `danger` (red bar). Threshold-exceeded events use `warning` (yellow bar).

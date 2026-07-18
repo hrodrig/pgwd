@@ -350,7 +350,27 @@ func TestMakeRunFunc_insertsAndRuns(t *testing.T) {
 	}
 	st := &memStore{}
 	fn := MakeRunFunc(ctx, q, cfg, nil, st, "cl", "c", "ns", "db")
-	fn() // dry-run path, no panic
+	out := fn()
+	if out.QueryFailed || out.DeliveryFailed {
+		t.Fatalf("outcome = %+v", out)
+	}
+}
+
+func TestMakeRunFunc_queryFailed(t *testing.T) {
+	ctx := context.Background()
+	q := &fakeQuerier{
+		queryRow: func(context.Context, string, ...any) pgx.Row {
+			return fakeRow{scan: func(...any) error { return errors.New("query boom") }}
+		},
+	}
+	fn := MakeRunFunc(ctx, q, &config.Config{DryRun: true}, nil, nil, "", "c", "", "db")
+	out := fn()
+	if !out.QueryFailed {
+		t.Fatal("want QueryFailed")
+	}
+	if out.DeliveryFailed {
+		t.Fatal("QueryFailed path must not set DeliveryFailed")
+	}
 }
 
 func TestNotificationSentLine_cases(t *testing.T) {

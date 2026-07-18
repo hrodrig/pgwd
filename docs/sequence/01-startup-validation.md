@@ -59,7 +59,7 @@ sequenceDiagram
                 pgwd->>pgwd: log Notification sent
             end
         end
-        pgwd->>User: log.Fatalf, exit 1
+        pgwd->>User: log connect failed, exit 2
     end
     Postgres-->>pgwd: pool
     pgwd->>Postgres: MaxConnections(ctx, pool)

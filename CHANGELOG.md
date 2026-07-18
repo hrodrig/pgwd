@@ -8,6 +8,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ### Added
 
+- **Exit codes 2 and 3:** single-target connect failure exits **2** (after `Ping`); one-shot stats/query failure exits **3**. Daemon mode does not exit on query errors. Exit **4** (`-strict`) unchanged. See SPECIFICATIONS.md § Exit codes.
 - **Brand mark:** [`docs/logo.svg`](docs/logo.svg) (and `docs/logo.png`) — cyan **`pg`** monogram + green live status dot; README header uses the SVG.
 
 ## [0.9.0] - 2026-07-13

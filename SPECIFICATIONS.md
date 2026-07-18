@@ -78,8 +78,8 @@ Documented operator-facing gaps; planned hardening is in [ROADMAP.md](ROADMAP.md
 |------|---------|
 | 0 | Success (no thresholds exceeded, or dry-run, or force-notification delivered, or export complete) |
 | 1 | Config validation error (missing required flags, invalid combo, no notifier + no dry-run) |
-| 2 | Postgres connection failure (or too many clients) after config is valid |
-| 3 | Postgres query error during stats collection |
+| 2 | Postgres connection failure (or too many clients) after config is valid — single-target; multi-DB logs and skips the target |
+| 3 | Postgres query error during stats collection — **one-shot** (`interval == 0`) single-target only; daemon logs and continues |
 | 4 | Notifier delivery failure when **`-strict`** is set (threshold events only) |
 
 ### Persistent flags

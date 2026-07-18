@@ -846,9 +846,19 @@ Using **127.0.0.1** and host port **5433** avoids hitting a local Postgres on 54
 
 ## Behavior and exit
 
-- **One-shot** (`interval` 0 or unset): runs one check, sends alerts if thresholds are exceeded, then exits. Exit code 0 on success; non-zero on fatal errors (e.g. DB connection failure).
-- **Daemon** (`interval` greater than 0): runs every `interval` seconds until interrupted (Ctrl+C or SIGTERM). Exits with 0 after a clean shutdown.
+- **One-shot** (`interval` 0 or unset): runs one check, sends alerts if thresholds are exceeded, then exits.
+- **Daemon** (`interval` greater than 0): runs every `interval` seconds until interrupted (Ctrl+C or SIGTERM). Exits with 0 after a clean shutdown. Query errors during a tick are logged; the process keeps running.
 - **Dry run**: same as above but no HTTP calls to notifiers; only logs stats to stdout.
+
+| Exit | Meaning |
+|------|---------|
+| **0** | Success |
+| **1** | Config validation error |
+| **2** | Postgres connection failure (single-target; multi-DB logs and skips the target) |
+| **3** | Stats/query error — one-shot single-target only |
+| **4** | Notifier delivery failure when **`-strict`** is set |
+
+Full contract: [SPECIFICATIONS.md — Exit codes](SPECIFICATIONS.md#exit-codes).
 
 ## Help
 

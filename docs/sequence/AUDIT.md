@@ -108,7 +108,7 @@ Last audit: 2026-07-13 (0.9.x: DISCOVER removed, `password_from_secret`, collect
 | build connect_failure event (message + run context) | 255–269 `notify.Event{ Threshold: "connect_failure", Cluster, Client, Namespace, Database }` |
 | loop Send to Slack/Loki | 271–278 |
 | opt at least one Send ok → log Notification sent | 279–281 |
-| log.Fatal, exit 1 | 565 `log.Fatal("postgres connect failed...")` (message omits error detail intentionally) |
+| log + exit 2 | `exitConnectFailureIf` / `handleConnectFailure` after Pool or Ping fail (message omits error detail intentionally) |
 
 **Verdict:** Matches.
 

@@ -129,3 +129,17 @@ func TestMain_MissingDBURL(t *testing.T) {
 		t.Errorf("pgwd with missing db url: stderr %q should mention database/db", stderr)
 	}
 }
+
+func TestMain_ConnectFailureExit2(t *testing.T) {
+	_, stderr, code := runBinary(
+		"-client", "exit2-test",
+		"-db-url", "postgres://127.0.0.1:1/nope?sslmode=disable",
+		"-dry-run",
+	)
+	if code != 2 {
+		t.Errorf("connect failure: exit %d, want 2; stderr=%q", code, stderr)
+	}
+	if !strings.Contains(stderr, "postgres connect failed") {
+		t.Errorf("stderr %q should mention connect failed", stderr)
+	}
+}

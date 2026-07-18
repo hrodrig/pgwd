@@ -455,14 +455,19 @@ func TrySendResolutionNotification(ctx context.Context, st store.MetricsStorer, 
 	return failed
 }
 
+// CheckOutcome is returned by MakeRunFunc for -strict and process exit codes.
+type CheckOutcome struct {
+	DeliveryFailed bool
+	QueryFailed    bool
+}
+
 // MakeRunFunc returns the per-interval check closure for one target.
-// The returned func reports whether notifier delivery failed (for -strict).
-func MakeRunFunc(ctx context.Context, pool postgres.Querier, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, cluster, client, ns, db string) func() bool {
-	return func() bool {
+func MakeRunFunc(ctx context.Context, pool postgres.Querier, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, cluster, client, ns, db string) func() CheckOutcome {
+	return func() CheckOutcome {
 		res, err := DoRunCheck(ctx, pool, cfg, cluster, client, ns, db)
 		if err != nil {
 			log.Printf("stats: %v", err)
-			return false
+			return CheckOutcome{QueryFailed: true}
 		}
 		if cfg.DryRun && cfg.LogLevel == "debug" {
 			LogDryRunStats(cluster, client, db, res)
@@ -493,7 +498,7 @@ func MakeRunFunc(ctx context.Context, pool postgres.Querier, cfg *config.Config,
 				}
 			}
 		}
-		return deliveryFailed
+		return CheckOutcome{DeliveryFailed: deliveryFailed}
 	}
 }
 

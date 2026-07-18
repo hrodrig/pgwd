@@ -27,8 +27,15 @@ import (
 	"github.com/hrodrig/pgwd/internal/validator"
 )
 
-// ExitStrictNotify is returned when -strict is set and notifier delivery failed.
-const ExitStrictNotify = 4
+// Process exit codes (see SPECIFICATIONS.md § Exit codes).
+const (
+	ExitConnectFailure = 2 // Postgres connection failure (or too many clients)
+	ExitQueryError     = 3 // Postgres query error during stats collection
+	ExitStrictNotify   = 4 // -strict and notifier delivery failed
+)
+
+// exitFunc is os.Exit; tests may replace it to avoid killing the test process.
+var exitFunc = os.Exit
 
 func init() {
 	run.SetKubeHelpers(kube.ClusterName, kube.ParseKubePostgres)
@@ -453,8 +460,36 @@ func setupHTTPIfConfigured(cfg *config.Config, st store.MetricsStorer) func() {
 func exitStrictIf(cfg *config.Config, deliveryFailed bool) {
 	if cfg.Strict && deliveryFailed {
 		log.Printf("pgwd: strict mode: notifier delivery failed")
-		os.Exit(ExitStrictNotify)
+		exitFunc(ExitStrictNotify)
 	}
+}
+
+// exitConnectFailureIf exits with ExitConnectFailure for single-target connect failure.
+func exitConnectFailureIf(targets []config.DatabaseTarget) {
+	if len(targets) == 1 {
+		log.Printf("postgres connect failed (check database URL, connectivity, and credentials)")
+		exitFunc(ExitConnectFailure)
+	}
+}
+
+// exitQueryErrorIf exits with ExitQueryError on one-shot single-target stats query failure.
+// Daemon mode (interval > 0) logs and continues so a transient query error does not kill the process.
+func exitQueryErrorIf(cfg *config.Config, targets []config.DatabaseTarget, queryFailed bool) {
+	if !queryFailed || cfg.Interval > 0 || len(targets) != 1 {
+		return
+	}
+	log.Printf("postgres stats query failed")
+	exitFunc(ExitQueryError)
+}
+
+// handleConnectFailure notifies (if configured) then exits 2 for single-target, or logs for multi-DB.
+func handleConnectFailure(ctx context.Context, senders []notify.Sender, targetCfg *config.Config, cluster, client, ns, db string, connectErr error, targets []config.DatabaseTarget) {
+	exitStrictIf(targetCfg, run.NotifyConnectFailure(ctx, senders, targetCfg, cluster, client, ns, db, connectErr))
+	if len(targets) == 1 {
+		exitConnectFailureIf(targets)
+		return
+	}
+	log.Printf("postgres connect failed [%s]: %v", client, connectErr)
 }
 
 // runOneTarget connects to one database target, applies threshold defaults, and
@@ -466,22 +501,26 @@ func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Conf
 
 	pool, err := postgres.Pool(ctx, t.URL)
 	if err != nil {
-		exitStrictIf(targetCfg, run.NotifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err))
-		if len(targets) == 1 {
-			log.Fatal("postgres connect failed (check database URL, connectivity, and credentials)")
-		}
-		log.Printf("postgres connect failed [%s]: %v", t.Client, err)
+		handleConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err, targets)
 		return
 	}
 	defer pool.Close()
 
+	// pgxpool.New is lazy; Ping forces a real connection so connect failures map to exit 2.
+	if err := pool.Ping(ctx); err != nil {
+		handleConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err, targets)
+		return
+	}
+
 	if err := run.ApplyThresholdDefaults(ctx, pool, targetCfg); err != nil {
 		exitStrictIf(targetCfg, run.NotifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err))
 		log.Printf("threshold config error [%s]: %v", t.Client, err)
+		exitQueryErrorIf(targetCfg, targets, true)
 		return
 	}
-	runFn := run.MakeRunFunc(ctx, pool, targetCfg, senders, st, runCluster, runClient, runNamespace, runDatabase)
-	exitStrictIf(targetCfg, runFn())
+	outcome := run.MakeRunFunc(ctx, pool, targetCfg, senders, st, runCluster, runClient, runNamespace, runDatabase)()
+	exitStrictIf(targetCfg, outcome.DeliveryFailed)
+	exitQueryErrorIf(targetCfg, targets, outcome.QueryFailed)
 }
 
 // runTickerLoop repeats runOneTarget for every target every cfg.Interval seconds
