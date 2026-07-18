@@ -266,6 +266,92 @@ func TestSQLStore_LatestRecords_queryError(t *testing.T) {
 	}
 }
 
+func TestQueryAllMetrics(t *testing.T) {
+	t.Parallel()
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	rows := sqlmock.NewRows([]string{
+		"id", "ts", "client", "cluster", "namespace", "database",
+		"total", "active", "idle", "stale", "max_connections", "state", "threshold",
+	}).AddRow(1, 1700000000000, "c", "cl", "ns", "db", 10, 2, 8, 0, 100, "ok", "total").
+		AddRow(2, 1700000000001, "c2", nil, nil, nil, 1, 0, 1, 0, 50, "attention", nil)
+	mock.ExpectQuery(`SELECT id, ts, client`).WillReturnRows(rows)
+
+	got, err := queryAllMetrics(context.Background(), db, dialectPostgres)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d", len(got))
+	}
+	if got[0].ID != 1 || got[0].TSMillis != 1700000000000 ||
+		got[0].Client != "c" || got[0].Cluster != "cl" ||
+		got[0].Namespace != "ns" || got[0].Database != "db" ||
+		got[0].Threshold != "total" {
+		t.Fatalf("row0=%+v", got[0])
+	}
+	if got[1].Cluster != "" || got[1].Namespace != "" ||
+		got[1].Database != "" || got[1].Threshold != "" {
+		t.Fatalf("nulls not cleared: %+v", got[1])
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestQueryAllMetrics_QueryError(t *testing.T) {
+	t.Parallel()
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectQuery(`SELECT id, ts, client`).WillReturnError(errors.New("query failed"))
+
+	if _, err := queryAllMetrics(context.Background(), db, dialectMySQL); err == nil {
+		t.Fatal("want query error")
+	}
+}
+
+func TestQueryAllMetrics_ScanError(t *testing.T) {
+	t.Parallel()
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	mock.ExpectQuery(`SELECT id, ts, client`).WillReturnRows(
+		sqlmock.NewRows([]string{"id"}).AddRow(1),
+	)
+
+	if _, err := queryAllMetrics(context.Background(), db, dialectPostgres); err == nil {
+		t.Fatal("want scan error")
+	}
+}
+
+func TestQueryAllMetrics_RowsError(t *testing.T) {
+	t.Parallel()
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows := sqlmock.NewRows([]string{
+		"id", "ts", "client", "cluster", "namespace", "database",
+		"total", "active", "idle", "stale", "max_connections", "state", "threshold",
+	}).AddRow(1, 1700000000000, "c", nil, nil, nil, 1, 0, 1, 0, 10, "ok", nil).
+		RowError(0, errors.New("rows failed"))
+	mock.ExpectQuery(`SELECT id, ts, client`).WillReturnRows(rows)
+
+	if _, err := queryAllMetrics(context.Background(), db, dialectPostgres); err == nil {
+		t.Fatal("want rows error")
+	}
+}
+
 func TestSQLStore_LastStates(t *testing.T) {
 	t.Parallel()
 	db, mock, err := sqlmock.New()
