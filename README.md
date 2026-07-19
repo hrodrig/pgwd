@@ -18,7 +18,6 @@
 [![Go 1.26.5](https://img.shields.io/badge/go-1.26.5-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![pkg.go.dev](https://pkg.go.dev/badge/github.com/hrodrig/pgwd)](https://pkg.go.dev/github.com/hrodrig/pgwd)
-[![Go Report Card](https://goreportcard.com/badge/github.com/hrodrig/pgwd)](https://goreportcard.com/report/github.com/hrodrig/pgwd)
 [![deps.dev](https://img.shields.io/badge/deps.dev-go%20module-blue)](https://deps.dev/go/github.com/hrodrig/pgwd)
 [![DEV.to](https://img.shields.io/badge/DEV.to-Article-0A0A0A?logo=dev.to)](https://dev.to/hrodrig/pgwd-a-watchdog-for-your-postgresql-connections-1pjg)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/hrodrig/pgwd)

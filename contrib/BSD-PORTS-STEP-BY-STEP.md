@@ -91,8 +91,8 @@ Use when you want to test the port **before** GoReleaser publishes assets.
 
 1. Complete application release: **`make release-check`**, merge **`develop` → `main`**, tag **`v<VERSION>`**, CI/GoReleaser publishes assets.
 2. Confirm on [GitHub Releases](https://github.com/hrodrig/pgwd/releases), for example:
-   - `pgwd_v0.6.7_openbsd_amd64.tar.gz`
-   - `pgwd_v0.6.7_freebsd_amd64.tar.gz`
+   - `pgwd_v1.0.0_openbsd_amd64.tar.gz`
+   - `pgwd_v1.0.0_freebsd_amd64.tar.gz`
    - `.deb`, `.rpm`, Linux archives, container image, etc.
 3. **`gmake port-openbsd-sync`** (and **`port-freebsd-sync`** if needed) on **`main`** or **`develop`** at the released **`VERSION`**.
 4. On each BSD VM: refresh **`/usr/ports/sysutils/pgwd`**, **`make fetch`** (or copy distfile to **`DISTDIR`**), **`make makesum`**, **`make package FETCH_PACKAGES=No`**, **`make install`**.

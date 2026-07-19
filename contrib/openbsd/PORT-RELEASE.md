@@ -95,8 +95,8 @@ Use **BSD `make`** inside **`/usr/ports/sysutils/pgwd`**, not **`gmake`** from t
 
 ```sh
 cd /usr/ports/sysutils/pgwd
-ver=$(make -V PKGNAME | sed 's/^pgwd-//')    # e.g. 0.6.7
-dist=$(make -V DISTFILES)                     # e.g. pgwd_v0.6.7_openbsd_amd64.tar.gz
+ver=$(make -V PKGNAME | sed 's/^pgwd-//')    # e.g. 1.0.0
+dist=$(make -V DISTFILES)                     # e.g. pgwd_v1.0.0_openbsd_amd64.tar.gz
 echo "PKGNAME=$ver DISTFILES=$dist"
 ```
 
@@ -234,7 +234,7 @@ rcctl enable pgwd
 ```sh
 mkdir -p /etc/pgwd
 cp /usr/local/share/examples/pgwd/pgwd.conf.example /etc/pgwd/pgwd.conf
-vi /etc/pgwd/pgwd.conf    # db.url, client, notifications, etc.
+vi /etc/pgwd/pgwd.conf    # databases[].url, client, notifications, etc.
 
 rcctl start pgwd
 rcctl check pgwd          # expect pgwd(ok)
@@ -256,7 +256,7 @@ make test-platforms-ping PLATFORM=pgwd-openbsd
 make test-platforms PLATFORM=pgwd-openbsd
 ```
 
-Set **`pgwd_version`** in **`testing/platforms/inventory/hosts.yml`** to match the release (e.g. **`0.6.7`**) or use **`pgwd_local_package`** pointing at **`dist/pgwd_v...tar.gz`**.
+Set **`pgwd_version`** in **`testing/platforms/inventory/hosts.yml`** to match the release (e.g. **`1.0.0`**) or use **`pgwd_local_package`** pointing at **`dist/pgwd_v...tar.gz`**.
 
 ### B8. Port vs tarball (rc.d location)
 
@@ -268,7 +268,7 @@ Set **`pgwd_version`** in **`testing/platforms/inventory/hosts.yml`** to match t
 ### B9. Lab shortcut (no full ports tree)
 
 ```sh
-doas sh /tmp/pgwd-port/test-install-from-dist.sh /tmp/pgwd_v0.6.7_openbsd_amd64.tar.gz /tmp/pgwd-port
+doas sh /tmp/pgwd-port/test-install-from-dist.sh /tmp/pgwd_v1.0.0_openbsd_amd64.tar.gz /tmp/pgwd-port
 ```
 
 Useful for debugging **do-install** layout; **not** a substitute for **B5** before submitting the port.
