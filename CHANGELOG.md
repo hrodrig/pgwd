@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ## [Unreleased]
 
+### Security
+
+- **Dependencies:** bump transitive `golang.org/x/text` to **v0.39.0** ([GO-2026-5970](https://pkg.go.dev/vuln/GO-2026-5970) — infinite loop on invalid input).
+
+### Docs
+
+- **README:** fix deps.dev badge URL encoding; drop retired Go Report Card badge; sync BSD port examples to 1.0.0.
+
 ## [1.0.0] - 2026-07-18
 
 Stable API release: remove remaining pre-1.0 config/flag surface, document exit codes **2**/**3**, and ship operator positioning docs (compare, upgrade, connection-limits).
