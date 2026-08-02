@@ -1,10 +1,10 @@
 # pgwd roadmap
 
-**Current release:** [v1.0.0](VERSION) (ready on `develop`; tag from `main` after `make release-check`) · **Branch:** `develop`
+**Current release:** [v1.0.1](VERSION) (ready on `develop`; tag from `main` after `make release-check`) · **Branch:** `develop`
 
-**Status (2026-07-18):** **v1.0.0** ready — breaking stable API + compare / upgrade / connection-limits docs. Distro packaging continues in **1.x** (not a hard tag gate).
+**Status (2026-08-01):** **v1.0.1** ready — `golang.org/x/text` security bump + README/man/ports docs. Stable API remains **v1.0.0**. Distro packaging continues in **1.x** (not a hard tag gate).
 
-This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md) (v1.0.0). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md).
+This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md) (v1.0.0 contract; patch **v1.0.1**). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md).
 
 ---
 

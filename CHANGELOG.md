@@ -6,13 +6,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-08-01
+
 ### Security
 
 - **Dependencies:** bump transitive `golang.org/x/text` to **v0.39.0** ([GO-2026-5970](https://pkg.go.dev/vuln/GO-2026-5970) — infinite loop on invalid input).
 
 ### Docs
 
-- **README:** fix deps.dev badge URL encoding; drop retired Go Report Card badge; sync BSD port examples to 1.0.0.
+- **README:** fix deps.dev badge URL encoding; drop retired Go Report Card badge; sync BSD port / install examples to **1.0.1**; expand post-badge nav to family header pattern (Spec · Operator · Changelog · Roadmap · Article).
+- **man(1):** `.TH` date/version → **pgwd v1.0.1**.
 
 ## [1.0.0] - 2026-07-18
 
@@ -507,7 +510,8 @@ Pre-1.0 security and operator polish: removes insecure Kubernetes password disco
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/hrodrig/pgwd/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/hrodrig/pgwd/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/hrodrig/pgwd/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/hrodrig/pgwd/compare/v0.7.0...v0.8.0
