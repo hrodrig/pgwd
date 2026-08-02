@@ -2,6 +2,6 @@
 # Shared defaults for all platform test hosts.
 # Override in hosts.yml or per-host vars as needed.
 
-pgwd_version: "1.0.0"
+pgwd_version: "1.0.1"
 pgwd_release_url: "https://github.com/hrodrig/pgwd/releases/download/v{{ pgwd_version }}"
 notification_mock_port: 9999

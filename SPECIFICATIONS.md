@@ -116,7 +116,7 @@ When **`interval > 0`** (daemon mode), pgwd may run **once per process start**:
 
 ```json
 {
-  "version": "1.0.0",
+  "version": "1.0.1",
   "commit": "abc1234",
   "build_date": "2026-07-18T12:00:00Z",
   "hash": "a1b2c3d4e5f67890",
