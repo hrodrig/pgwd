@@ -22,7 +22,7 @@
 [![DEV.to](https://img.shields.io/badge/DEV.to-Article-0A0A0A?logo=dev.to)](https://dev.to/hrodrig/pgwd-a-watchdog-for-your-postgresql-connections-1pjg)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/hrodrig/pgwd)
 
-**Repo:** [github.com/hrodrig/pgwd](https://github.com/hrodrig/pgwd) · **Releases:** [Releases](https://github.com/hrodrig/pgwd/releases)
+**Repo:** [github.com/hrodrig/pgwd](https://github.com/hrodrig/pgwd) · **Releases:** [GitHub Releases](https://github.com/hrodrig/pgwd/releases) · **Spec:** [SPECIFICATIONS.md](SPECIFICATIONS.md) · **Operator:** [pgwd-selfhosted](https://github.com/hrodrig/pgwd-selfhosted) · **Changelog:** [CHANGELOG.md](CHANGELOG.md) · **Roadmap:** [ROADMAP.md](ROADMAP.md) · **Article:** [pgwd on DEV — a watchdog for your PostgreSQL connections](https://dev.to/hrodrig/pgwd-a-watchdog-for-your-postgresql-connections-1pjg)
 
 **Supply chain (from v0.8.0):** each release attaches **SPDX** and **CycloneDX** SBOMs plus **Cosign** signatures for **`checksums.txt`** and **`ghcr.io/hrodrig/pgwd`** images — see [Supply chain verification](#supply-chain-verification).
 
