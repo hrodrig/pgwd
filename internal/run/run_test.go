@@ -419,6 +419,39 @@ func TestMakeRunFunc_insertsAndRuns(t *testing.T) {
 	}
 }
 
+func TestMakeRunFunc_suppressesSecondTickSameSeverity(t *testing.T) {
+	ctx := context.Background()
+	q := statsQuerierMock(100, 80, 10, 90, 0, 0) // 90% → alert
+	cfg := &config.Config{ThresholdLevels: "75,85,95"}
+	s := &fakeSender{}
+	fn := MakeRunFunc(ctx, q, cfg, []notify.Sender{s}, nil, "cl", "c", "ns", "db")
+	if out := fn(); out.QueryFailed {
+		t.Fatalf("first tick: %+v", out)
+	}
+	if s.n != 1 {
+		t.Fatalf("first tick: Send n=%d, want 1", s.n)
+	}
+	if out := fn(); out.QueryFailed {
+		t.Fatalf("second tick: %+v", out)
+	}
+	if s.n != 1 {
+		t.Fatalf("second tick same severity: Send n=%d, want 1 (latched)", s.n)
+	}
+}
+
+func TestMakeRunFunc_repeatWhileFiringSendsEveryTick(t *testing.T) {
+	ctx := context.Background()
+	q := statsQuerierMock(100, 80, 10, 90, 0, 0)
+	cfg := &config.Config{ThresholdLevels: "75,85,95", RepeatWhileFiring: true}
+	s := &fakeSender{}
+	fn := MakeRunFunc(ctx, q, cfg, []notify.Sender{s}, nil, "cl", "c", "ns", "db")
+	fn()
+	fn()
+	if s.n != 2 {
+		t.Fatalf("repeat_while_firing: Send n=%d, want 2", s.n)
+	}
+}
+
 func TestMakeRunFunc_queryFailed(t *testing.T) {
 	ctx := context.Background()
 	q := &fakeQuerier{
