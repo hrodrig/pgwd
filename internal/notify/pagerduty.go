@@ -22,6 +22,7 @@ type PagerDuty struct {
 type pagerDutyEnvelope struct {
 	RoutingKey  string           `json:"routing_key"`
 	EventAction string           `json:"event_action"`
+	DedupKey    string           `json:"dedup_key,omitempty"`
 	Payload     pagerDutyPayload `json:"payload"`
 }
 
@@ -33,7 +34,7 @@ type pagerDutyPayload struct {
 	CustomDetails map[string]any `json:"custom_details"`
 }
 
-// Send posts a trigger event to PagerDuty.
+// Send posts a trigger or resolve event to PagerDuty Events API v2.
 func (p *PagerDuty) Send(ctx context.Context, ev Event) error {
 	ts := time.Now().UTC().Format(time.RFC3339)
 	summary := ev.Message
@@ -46,7 +47,8 @@ func (p *PagerDuty) Send(ctx context.Context, ev Event) error {
 	}
 	body, err := json.Marshal(pagerDutyEnvelope{
 		RoutingKey:  p.RoutingKey,
-		EventAction: "trigger",
+		EventAction: pagerDutyEventAction(ev),
+		DedupKey:    pagerDutyDedupKey(ev),
 		Payload: pagerDutyPayload{
 			Summary:       summary,
 			Source:        source,
@@ -66,6 +68,36 @@ func (p *PagerDuty) Send(ctx context.Context, ev Event) error {
 		return fmt.Errorf("pagerduty: %w", err)
 	}
 	return nil
+}
+
+func pagerDutyEventAction(ev Event) string {
+	if ev.Threshold == "resolution" {
+		return "resolve"
+	}
+	return "trigger"
+}
+
+// pagerDutyDedupKey builds a stable Events API v2 dedup_key for one target/problem class.
+// Resolution uses the connections key so the open incident auto-closes.
+func pagerDutyDedupKey(ev Event) string {
+	seg := func(s string) string {
+		if s == "" {
+			return "_"
+		}
+		return s
+	}
+	suffix := "connections"
+	switch ev.Threshold {
+	case "long_query":
+		suffix = "long_query"
+	case "connect_failure", "too_many_clients":
+		suffix = "connect"
+	case "test":
+		suffix = "test"
+	case "resolution":
+		suffix = "connections"
+	}
+	return fmt.Sprintf("pgwd:%s:%s:%s:%s", seg(ev.Client), seg(ev.Cluster), seg(ev.Database), suffix)
 }
 
 func pagerDutySeverity(ev Event, defaultSeverity string) string {
