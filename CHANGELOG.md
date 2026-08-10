@@ -6,6 +6,24 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-10
+
+Incident hygiene for on-call: PagerDuty incident lifecycle and quieter threshold alerts by default.
+
+### Added
+
+- **PagerDuty:** stable `dedup_key` per target/problem class; `event_action: resolve` on resolution (auto-close incidents).
+- **Config:** `notifications.repeat_while_firing` / `-notifications-repeat-while-firing` / `PGWD_NOTIFICATIONS_REPEAT_WHILE_FIRING` to restore per-interval threshold spam.
+
+### Changed
+
+- **Alert repeat:** by default, connection-threshold notifiers fire on transition, escalation, and de-escalation only — not every interval while the bad state persists. Set `repeat_while_firing: true` for v1.0 behavior.
+
+### Docs
+
+- **ROADMAP:** band **1.1.x** + [docs/plan-1.1.x.md](docs/plan-1.1.x.md); SPEC/man/example synced for latch and PagerDuty resolve.
+- **README / ports:** version badge and install examples → **1.1.0**; FreeBSD/OpenBSD port Makefiles synced from `VERSION`.
+
 ## [1.0.1] - 2026-08-01
 
 ### Security
@@ -510,7 +528,8 @@ Pre-1.0 security and operator polish: removes insecure Kubernetes password disco
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/hrodrig/pgwd/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/hrodrig/pgwd/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/hrodrig/pgwd/compare/v0.9.0...v1.0.0
 [0.9.0]: https://github.com/hrodrig/pgwd/compare/v0.8.0...v0.9.0

@@ -127,6 +127,7 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	flag.IntVar(&cfg.RetryMaxAttempts, "notifications-retry-max-attempts", cfg.RetryMaxAttempts, "Notifier HTTP retry max attempts (PGWD_NOTIFICATIONS_RETRY_MAX_ATTEMPTS; default 3)")
 	retryInitialBackoff := flag.String("notifications-retry-initial-backoff", "", "Notifier HTTP retry initial backoff, e.g. 1s (PGWD_NOTIFICATIONS_RETRY_INITIAL_BACKOFF; default 1s)")
 	retryMaxBackoff := flag.String("notifications-retry-max-backoff", "", "Notifier HTTP retry max backoff, e.g. 10s (PGWD_NOTIFICATIONS_RETRY_MAX_BACKOFF; default 10s)")
+	flag.BoolVar(&cfg.RepeatWhileFiring, "notifications-repeat-while-firing", cfg.RepeatWhileFiring, "Re-send threshold alerts every interval while bad state persists; default off = transition/escalation only (PGWD_NOTIFICATIONS_REPEAT_WHILE_FIRING)")
 	flag.IntVar(&cfg.Interval, "interval", cfg.Interval, "Run every N seconds; 0 = run once (PGWD_INTERVAL)")
 	flag.BoolVar(&cfg.DryRun, "dry-run", cfg.DryRun, "Only print, do not send notifications (PGWD_DRY_RUN)")
 	flag.BoolVar(&cfg.Strict, "strict", cfg.Strict, "Exit 4 when notifier delivery fails for a threshold event (PGWD_STRICT)")

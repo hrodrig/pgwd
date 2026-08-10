@@ -90,6 +90,9 @@ func TestPagerDutySend_Success(t *testing.T) {
 	if gotBody.RoutingKey != "rk-test" || gotBody.EventAction != "trigger" {
 		t.Errorf("envelope: %+v", gotBody)
 	}
+	if gotBody.DedupKey != "pgwd:_:prod:_:test" {
+		t.Errorf("dedup_key = %q, want pgwd:_:prod:_:test", gotBody.DedupKey)
+	}
 	if gotBody.Payload.Source != "pgwd-test" || gotBody.Payload.Severity != "info" {
 		t.Errorf("payload: %+v", gotBody.Payload)
 	}

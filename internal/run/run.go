@@ -387,6 +387,63 @@ func ApplyHysteresisFilter(ctx context.Context, st store.MetricsStorer, cfg *con
 	return filtered
 }
 
+func severityRank(state string) int {
+	switch state {
+	case "attention":
+		return 1
+	case "alert":
+		return 2
+	case "danger":
+		return 3
+	case "connect_failure":
+		return 4
+	default:
+		return 0 // ok / empty
+	}
+}
+
+func isConnectionThresholdEvent(threshold string) bool {
+	switch threshold {
+	case "total", "active", "idle", "stale":
+		return true
+	default:
+		return false
+	}
+}
+
+// ApplyFiringRepeatFilter suppresses connection-threshold alerts while the same
+// severity persists. Escalation and de-escalation notify; repeat_while_firing restores v1.0 spam.
+// Severity is derived from connection-threshold events only so long_query/connect_failure do not skew the latch.
+func ApplyFiringRepeatFilter(cfg *config.Config, prevState string, events []notify.Event) []notify.Event {
+	if cfg == nil || cfg.RepeatWhileFiring || len(events) == 0 {
+		return events
+	}
+	if prevState == "" || prevState == "ok" {
+		return events
+	}
+	var thrEv []notify.Event
+	for _, e := range events {
+		if isConnectionThresholdEvent(e.Threshold) {
+			thrEv = append(thrEv, e)
+		}
+	}
+	if len(thrEv) == 0 {
+		return events
+	}
+	cur, _ := checker.StateAndThresholdFromEvents(thrEv)
+	if severityRank(cur) != severityRank(prevState) {
+		return events
+	}
+	var out []notify.Event
+	for _, e := range events {
+		if isConnectionThresholdEvent(e.Threshold) {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
 // ApplyLongQueryCooldownFilter drops long_query events within the cooldown window.
 func ApplyLongQueryCooldownFilter(ctx context.Context, st store.MetricsStorer, cfg *config.Config, client, cluster, db string, events []notify.Event) []notify.Event {
 	if cfg.LongQueryMinSeconds <= 0 || st == nil {
@@ -456,8 +513,52 @@ type CheckOutcome struct {
 	QueryFailed    bool
 }
 
+func previousFiringState(ctx context.Context, st store.MetricsStorer, client, cluster, db, memPrev string) string {
+	if st == nil {
+		return memPrev
+	}
+	last, err := st.LastStates(ctx, client, cluster, db, 1)
+	if err != nil || len(last) == 0 {
+		return memPrev
+	}
+	return last[0]
+}
+
+func filterCheckEvents(ctx context.Context, st store.MetricsStorer, cfg *config.Config, client, cluster, db, memPrev string, events []notify.Event) (filtered []notify.Event, state, thr, nextMemPrev string) {
+	statePre, _ := checker.StateAndThresholdFromEvents(events)
+	events = ApplyHysteresisFilter(ctx, st, cfg, client, cluster, db, statePre, events)
+	events = ApplyLongQueryCooldownFilter(ctx, st, cfg, client, cluster, db, events)
+	// Persist actual check severity before the firing latch drops duplicate alerts.
+	state, thr = checker.StateAndThresholdFromEvents(events)
+	prev := previousFiringState(ctx, st, client, cluster, db, memPrev)
+	filtered = ApplyFiringRepeatFilter(cfg, prev, events)
+	return filtered, state, thr, state
+}
+
+func persistCheckAndMaybeResolve(ctx context.Context, st store.MetricsStorer, cfg *config.Config, senders []notify.Sender, res RunCheckResult, cluster, client, ns, db, state, thr string, deliveryFailed bool) bool {
+	if st == nil {
+		return deliveryFailed
+	}
+	rec := store.Record{
+		Client: client, Cluster: cluster, Namespace: ns, Database: db,
+		Total: res.Stats.Total, Active: res.Stats.Active, Idle: res.Stats.Idle, Stale: res.StaleCountForStore,
+		MaxConnections: res.MaxConn, State: state, Threshold: thr,
+	}
+	if err := st.Insert(ctx, rec); err != nil {
+		log.Printf("store insert: %v", err)
+		return deliveryFailed
+	}
+	if state == "ok" {
+		if TrySendResolutionNotification(ctx, st, cfg, senders, res, cluster, client, ns, db) {
+			return true
+		}
+	}
+	return deliveryFailed
+}
+
 // MakeRunFunc returns the per-interval check closure for one target.
 func MakeRunFunc(ctx context.Context, pool postgres.Querier, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, cluster, client, ns, db string) func() CheckOutcome {
+	var memPrevState string
 	return func() CheckOutcome {
 		res, err := DoRunCheck(ctx, pool, cfg, cluster, client, ns, db)
 		if err != nil {
@@ -467,10 +568,8 @@ func MakeRunFunc(ctx context.Context, pool postgres.Querier, cfg *config.Config,
 		if cfg.DryRun && cfg.LogLevel == "debug" {
 			LogDryRunStats(cluster, client, db, res)
 		}
-		statePre, _ := checker.StateAndThresholdFromEvents(res.Events)
-		res.Events = ApplyHysteresisFilter(ctx, st, cfg, client, cluster, db, statePre, res.Events)
-		res.Events = ApplyLongQueryCooldownFilter(ctx, st, cfg, client, cluster, db, res.Events)
-		state, thr := checker.StateAndThresholdFromEvents(res.Events)
+		var state, thr string
+		res.Events, state, thr, memPrevState = filterCheckEvents(ctx, st, cfg, client, cluster, db, memPrevState, res.Events)
 		sent, deliveryFailed := SendEvents(ctx, senders, cfg, res.Events)
 		if sent["long_query"] && st != nil {
 			if cd, ok := st.(store.AlertCooldownRecorder); ok {
@@ -479,20 +578,7 @@ func MakeRunFunc(ctx context.Context, pool postgres.Querier, cfg *config.Config,
 				}
 			}
 		}
-		if st != nil {
-			rec := store.Record{
-				Client: client, Cluster: cluster, Namespace: ns, Database: db,
-				Total: res.Stats.Total, Active: res.Stats.Active, Idle: res.Stats.Idle, Stale: res.StaleCountForStore,
-				MaxConnections: res.MaxConn, State: state, Threshold: thr,
-			}
-			if err := st.Insert(ctx, rec); err != nil {
-				log.Printf("store insert: %v", err)
-			} else if state == "ok" {
-				if TrySendResolutionNotification(ctx, st, cfg, senders, res, cluster, client, ns, db) {
-					deliveryFailed = true
-				}
-			}
-		}
+		deliveryFailed = persistCheckAndMaybeResolve(ctx, st, cfg, senders, res, cluster, client, ns, db, state, thr, deliveryFailed)
 		return CheckOutcome{DeliveryFailed: deliveryFailed}
 	}
 }

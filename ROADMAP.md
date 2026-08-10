@@ -1,10 +1,10 @@
 # pgwd roadmap
 
-**Current release:** [v1.0.1](VERSION) (ready on `develop`; tag from `main` after `make release-check`) · **Branch:** `develop`
+**Current release:** [v1.1.0](VERSION) (ready on `develop`; tag from `main` after `make release-check`) · **Branch:** `develop`
 
-**Status (2026-08-01):** **v1.0.1** ready — `golang.org/x/text` security bump + README/man/ports docs. Stable API remains **v1.0.0**. Distro packaging continues in **1.x** (not a hard tag gate).
+**Status (2026-08-10):** **v1.1.0** ready — incident hygiene (PagerDuty `dedup_key`/`resolve` + threshold anti-spam latch). Stable API remains **v1.0.0** (+ additive 1.1 keys). Distro packaging continues in **1.x** (not a hard tag gate).
 
-This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md) (v1.0.0 contract; patch **v1.0.1**). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md).
+This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md) (v1.0.0 contract; **v1.1.0** latch/PagerDuty). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md) → [docs/plan-1.1.x.md](docs/plan-1.1.x.md).
 
 ---
 
@@ -19,9 +19,11 @@ This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md]
 ```mermaid
 flowchart LR
   A["0.6.10 ✅"] --> B["0.7.0 ✅"]
-  B --> C["0.8.0 ✅ ready"]
+  B --> C["0.8.0 ✅"]
   C --> D["0.9.0 ✅"]
-  D --> E["1.0.0 ✅ ready"]
+  D --> E["1.0.0 ✅"]
+  E --> F["1.0.1 ✅"]
+  F --> G["1.1.0 ✅ ready"]
 ```
 
 | Band | Status | Target | Theme | Plan |
@@ -31,6 +33,8 @@ flowchart LR
 | **0.8.0** | ✅ Ready (v0.8.0) | Jul 2026 | Syft SBOM + Cosign keyless signing (GHCR + release artifacts) | [plan-0.8.x.md](docs/plan-0.8.x.md) · [CHANGELOG](CHANGELOG.md#080---2026-07-11) |
 | **0.9.x** | ✅ Ready (v0.9.0) | Jul 2026 | Pre-1.0 polish, DISCOVER removal, profiles, `--strict`, collector, SPEC audit | [plan-0.9.x.md](docs/plan-0.9.x.md) · [CHANGELOG](CHANGELOG.md#090---2026-07-13) |
 | **1.0.0** | ✅ Ready (v1.0.0) | Jul 2026 | Breaking stable API, compare docs, **start official distro packaging** | [plan-1.0.x.md](docs/plan-1.0.x.md) · [CHANGELOG](CHANGELOG.md#100---2026-07-18) |
+| **1.0.1** | ✅ Shipped | Aug 2026 | `golang.org/x/text` security bump + docs | [CHANGELOG](CHANGELOG.md#101---2026-08-01) |
+| **1.1.x** | ✅ Ready (v1.1.0) | Aug 2026 | Incident hygiene: PagerDuty dedup/resolve + threshold anti-spam latch | [plan-1.1.x.md](docs/plan-1.1.x.md) · [CHANGELOG](CHANGELOG.md#110---2026-08-10) |
 
 **Suggested calendar** (from band plans — **slip OK**; 0.7.x started 2026-07-02):
 
@@ -40,7 +44,9 @@ flowchart LR
 | Jul 3 | v0.7.0 ✅ |
 | Jul 11 | v0.8.0 ✅ |
 | Jul 13 | v0.9.0 ✅ |
-| Jul 18 | v1.0.0 ✅ ready (tag from `main` after gates) |
+| Jul 18 | v1.0.0 ✅ |
+| Aug 1 | v1.0.1 ✅ |
+| Aug 10 | v1.1.0 ✅ ready (tag from `main` after gates) |
 
 Each band: design → implement → test → `make release-check` → docs → tag from `main`.
 
@@ -128,6 +134,21 @@ Acceptance timelines are external (reviewers, freeze windows) — **not** a hard
 
 → [plan-1.0.x.md](docs/plan-1.0.x.md)
 
+### 1.1.x — incident hygiene (on-call ready) ✅ (v1.1.0 ready)
+
+Theme from 2026-08-09 multi-auditor review: product gap is **sustained-outage noise**, not code craft.
+
+| Item | Notes |
+|------|--------|
+| **PagerDuty `dedup_key` + `resolve`** ✅ | Stable key per target/problem; resolution uses `event_action: resolve` (not `trigger`+`info`) |
+| **Threshold anti-spam latch** ✅ | Default: notify on transition / escalation / de-escalation only; escape hatch `notifications.repeat_while_firing` |
+| **SPEC fix** ✅ | Known Limitations row corrected; latch + PagerDuty resolve documented |
+| **Doc drift (C5)** | Partial — man/example/SPEC done; OCI/nfpm one-liners may still say “Slack/Loki” only (follow-up) |
+
+**Not in 1.1.x:** Dependabot, `slog`, cli split, per-DB kube, new channels — see Post-1.0 / later minors.
+
+→ [plan-1.1.x.md](docs/plan-1.1.x.md) · [CHANGELOG](CHANGELOG.md#110---2026-08-10)
+
 ---
 
 ## Shipped history (0.4 → 0.7.0)
@@ -144,6 +165,9 @@ Acceptance timelines are external (reviewers, freeze windows) — **not** a hard
 | 0.7.0 | Jul 2026 | PagerDuty, Teams, generic webhook, HTTP retry |
 | 0.8.0 | Jul 2026 | Syft SBOM, Cosign signing, supply chain docs |
 | 0.9.0 | Jul 2026 | DISCOVER removed, profiles, strict, collector, metrics/CSV hardening, operator docs |
+| 1.0.0 | Jul 2026 | Stable API; compare/upgrade docs; distro packaging started |
+| 1.0.1 | Aug 2026 | `golang.org/x/text` security bump |
+| 1.1.0 | Aug 2026 | PagerDuty dedup/resolve; threshold alert latch |
 
 Full detail: [CHANGELOG.md](CHANGELOG.md).
 
@@ -159,6 +183,8 @@ Full detail: [CHANGELOG.md](CHANGELOG.md).
 | **Multi-DB + kube** | `-kube-postgres` not supported with `databases:` until per-db kube exists (post-1.0) |
 | **Connect failure alerts** | Always sent when notifiers configured (no extra flag) |
 | **HTTP `/metrics` privacy** | Opt-in token/basic auth (0.9.x); default anonymous in-cluster scrape; operator controls bind/network |
+| **Alert repeat (1.1.x)** | Default: transition/escalation/de-escalation only; `notifications.repeat_while_firing` restores per-interval spam |
+| **PagerDuty incidents (1.1.x)** | Stable `dedup_key` + `resolve` on resolution (one connections incident per target) |
 
 ---
 
@@ -176,12 +202,18 @@ See [SPECIFICATIONS.md §2](SPECIFICATIONS.md#2-scope).
 
 ## Post-1.0 (ideas, not committed)
 
+**Shipped:** [1.1.x incident hygiene](docs/plan-1.1.x.md) (dedup/resolve + latch) in **v1.1.0**.
+
+Still ideas (not scheduled):
+
 - Per-database `kube.postgres` in `databases:`
 - Additional Prometheus series or OpenMetrics (today: text exposition on HTTP `/metrics`)
 - Discord, email, additional channels via same notifier pattern as 0.7.x
+- Structured logging (`slog`) — audit Band C
+- Dependabot/Renovate + pin CI tool versions — audit Band B
 - Finish / expand **official distro** coverage if any 1.x submissions still pending (see [plan-1.0.x.md](docs/plan-1.0.x.md) § Distro packaging)
 
-Track via GitHub issues after 1.0.0.
+Track via GitHub issues; promote to a band plan when scheduled.
 
 ---
 
@@ -192,7 +224,7 @@ Track via GitHub issues after 1.0.0.
 | **ROADMAP.md** (this file) | Where we are, where we go, band index |
 | **[SPECIFICATIONS.md](SPECIFICATIONS.md)** | Observable behavior contract for **shipped** code (v1.0.0) |
 | **[CHANGELOG.md](CHANGELOG.md)** | What actually shipped per version |
-| **[docs/plan-0.7.x.md](docs/plan-0.7.x.md) … [plan-1.0.x.md](docs/plan-1.0.x.md)** | Implementation checklists per band |
+| **[docs/plan-0.7.x.md](docs/plan-0.7.x.md) … [plan-1.1.x.md](docs/plan-1.1.x.md)** | Implementation checklists per band |
 | **[docs/use-cases.md](docs/use-cases.md)** | Operator scenario matrix (single/multi DB, K8s, credentials) |
 | **[docs/compare.md](docs/compare.md)** | pgwd vs postgres_exporter, pgwatch, hosted APM, cloud alarms, DIY cron |
 | **[docs/kubernetes-passwords.md](docs/kubernetes-passwords.md)** | K8s credentials + DISCOVER migration |

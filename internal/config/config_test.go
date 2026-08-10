@@ -285,6 +285,7 @@ func TestApplyEnv_Notifiers(t *testing.T) {
 	t.Setenv("PGWD_NOTIFICATIONS_LOKI_LABELS", "env=prod,app=pgwd")
 	t.Setenv("PGWD_NOTIFICATIONS_LOKI_ORG_ID", "tenant-1")
 	t.Setenv("PGWD_NOTIFICATIONS_LOKI_BEARER_TOKEN", "secret-token")
+	t.Setenv("PGWD_NOTIFICATIONS_REPEAT_WHILE_FIRING", "true")
 
 	var cfg Config
 	ApplyEnv(&cfg)
@@ -303,6 +304,9 @@ func TestApplyEnv_Notifiers(t *testing.T) {
 	}
 	if cfg.LokiBearerToken != "secret-token" {
 		t.Errorf("LokiBearerToken: got %q", cfg.LokiBearerToken)
+	}
+	if !cfg.RepeatWhileFiring {
+		t.Error("RepeatWhileFiring: expected true")
 	}
 }
 
