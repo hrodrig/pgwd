@@ -150,6 +150,9 @@ Initial retry backoff, e.g. 1s. Env: PGWD_NOTIFICATIONS_RETRY_INITIAL_BACKOFF.
 .BR \-notifications\-retry\-max\-backoff " \fIduration\fR"
 Max retry backoff, e.g. 10s. Env: PGWD_NOTIFICATIONS_RETRY_MAX_BACKOFF.
 .TP
+.BR \-notifications\-repeat\-while\-firing
+Re-send connection-threshold alerts every interval while the bad state persists (v1.0 behavior). Default off: notify on transition, escalation, and de-escalation only. Env: PGWD_NOTIFICATIONS_REPEAT_WHILE_FIRING.
+.TP
 .BR \-interval " \fIN\fR"
 Run every N seconds; 0 = run once. Env: PGWD_INTERVAL.
 .TP

@@ -113,6 +113,7 @@ type fileConfig struct {
 			InitialBackoff string `yaml:"initial_backoff"`
 			MaxBackoff     string `yaml:"max_backoff"`
 		} `yaml:"retry"`
+		RepeatWhileFiring bool `yaml:"repeat_while_firing"`
 	} `yaml:"notifications"`
 }
 
@@ -211,6 +212,7 @@ func fileConfigToConfig(fc fileConfig) Config {
 		RetryMaxAttempts:         fc.Notifications.Retry.MaxAttempts,
 		RetryInitialBackoff:      parseDurationOrZero(fc.Notifications.Retry.InitialBackoff),
 		RetryMaxBackoff:          parseDurationOrZero(fc.Notifications.Retry.MaxBackoff),
+		RepeatWhileFiring:        fc.Notifications.RepeatWhileFiring,
 	}
 
 	if len(fc.Databases) > 0 {

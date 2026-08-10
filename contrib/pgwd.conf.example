@@ -215,3 +215,6 @@ notifications:
     max_attempts: 3
     initial_backoff: 1s
     max_backoff: 10s
+  # Re-send connection-threshold alerts every interval while the bad state persists (v1.0 spam).
+  # Default false: notify on enter / escalation / de-escalation only.
+  # repeat_while_firing: false

@@ -122,6 +122,10 @@ type Config struct {
 	ConfirmAlert int // consecutive "bad" checks before sending alert (default 1)
 	ConfirmOk    int // consecutive "ok" checks before resolution notification (default 1)
 
+	// RepeatWhileFiring: when true, re-send connection-threshold alerts every interval while the bad
+	// state persists (v1.0 behavior). Default false: notify on transition, escalation, and de-escalation only.
+	RepeatWhileFiring bool
+
 	LoadedFromFile           bool   // set when config was loaded from YAML file
 	EnableCollector          bool   // opt-in anonymous daemon telemetry (default false)
 	EnableUpdateCheck        bool   // opt-out GitHub release check (default true when unset)
@@ -339,6 +343,9 @@ func applyEnvNotifiers(cfg *Config) {
 	applyEnvTeams(cfg)
 	applyEnvGenericWebhook(cfg)
 	applyEnvNotifyRetry(cfg)
+	if _, ok := os.LookupEnv("PGWD_NOTIFICATIONS_REPEAT_WHILE_FIRING"); ok {
+		cfg.RepeatWhileFiring = envBool("NOTIFICATIONS_REPEAT_WHILE_FIRING", false)
+	}
 }
 
 func applyEnvBehaviour(cfg *Config) {
@@ -408,6 +415,7 @@ func FromEnv() Config {
 		SqliteStaleAge:           envInt("SQLITE_STALE_AGE", 0),
 		ConfirmAlert:             envInt("CONFIRM_ALERT", 1),
 		ConfirmOk:                envInt("CONFIRM_OK", 1),
+		RepeatWhileFiring:        envBool("NOTIFICATIONS_REPEAT_WHILE_FIRING", false),
 		HTTPListen:               env("HTTP_LISTEN", ""),
 		HTTPBasePath:             env("HTTP_BASE_PATH", ""),
 		HTTPHealthPath:           env("HTTP_HEALTHZ_PATH", ""),

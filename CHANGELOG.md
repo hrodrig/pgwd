@@ -6,6 +6,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ## [Unreleased]
 
+### Added
+
+- **PagerDuty:** stable `dedup_key` per target/problem class; `event_action: resolve` on resolution (auto-close incidents).
+- **Config:** `notifications.repeat_while_firing` / `-notifications-repeat-while-firing` / `PGWD_NOTIFICATIONS_REPEAT_WHILE_FIRING` to restore per-interval threshold spam.
+
+### Changed
+
+- **Alert repeat:** by default, connection-threshold notifiers fire on transition, escalation, and de-escalation only — not every interval while the bad state persists. Set `repeat_while_firing: true` for v1.0 behavior.
+
 ## [1.0.1] - 2026-08-01
 
 ### Security

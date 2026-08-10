@@ -188,6 +188,69 @@ func TestApplyHysteresisFilter_longQueryAlwaysPasses(t *testing.T) {
 	}
 }
 
+func TestApplyFiringRepeatFilter_suppressesSameState(t *testing.T) {
+	cfg := &config.Config{}
+	events := []notify.Event{{Threshold: "total", Level: "alert", Message: "m"}}
+	out := ApplyFiringRepeatFilter(cfg, "alert", events)
+	if len(out) != 0 {
+		t.Fatalf("want suppressed, got %+v", out)
+	}
+}
+
+func TestApplyFiringRepeatFilter_allowsEscalation(t *testing.T) {
+	cfg := &config.Config{}
+	events := []notify.Event{{Threshold: "total", Level: "alert", Message: "m"}}
+	out := ApplyFiringRepeatFilter(cfg, "attention", events)
+	if len(out) != 1 {
+		t.Fatalf("want escalation pass-through, got %d", len(out))
+	}
+}
+
+func TestApplyFiringRepeatFilter_allowsDeescalation(t *testing.T) {
+	cfg := &config.Config{}
+	events := []notify.Event{{Threshold: "total", Level: "attention", Message: "m"}}
+	out := ApplyFiringRepeatFilter(cfg, "alert", events)
+	if len(out) != 1 {
+		t.Fatalf("want de-escalation pass-through, got %d", len(out))
+	}
+}
+
+func TestApplyFiringRepeatFilter_allowsFirstFire(t *testing.T) {
+	cfg := &config.Config{}
+	events := []notify.Event{{Threshold: "total", Level: "alert", Message: "m"}}
+	for _, prev := range []string{"", "ok"} {
+		out := ApplyFiringRepeatFilter(cfg, prev, events)
+		if len(out) != 1 {
+			t.Fatalf("prev=%q: want first fire, got %d", prev, len(out))
+		}
+	}
+}
+
+func TestApplyFiringRepeatFilter_repeatWhileFiringBypass(t *testing.T) {
+	cfg := &config.Config{RepeatWhileFiring: true}
+	events := []notify.Event{{Threshold: "total", Level: "alert", Message: "m"}}
+	out := ApplyFiringRepeatFilter(cfg, "alert", events)
+	if len(out) != 1 {
+		t.Fatalf("want bypass, got %d", len(out))
+	}
+}
+
+func TestApplyFiringRepeatFilter_keepsConnectAndLongQuery(t *testing.T) {
+	cfg := &config.Config{}
+	events := []notify.Event{
+		{Threshold: "total", Level: "alert"},
+		{Threshold: "long_query"},
+		{Threshold: "connect_failure"},
+	}
+	out := ApplyFiringRepeatFilter(cfg, "alert", events)
+	if len(out) != 2 {
+		t.Fatalf("want long_query+connect kept, got %+v", out)
+	}
+	if out[0].Threshold != "long_query" || out[1].Threshold != "connect_failure" {
+		t.Fatalf("order/thresholds: %+v", out)
+	}
+}
+
 func TestApplyLongQueryCooldownFilter_skipsRecent(t *testing.T) {
 	ctx := context.Background()
 	cfg := &config.Config{LongQueryMinSeconds: 60, LongQueryCooldownSeconds: 3600}

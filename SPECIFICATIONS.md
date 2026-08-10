@@ -43,7 +43,7 @@ Documented operator-facing gaps; planned hardening is in [ROADMAP.md](ROADMAP.md
 | Notifier transport TLS | Operator-supplied URLs; `http://` allowed for Slack, Loki, Teams, generic webhook | Startup warning for non-loopback `http://` URLs (0.9.x) |
 | Postgres query timeout | Uses caller `context`; no dedicated query timeout | Nice-to-have (0.9.x) |
 | Structured logging | `log.Printf` only | Post-1.0 |
-| Alert cooldown | `long_query` only (metrics store) | Per-threshold cooldown not planned (hysteresis covers threshold repeats) |
+| Alert repeat while firing | Connection thresholds: transition/escalation/de-escalation only (default); `long_query` has its own cooldown | `notifications.repeat_while_firing: true` restores per-interval threshold spam (v1.0) |
 | CSV formula injection | String fields written as-is | Prefix sanitization for spreadsheet tools (0.9.x) |
 
 ### Design principles
@@ -213,6 +213,7 @@ When `databases:` is non-empty in the config file, each entry is one Postgres ta
 | `notifications.retry.max_attempts` | int | 3 | HTTP retry attempts (5xx and network errors). |
 | `notifications.retry.initial_backoff` | duration | `1s` | Initial retry backoff. |
 | `notifications.retry.max_backoff` | duration | `10s` | Maximum retry backoff. |
+| `notifications.repeat_while_firing` | bool | false | When true, re-send connection-threshold alerts every interval while bad (v1.0). Default: transition/escalation/de-escalation only. |
 | `interval` | int | 0 | 0 = one-shot. |
 | `strict` | bool | false | Exit **4** when notifier delivery fails for a threshold event. |
 | `enable_collector` | bool | false | Opt-in anonymous daemon telemetry (see §3). |
@@ -265,6 +266,7 @@ All config keys map to `PGWD_<UPPER_SNAKE>` equivalents. Notifier env vars:
 | `PGWD_NOTIFICATIONS_RETRY_MAX_ATTEMPTS` | `notifications.retry.max_attempts` |
 | `PGWD_NOTIFICATIONS_RETRY_INITIAL_BACKOFF` | `notifications.retry.initial_backoff` |
 | `PGWD_NOTIFICATIONS_RETRY_MAX_BACKOFF` | `notifications.retry.max_backoff` |
+| `PGWD_NOTIFICATIONS_REPEAT_WHILE_FIRING` | `notifications.repeat_while_firing` |
 
 ### Multi-database limitations
 
@@ -320,6 +322,18 @@ Queried from `pg_stat_activity`:
 - When `confirm_alert > 1`: alert fires only after N consecutive check cycles where a threshold is breached.
 - When `confirm_ok > 1`: resolution fires only after N consecutive check cycles where no threshold is breached.
 - Persisted in the metrics store (SQLite or SQL).
+- Hysteresis delays the **first** alert; it does **not** by itself suppress repeats every interval after the state is confirmed.
+
+### Alert repeat (firing latch)
+
+After hysteresis and long-query cooldown, connection-threshold events (`total` / `active` / `idle` / `stale`) are filtered:
+
+- **Default** (`notifications.repeat_while_firing: false`): notify when entering a bad state, on **escalation** (`attention` → `alert` → `danger`), or on **de-escalation**. Same severity while still firing → no outbound threshold notification.
+- **`repeat_while_firing: true`**: restore v1.0 behavior (notify every interval while bad).
+- `long_query`, `connect_failure`, `too_many_clients`, and `test` are not suppressed by this latch.
+- Previous state comes from the metrics store when configured; otherwise from in-memory state in the daemon loop.
+
+CLI: `-notifications-repeat-while-firing`. Env: `PGWD_NOTIFICATIONS_REPEAT_WHILE_FIRING`.
 
 ### Resolution notifications
 
@@ -393,7 +407,11 @@ All notifier senders (Slack, Loki, PagerDuty, Teams, generic webhook) use shared
 ### PagerDuty
 
 - Events API v2: POST `https://events.pagerduty.com/v2/enqueue`
-- Envelope: `routing_key`, `event_action: trigger`, `payload.{summary, source, severity, timestamp, custom_details}`
+- Envelope: `routing_key`, `dedup_key`, `event_action` (`trigger` or `resolve`), `payload.{summary, source, severity, timestamp, custom_details}`
+- `dedup_key`: `pgwd:{client}:{cluster}:{database}:{suffix}` (empty segments → `_`)
+  - connection thresholds / `resolution` → suffix `connections` (resolve closes the open incident)
+  - `long_query` → `long_query`; `connect_failure` / `too_many_clients` → `connect`; `test` → `test`
+- `event_action`: `resolve` when `threshold=resolution`; otherwise `trigger`
 - `custom_details`: total, active, idle, max_connections, threshold, threshold_value, level, database, client, cluster, namespace
 - Severity mapping: `danger` / `too_many_clients` / `connect_failure` → `critical`; `alert` → `warning`; `attention` / `resolution` / `test` → `info`; otherwise config default (`warning`)
 - Default source: `pgwd`

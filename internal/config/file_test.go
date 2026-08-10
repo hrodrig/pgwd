@@ -402,6 +402,7 @@ notifications:
     max_attempts: 5
     initial_backoff: 2s
     max_backoff: 30s
+  repeat_while_firing: true
 `
 	if err := os.WriteFile(path, []byte(content), 0600); err != nil {
 		t.Fatal(err)
@@ -414,6 +415,9 @@ notifications:
 		t.Fatal("expected loaded=true")
 	}
 	assertExtendedNotifications(t, cfg)
+	if !cfg.RepeatWhileFiring {
+		t.Error("RepeatWhileFiring: expected true from YAML")
+	}
 }
 
 func assertExtendedNotifications(t *testing.T, cfg Config) {
