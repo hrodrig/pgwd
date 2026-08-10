@@ -4,8 +4,8 @@
 # Uses pledge() for security.
 
 COMMENT =	postgres connection watchdog with Slack/Loki alerts
-DISTNAME =	pgwd_v1.0.1_openbsd_${MACHINE_ARCH:S/aarch64/arm64/}
-PKGNAME =	pgwd-1.0.1
+DISTNAME =	pgwd_v1.1.0_openbsd_${MACHINE_ARCH:S/aarch64/arm64/}
+PKGNAME =	pgwd-1.1.0
 CATEGORIES =	sysutils
 HOMEPAGE =	https://github.com/hrodrig/pgwd
 MAINTAINER =	hrodrig@usb.ve
@@ -17,8 +17,8 @@ PERMIT_DISTFILES =	Yes
 # Local test before release: copy tarball to DISTDIR or use
 #   make fetch MASTER_SITES=file:///absolute/path/to/dir/
 # See README.md "Test with a local tarball".
-MASTER_SITES =	https://github.com/hrodrig/pgwd/releases/download/v1.0.1/
-DISTFILES =	pgwd_v1.0.1_openbsd_${MACHINE_ARCH:S/aarch64/arm64/}.tar.gz
+MASTER_SITES =	https://github.com/hrodrig/pgwd/releases/download/v1.1.0/
+DISTFILES =	pgwd_v1.1.0_openbsd_${MACHINE_ARCH:S/aarch64/arm64/}.tar.gz
 EXTRACT_SUFX =	.tar.gz
 
 ONLY_FOR_ARCHS =	amd64 arm64 aarch64

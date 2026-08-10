@@ -1,10 +1,10 @@
 # pgwd roadmap
 
-**Current release:** [v1.0.1](VERSION) (ready on `develop`; tag from `main` after `make release-check`) · **Branch:** `develop`
+**Current release:** [v1.1.0](VERSION) (ready on `develop`; tag from `main` after `make release-check`) · **Branch:** `develop`
 
-**Status (2026-08-09):** **v1.0.1** shipped. Next band: **1.1.x** incident hygiene (PagerDuty dedup/resolve + threshold anti-spam latch) — plan open, not implemented. Stable API remains **v1.0.0** (+ additive 1.1 keys). Distro packaging continues in **1.x** (not a hard tag gate).
+**Status (2026-08-10):** **v1.1.0** ready — incident hygiene (PagerDuty `dedup_key`/`resolve` + threshold anti-spam latch). Stable API remains **v1.0.0** (+ additive 1.1 keys). Distro packaging continues in **1.x** (not a hard tag gate).
 
-This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md) (v1.0.0 contract; patch **v1.0.1**). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md) → [docs/plan-1.1.x.md](docs/plan-1.1.x.md).
+This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md) (v1.0.0 contract; **v1.1.0** latch/PagerDuty). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → [docs/plan-1.0.x.md](docs/plan-1.0.x.md) → [docs/plan-1.1.x.md](docs/plan-1.1.x.md).
 
 ---
 
@@ -23,7 +23,7 @@ flowchart LR
   C --> D["0.9.0 ✅"]
   D --> E["1.0.0 ✅"]
   E --> F["1.0.1 ✅"]
-  F --> G["1.1.x ⬜"]
+  F --> G["1.1.0 ✅ ready"]
 ```
 
 | Band | Status | Target | Theme | Plan |
@@ -34,7 +34,7 @@ flowchart LR
 | **0.9.x** | ✅ Ready (v0.9.0) | Jul 2026 | Pre-1.0 polish, DISCOVER removal, profiles, `--strict`, collector, SPEC audit | [plan-0.9.x.md](docs/plan-0.9.x.md) · [CHANGELOG](CHANGELOG.md#090---2026-07-13) |
 | **1.0.0** | ✅ Ready (v1.0.0) | Jul 2026 | Breaking stable API, compare docs, **start official distro packaging** | [plan-1.0.x.md](docs/plan-1.0.x.md) · [CHANGELOG](CHANGELOG.md#100---2026-07-18) |
 | **1.0.1** | ✅ Shipped | Aug 2026 | `golang.org/x/text` security bump + docs | [CHANGELOG](CHANGELOG.md#101---2026-08-01) |
-| **1.1.x** | ⬜ Plan open | Aug–Sep 2026 | Incident hygiene: PagerDuty dedup/resolve + threshold anti-spam latch | [plan-1.1.x.md](docs/plan-1.1.x.md) |
+| **1.1.x** | ✅ Ready (v1.1.0) | Aug 2026 | Incident hygiene: PagerDuty dedup/resolve + threshold anti-spam latch | [plan-1.1.x.md](docs/plan-1.1.x.md) · [CHANGELOG](CHANGELOG.md#110---2026-08-10) |
 
 **Suggested calendar** (from band plans — **slip OK**; 0.7.x started 2026-07-02):
 
@@ -46,7 +46,7 @@ flowchart LR
 | Jul 13 | v0.9.0 ✅ |
 | Jul 18 | v1.0.0 ✅ |
 | Aug 1 | v1.0.1 ✅ |
-| Aug–Sep 2026 | v1.1.0 target (incident hygiene) |
+| Aug 10 | v1.1.0 ✅ ready (tag from `main` after gates) |
 
 Each band: design → implement → test → `make release-check` → docs → tag from `main`.
 
@@ -134,20 +134,20 @@ Acceptance timelines are external (reviewers, freeze windows) — **not** a hard
 
 → [plan-1.0.x.md](docs/plan-1.0.x.md)
 
-### 1.1.x — incident hygiene (on-call ready) ⬜
+### 1.1.x — incident hygiene (on-call ready) ✅ (v1.1.0 ready)
 
 Theme from 2026-08-09 multi-auditor review: product gap is **sustained-outage noise**, not code craft.
 
 | Item | Notes |
 |------|--------|
-| **PagerDuty `dedup_key` + `resolve`** | Stable key per target/problem; resolution uses `event_action: resolve` (not `trigger`+`info`) |
-| **Threshold anti-spam latch** | Default: notify on transition / escalation / de-escalation only; escape hatch `notifications.repeat_while_firing` |
-| **SPEC fix** | Known Limitations row wrongly claimed hysteresis covers interval repeats — correct when latch ships |
-| **Doc drift (C5)** | README / OCI / nfpm one-liners: full notifier list (not “Slack/Loki” only) |
+| **PagerDuty `dedup_key` + `resolve`** ✅ | Stable key per target/problem; resolution uses `event_action: resolve` (not `trigger`+`info`) |
+| **Threshold anti-spam latch** ✅ | Default: notify on transition / escalation / de-escalation only; escape hatch `notifications.repeat_while_firing` |
+| **SPEC fix** ✅ | Known Limitations row corrected; latch + PagerDuty resolve documented |
+| **Doc drift (C5)** | Partial — man/example/SPEC done; OCI/nfpm one-liners may still say “Slack/Loki” only (follow-up) |
 
 **Not in 1.1.x:** Dependabot, `slog`, cli split, per-DB kube, new channels — see Post-1.0 / later minors.
 
-→ [plan-1.1.x.md](docs/plan-1.1.x.md)
+→ [plan-1.1.x.md](docs/plan-1.1.x.md) · [CHANGELOG](CHANGELOG.md#110---2026-08-10)
 
 ---
 
@@ -167,6 +167,7 @@ Theme from 2026-08-09 multi-auditor review: product gap is **sustained-outage no
 | 0.9.0 | Jul 2026 | DISCOVER removed, profiles, strict, collector, metrics/CSV hardening, operator docs |
 | 1.0.0 | Jul 2026 | Stable API; compare/upgrade docs; distro packaging started |
 | 1.0.1 | Aug 2026 | `golang.org/x/text` security bump |
+| 1.1.0 | Aug 2026 | PagerDuty dedup/resolve; threshold alert latch |
 
 Full detail: [CHANGELOG.md](CHANGELOG.md).
 
@@ -201,7 +202,7 @@ See [SPECIFICATIONS.md §2](SPECIFICATIONS.md#2-scope).
 
 ## Post-1.0 (ideas, not committed)
 
-**Committed next:** [1.1.x incident hygiene](docs/plan-1.1.x.md) (dedup/resolve + latch).
+**Shipped:** [1.1.x incident hygiene](docs/plan-1.1.x.md) (dedup/resolve + latch) in **v1.1.0**.
 
 Still ideas (not scheduled):
 
