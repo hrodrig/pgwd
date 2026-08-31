@@ -9,6 +9,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 ### Security
 
 - **Go toolchain:** bump minimum/build Go to **1.26.6** (stdlib fixes: [GO-2026-6218](https://pkg.go.dev/vuln/GO-2026-6218), [GO-2026-6090](https://pkg.go.dev/vuln/GO-2026-6090), [GO-2026-6089](https://pkg.go.dev/vuln/GO-2026-6089), [GO-2026-6088](https://pkg.go.dev/vuln/GO-2026-6088), [GO-2026-5972](https://pkg.go.dev/vuln/GO-2026-5972), [GO-2026-5026](https://pkg.go.dev/vuln/GO-2026-5026)).
+- **Dependencies:** bump transitive `golang.org/x/net` to **v0.56.0** ([GO-2026-5942](https://pkg.go.dev/vuln/GO-2026-5942)) so Grype on the image no longer fails `--fail-on high`.
 
 ## [1.1.0] - 2026-08-10
 
