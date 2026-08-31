@@ -36,16 +36,16 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 
 ## Git flow
 
-- **Branches:** Work on `develop`. `main` is production and is only updated from `develop` at release time (see `.cursor/rules/git-flow.mdc`).
+- **Branches:** No direct pushes to `develop` or `main`. Topic branch → **PR into `develop`** (green CI, merge, delete branch). Production: **PR `develop` → `main`**, then annotated **`v*`** tag on `main` (see `.cursor/rules/git-flow.mdc` and skill `pgwd-release`).
 - **Commits:** Always show the proposed commit message and wait for user approval before running `git commit`. See `.cursor/rules/commit-message-review.mdc`.
 - **Releases:** Before releasing: run **`make release-check`** (validates **`VERSION`** semver, then lint, test, **cover-check**, test-integration, test-e2e-kube, **`make docker-scan`**). All must pass — they are MANDATORY.
-- **Versioning:** Semantic versioning (MAJOR.MINOR.PATCH) for tags.
+- **Versioning:** Semantic versioning (MAJOR.MINOR.PATCH) for tags. The version cut is a **solo PR** into `develop` (`chore/release-X.Y.Z`): `VERSION`, CHANGELOG, README badge, **VHS** `docs/demo.gif`, man **`.TH`**, **`make port-freebsd-sync`** / **`port-openbsd-sync`**. Do not mix with other changes.
 
 ## Docker
 
 - Build image with version info: `make docker-build` (passes VERSION, COMMIT, BUILDDATE; without it the binary reports `dev`/`unknown`). For **linux/amd64** only (e.g. push to a private registry from another arch): `make docker-buildx-amd64` (`pgwd:amd64` locally) or `make docker-buildx-amd64-push DOCKER_IMAGE=registry/repo:tag` after `docker login`.
 - Build context is whitelisted via `.dockerignore`: only `go.mod`, `go.sum`, `cmd/`, and `internal/` are sent.
-- Dockerfile: multi-stage (Go 1.26.5 build; **distroless/static-debian13:nonroot** runtime), non-root user, no shell/OS packages (HTTPS via bundled CA certs in static image).
+- Dockerfile: multi-stage (Go 1.26.6 build; **distroless/static-debian13:nonroot** runtime), non-root user, no shell/OS packages (HTTPS via bundled CA certs in static image).
 
 ## Repository structure
 

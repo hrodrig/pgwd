@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Local / CI image: compile inside Docker (make docker-build, security workflow Grype scan).
 # Release images: GoReleaser builds static binaries, then Dockerfile.release packages them (distroless).
-FROM golang:1.26.5-alpine AS build
+FROM golang:1.26.6-alpine AS build
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILDDATE=unknown

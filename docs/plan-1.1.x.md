@@ -10,7 +10,7 @@
 
 **Tech Stack:** Go 1.26.x, existing `internal/notify`, `internal/run`, `internal/store`, `httptest` for PD unit tests, SQLite metrics store for latch persistence across process restarts.
 
-**Source audits:** `.no-va-al-repo/20260809/` (Kimi, GLM, DeepSeek, MiniMax) — consensus items A1/A2/A3.
+**Follow-up:** In-memory latch across daemon ticks without a metrics store is completed in **[plan-1.1.1.md](./plan-1.1.1.md)** (v1.1.0 filter existed; production wiring discarded the closure each tick).
 
 **Baseline:** v1.0.1 on `develop` · **Previous band:** [plan-1.0.x.md](./plan-1.0.x.md) · **Target tag:** v1.1.0 after `make release-check` on `main`
 

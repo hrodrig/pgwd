@@ -6,6 +6,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-08-31
+
+Security patch for operators pulling the published binary and GHCR image (Go stdlib + `x/net`). Remaining [plan-1.1.1](docs/plan-1.1.1.md) contract-repair work (daemon latch without store, SPEC, YAML examples) is not in this tag.
+
+### Security
+
+- **Go toolchain:** bump minimum/build Go to **1.26.6** (stdlib fixes: [GO-2026-6218](https://pkg.go.dev/vuln/GO-2026-6218), [GO-2026-6090](https://pkg.go.dev/vuln/GO-2026-6090), [GO-2026-6089](https://pkg.go.dev/vuln/GO-2026-6089), [GO-2026-6088](https://pkg.go.dev/vuln/GO-2026-6088), [GO-2026-5972](https://pkg.go.dev/vuln/GO-2026-5972), [GO-2026-5026](https://pkg.go.dev/vuln/GO-2026-5026)).
+- **Dependencies:** bump transitive `golang.org/x/net` to **v0.56.0** ([GO-2026-5942](https://pkg.go.dev/vuln/GO-2026-5942)) so Grype on the image no longer fails `--fail-on high`.
+
+### Docs
+
+- **README / ports:** version badge and install examples → **1.1.1**; FreeBSD/OpenBSD port Makefiles synced from `VERSION`; man `.TH` and `docs/demo.gif`.
+
 ## [1.1.0] - 2026-08-10
 
 Incident hygiene for on-call: PagerDuty incident lifecycle and quieter threshold alerts by default.
@@ -528,7 +541,8 @@ Pre-1.0 security and operator polish: removes insecure Kubernetes password disco
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/hrodrig/pgwd/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/hrodrig/pgwd/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/hrodrig/pgwd/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/hrodrig/pgwd/compare/v0.9.0...v1.0.0
