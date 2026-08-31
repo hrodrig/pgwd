@@ -1,8 +1,8 @@
 # pgwd roadmap
 
-**Current release:** [v1.1.0](VERSION) · **Branch:** `develop` · **Next:** [v1.1.1](docs/plan-1.1.1.md) (contract repair), then [1.2.x](docs/plan-1.2.x.md) (hygiene)
+**Current release:** [v1.1.1](VERSION) · **Branch:** `develop` · **Next:** remaining [plan-1.1.1](docs/plan-1.1.1.md) contract repair (latch without store, SPEC, YAML), then [1.2.x](docs/plan-1.2.x.md) (hygiene)
 
-**Status (2026-08-16):** **v1.1.0** shipped (PagerDuty dedup/resolve + threshold latch). **v1.1.1** planned — daemon latch without store, SPEC dry-run/Stats alignment, Go 1.26.6, broken YAML examples. **1.2.x** planned — Dependabot, KnownFields, env honesty, HTTP timeouts, docs/packaging sync. Stable API remains **v1.0.0** (+ additive 1.1+ keys). Distro packaging continues in **1.x** (not a hard tag gate).
+**Status (2026-08-31):** **v1.1.1** shipped (Go **1.26.6** + `golang.org/x/net` **v0.56.0**). **v1.1.0** incident hygiene remains. Leftover **plan-1.1.1** work (daemon latch without store, SPEC dry-run/Stats, YAML examples) is not in this tag. **1.2.x** planned — Dependabot, KnownFields, env honesty, HTTP timeouts, docs/packaging sync. Stable API remains **v1.0.0** (+ additive 1.1+ keys). Distro packaging continues in **1.x** (not a hard tag gate).
 
 This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → … → [docs/plan-1.1.x.md](docs/plan-1.1.x.md) → [docs/plan-1.1.1.md](docs/plan-1.1.1.md) → [docs/plan-1.2.x.md](docs/plan-1.2.x.md).
 
@@ -24,7 +24,7 @@ flowchart LR
   D --> E["1.0.0 ✅"]
   E --> F["1.0.1 ✅"]
   F --> G["1.1.0 ✅"]
-  G --> H["1.1.1 planned"]
+  G --> H["1.1.1 ✅"]
   H --> I["1.2.0 planned"]
 ```
 
@@ -37,7 +37,7 @@ flowchart LR
 | **1.0.0** | ✅ Ready (v1.0.0) | Jul 2026 | Breaking stable API, compare docs, **start official distro packaging** | [plan-1.0.x.md](docs/plan-1.0.x.md) · [CHANGELOG](CHANGELOG.md#100---2026-07-18) |
 | **1.0.1** | ✅ Shipped | Aug 2026 | `golang.org/x/text` security bump + docs | [CHANGELOG](CHANGELOG.md#101---2026-08-01) |
 | **1.1.x** | ✅ Shipped (v1.1.0) | Aug 2026 | Incident hygiene: PagerDuty dedup/resolve + threshold anti-spam latch | [plan-1.1.x.md](docs/plan-1.1.x.md) · [CHANGELOG](CHANGELOG.md#110---2026-08-10) |
-| **1.1.1** | 📋 Planned | Aug 2026 | Contract repair: daemon latch without store, SPEC dry-run/Stats, Go 1.26.6, YAML examples | [plan-1.1.1.md](docs/plan-1.1.1.md) |
+| **1.1.1** | ✅ Shipped | Aug 2026 | Security: Go 1.26.6 + `x/net` v0.56.0. Remaining latch/SPEC/YAML in [plan-1.1.1.md](docs/plan-1.1.1.md) | [CHANGELOG](CHANGELOG.md#111---2026-08-31) |
 | **1.2.x** | 📋 Planned | — | Hygiene: Dependabot, KnownFields, env honesty, HTTP timeouts, docs/packaging | [plan-1.2.x.md](docs/plan-1.2.x.md) |
 
 **Suggested calendar** (from band plans — **slip OK**; 0.7.x started 2026-07-02):
@@ -51,7 +51,7 @@ flowchart LR
 | Jul 18 | v1.0.0 ✅ |
 | Aug 1 | v1.0.1 ✅ |
 | Aug 10 | v1.1.0 ✅ |
-| Aug 2026 | v1.1.1 planned ([plan-1.1.1.md](docs/plan-1.1.1.md)) |
+| Aug 31 | v1.1.1 ✅ (security; leftover [plan-1.1.1.md](docs/plan-1.1.1.md) after this tag) |
 | After 1.1.1 | v1.2.0 planned ([plan-1.2.x.md](docs/plan-1.2.x.md)) |
 
 Each band: design → implement → test → `make release-check` → docs → tag from `main`.
@@ -151,11 +151,13 @@ Acceptance timelines are external (reviewers, freeze windows) — **not** a hard
 
 → [plan-1.1.x.md](docs/plan-1.1.x.md) · [CHANGELOG](CHANGELOG.md#110---2026-08-10)
 
-### 1.1.1 — contract repair 📋
+### 1.1.1 — security patch ✅ (v1.1.1) + leftover contract repair 📋
 
-Daemon latch wiring without metrics store; SPEC dry-run + Stats self-exclude; Go 1.26.6; fix `db:` / wrong keys in operator examples.
+**Shipped in v1.1.1:** Go 1.26.6; transitive `golang.org/x/net` v0.56.0.
 
-→ [plan-1.1.1.md](docs/plan-1.1.1.md)
+**Still in** [plan-1.1.1.md](docs/plan-1.1.1.md): daemon latch wiring without metrics store; SPEC dry-run + Stats self-exclude; `db:` / wrong keys in operator examples.
+
+→ [CHANGELOG](CHANGELOG.md#111---2026-08-31) · [plan-1.1.1.md](docs/plan-1.1.1.md)
 
 ### 1.2.x — audit hygiene 📋
 
@@ -216,9 +218,9 @@ See [SPECIFICATIONS.md §2](SPECIFICATIONS.md#2-scope).
 
 ## Post-1.0 (ideas, not committed)
 
-**Shipped:** [1.1.x incident hygiene](docs/plan-1.1.x.md) (dedup/resolve + latch) in **v1.1.0**.
+**Shipped:** [1.1.x incident hygiene](docs/plan-1.1.x.md) in **v1.1.0**; [v1.1.1](CHANGELOG.md#111---2026-08-31) Go/`x/net` security patch.
 
-**Scheduled:** [1.1.1 contract repair](docs/plan-1.1.1.md) · [1.2.x hygiene](docs/plan-1.2.x.md) (Dependabot, KnownFields, timeouts, docs sync).
+**Scheduled:** leftover [1.1.1 contract repair](docs/plan-1.1.1.md) · [1.2.x hygiene](docs/plan-1.2.x.md) (Dependabot, KnownFields, timeouts, docs sync).
 
 Still ideas (not scheduled):
 
