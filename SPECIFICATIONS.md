@@ -532,14 +532,14 @@ Requires an active metrics store (sqlite.path or metrics_store.driver+dsn).
 ### Build
 
 - Go module: `github.com/hrodrig/pgwd`
-- Minimum Go: 1.26.5 (as of 0.8.0)
+- Minimum Go: 1.26.6 (as of Unreleased / next patch)
 - `make build`: reads `VERSION`, injects `Version`/`Commit`/`BuildDate`/`Branch` via ldflags
 - `make install`: installs to `$GOBIN`
 - Cross-compile: `make build-linux`, `make build-darwin`, `make build-windows`, `make build-all` (output in `dist/`)
 
 ### Docker
 
-- Multi-stage build: `golang:1.26.5-alpine` → `gcr.io/distroless/static-debian13:nonroot`
+- Multi-stage build: `golang:1.26.6-alpine` → `gcr.io/distroless/static-debian13:nonroot`
 - **Static binary** (`CGO_ENABLED=0`); runtime image has **no shell, kubectl, or OS packages**
 - **HTTPS notifiers** (Slack, Loki, PagerDuty, etc.): CA bundle included in distroless/static
 - **Kubernetes in-container:** `-kube-postgres` / `-kube-loki` use **client-go** (port-forward, API calls). **No kubectl binary** — mount kubeconfig or use in-cluster ServiceAccount + RBAC. **`DISCOVER_MY_PASSWORD` / `pods/exec` removed in 0.9.x**; use Secret-backed DSN or `kube.password_from_secret`.
