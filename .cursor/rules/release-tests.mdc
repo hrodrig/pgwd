@@ -16,7 +16,7 @@ Before merging to `main` or creating a release (tag and `make release`), run **`
 
 **These are NOT optional.** `make release` depends on `release-check`; if any step fails, the release is blocked.
 
-**When VERSION changes** (same `chore/release-*` PR): (1) Regenerate `docs/demo.gif` with `make install && bash -c "vhs docs/demo.tape"` from repo root (`bash -c` so zsh does not break VHS). The demo shows `pgwd -version`. See `docs/README.md`. (2) Update `contrib/man/man1/pgwd.1` — `.TH` date and version. See `man-page-sync.mdc`. (3) **`make port-freebsd-sync`** and **`make port-openbsd-sync`** so BSD port Makefiles match `VERSION`. Official ports tree updates wait until the `v*` tag is published.
+**When VERSION changes** (same `chore/release-*` PR): (1) Regenerate `docs/demo.gif` with `make install && bash -c "vhs docs/demo.tape"` from repo root (`bash -c` so zsh does not break VHS). The demo shows `pgwd -version`. See `docs/README.md`. (2) Update `contrib/man/man1/pgwd.1` — `.TH` date and version. See `man-page-sync.mdc`. (3) **`make port-freebsd-sync`** and **`make port-openbsd-sync`** so this repo’s BSD port Makefiles match `VERSION`. Do **not** treat Bugzilla or ports@ as part of the release.
 
 CI runs lint and tests. The Security workflow runs govulncheck and Grype on the image; both must pass (no `continue-on-error`). Do not push a release tag if CI or Security is red.
 
