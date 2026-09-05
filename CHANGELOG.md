@@ -6,6 +6,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-05
+
+### Changed
+
+- **SQLite driver:** bump `github.com/ncruces/go-sqlite3` to **v0.35.4** (from v0.32.0) to align with Debian packaging; drop the deprecated `embed` blank import (driver-only registration). Adds `github.com/ncruces/go-sqlite3-wasm/v5`, removes `github.com/tetratelabs/wazero`, and bumps transitive `golang.org/x/{sync,sys,text}`.
+
 ## [1.1.1] - 2026-08-31
 
 Security patch for operators pulling the published binary and GHCR image (Go stdlib + `x/net`). Remaining [plan-1.1.1](docs/plan-1.1.1.md) contract-repair work (daemon latch without store, SPEC, YAML examples) is not in this tag.
@@ -541,7 +547,8 @@ Pre-1.0 security and operator polish: removes insecure Kubernetes password disco
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/hrodrig/pgwd/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/hrodrig/pgwd/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/hrodrig/pgwd/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/hrodrig/pgwd/compare/v1.0.0...v1.0.1
