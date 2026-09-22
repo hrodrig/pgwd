@@ -1,0 +1,148 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "pgwd — Postgres Watch Dog",
+    "quality_profile": "showcase",
+    "animation": "trace",
+    "repository": {
+      "url": "https://github.com/hrodrig/pgwd",
+      "provider": "github",
+      "revision": "7a6d52f72a5a0c45428fb6b1cff095e26b9b60f8"
+    },
+    "views": [
+      {
+        "id": "main-path",
+        "label": "Main check path",
+        "focus": ["config", "run", "checker", "postgres"],
+        "note": "Each tick loads config, evaluates thresholds against live connection counts."
+      },
+      {
+        "id": "delivery",
+        "label": "Delivery",
+        "focus": ["run", "notify", "sinks"],
+        "note": "Threshold breach or connect failure dispatches to every configured notifier."
+      },
+      {
+        "id": "persistence",
+        "label": "Persistence and export",
+        "focus": ["run", "store", "httpsrv", "metricsexport"],
+        "note": "Store feeds /metrics and CSV export (read-only)."
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "config",
+      "type": "backend",
+      "label": "Config",
+      "sublabel": "YAML · env · CLI",
+      "pos": [40, 180],
+      "size": [150, 64],
+      "sources": [{ "path": "internal/config/config.go" }]
+    },
+    {
+      "id": "run",
+      "type": "backend",
+      "label": "Run",
+      "sublabel": "per-check loop",
+      "pos": [280, 180],
+      "size": [150, 64],
+      "sources": [{ "path": "internal/run/run.go" }]
+    },
+    {
+      "id": "checker",
+      "type": "backend",
+      "label": "Checker",
+      "sublabel": "thresholds · levels",
+      "pos": [520, 180],
+      "size": [150, 64],
+      "sources": [{ "path": "internal/checker/checker.go" }]
+    },
+    {
+      "id": "postgres",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "pg_stat_activity",
+      "brand": "postgresql",
+      "pos": [780, 180],
+      "size": [160, 64],
+      "sources": [{ "path": "internal/postgres/stats.go" }]
+    },
+    {
+      "id": "notify",
+      "type": "backend",
+      "label": "Notifiers",
+      "sublabel": "HTTP retry",
+      "pos": [280, 30],
+      "size": [150, 64],
+      "sources": [{ "path": "internal/notify/notify.go" }]
+    },
+    {
+      "id": "sinks",
+      "type": "external",
+      "label": "Alert sinks",
+      "sublabel": "Slack · Loki · PD · Teams · webhook",
+      "pos": [520, 30],
+      "size": [220, 64]
+    },
+    {
+      "id": "metricsexport",
+      "type": "backend",
+      "label": "CSV export",
+      "sublabel": "read-only rows",
+      "pos": [40, 360],
+      "size": [150, 64],
+      "sources": [{ "path": "internal/metricsexport/metricsexport.go" }]
+    },
+    {
+      "id": "store",
+      "type": "database",
+      "label": "Store",
+      "sublabel": "SQLite · PG · MySQL",
+      "pos": [280, 360],
+      "size": [150, 64],
+      "sources": [
+        { "path": "internal/store/store.go" },
+        { "path": "internal/metricsstore/metricsstore.go" }
+      ]
+    },
+    {
+      "id": "httpsrv",
+      "type": "backend",
+      "label": "HTTP server",
+      "sublabel": "/metrics · /healthz",
+      "pos": [520, 360],
+      "size": [160, 64],
+      "sources": [{ "path": "internal/httpsrv/server.go" }]
+    },
+    {
+      "id": "kube",
+      "type": "cloud",
+      "label": "Kubernetes",
+      "sublabel": "port-forward (client-go)",
+      "brand": "kubernetes",
+      "pos": [780, 360],
+      "size": [170, 64],
+      "sources": [{ "path": "internal/kube/kube.go" }]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "pgwd daemon",
+      "wraps": ["config", "run", "checker", "notify", "store", "httpsrv", "metricsexport", "kube"]
+    }
+  ],
+  "connections": [
+    { "id": "cfg-run", "from": "config", "to": "run", "label": "loads" },
+    { "id": "run-check", "from": "run", "to": "checker", "label": "evaluate" },
+    { "id": "check-pg", "from": "checker", "to": "postgres", "label": "read counts", "variant": "emphasis" },
+    { "id": "run-notify", "from": "run", "to": "notify", "label": "dispatch" },
+    { "id": "notify-sinks", "from": "notify", "to": "sinks", "label": "HTTP" },
+    { "id": "run-store", "from": "run", "to": "store", "label": "persist", "variant": "dashed", "labelDy": 24 },
+    { "id": "store-http", "from": "store", "to": "httpsrv", "label": "latest rows" },
+    { "id": "store-export", "from": "store", "to": "metricsexport", "label": "read-only", "variant": "dashed" },
+    { "id": "kube-pg", "from": "kube", "to": "postgres", "label": "port-forward", "variant": "dashed", "fromSide": "top", "toSide": "bottom" }
+  ]
+}

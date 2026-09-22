@@ -37,6 +37,16 @@ Release bands from **v0.7.0** to **v1.0.0**. Behavior contract: [SPECIFICATIONS.
 
 [Testing alert levels without changing production](./testing-alert-levels.md) — Procedure to trigger attention, alert, and danger notifications using `-test-max-connections` against a real Postgres instance (e.g. production) without modifying its config or waiting for real load.
 
+## Architecture (interactive)
+
+**[Open interactive architecture](https://htmlpreview.github.io/?https://raw.githubusercontent.com/hrodrig/pgwd/develop/docs/pgwd-architecture.html)** — Archify showcase: guided views, pan/zoom, Present mode, source links, flow animation.
+
+| Artifact | Role |
+|----------|------|
+| [`pgwd-architecture.html`](./pgwd-architecture.html) | Self-contained interactive viewer (open in a browser) |
+| [`pgwd-architecture.png`](./pgwd-architecture.png) | Static preview (README) |
+| [`architecture.pgwd.json`](./architecture.pgwd.json) | Archify source specification |
+
 ## Sequence diagrams
 
 Sequence diagrams for main use cases (Mermaid format). View in any Markdown viewer that supports Mermaid (e.g. GitHub, VS Code with Mermaid extension, or [Mermaid Live](https://mermaid.live)).
