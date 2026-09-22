@@ -15,6 +15,7 @@
 [![CI](https://github.com/hrodrig/pgwd/actions/workflows/ci.yml/badge.svg)](https://github.com/hrodrig/pgwd/actions)
 [![codecov](https://codecov.io/gh/hrodrig/pgwd/graph/badge.svg)](https://codecov.io/gh/hrodrig/pgwd)
 [![gghstats clones](https://gghstats.hermesrodriguez.com/api/v1/badge/hrodrig/pgwd?metric=clones)](https://gghstats.hermesrodriguez.com/hrodrig/pgwd)
+[![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
 [![Go 1.26.6](https://img.shields.io/badge/go-1.26.6-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![pkg.go.dev](https://pkg.go.dev/badge/github.com/hrodrig/pgwd)](https://pkg.go.dev/github.com/hrodrig/pgwd)
@@ -46,8 +47,26 @@ PostgreSQL enforces a configured ceiling (`max_connections`). Slots reserved for
 
 ![Terminal demo](docs/demo.gif)
 
+### How pgwd fits together
+
+Click the diagram for the **interactive** viewer (guided views, pan/zoom, Present mode, source links, flow animation). GitHub cannot run the HTML inline — the preview below is a static snapshot.
+
+<p align="center">
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/hrodrig/pgwd/develop/docs/pgwd-architecture.html">
+    <img src="docs/pgwd-architecture.png" alt="pgwd architecture — config, check loop, notifiers, store, Kubernetes port-forward" width="900">
+  </a>
+</p>
+
+<p align="center">
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/hrodrig/pgwd/develop/docs/pgwd-architecture.html"><strong>Open interactive architecture →</strong></a>
+  · or clone and open <code>docs/pgwd-architecture.html</code> locally
+</p>
+
+Config → check loop → PostgreSQL · notifiers → Slack/Loki/PagerDuty/Teams/webhook · store → `/metrics` + CSV · optional Kubernetes port-forward. Spec: [`docs/architecture.pgwd.json`](docs/architecture.pgwd.json).
+
 ## Table of contents
 
+- [How pgwd fits together](#how-pgwd-fits-together)
 - [Quick start](#quick-start)
 - [Compare](#compare)
 - [Configuration: CLI vs environment](#configuration-cli-vs-environment)
