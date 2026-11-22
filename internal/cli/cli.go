@@ -478,11 +478,16 @@ func exitStrictIf(cfg *config.Config, deliveryFailed bool) {
 }
 
 // exitConnectFailureIf exits with ExitConnectFailure for single-target connect failure.
-func exitConnectFailureIf(targets []config.DatabaseTarget) {
-	if len(targets) == 1 {
-		log.Printf("postgres connect failed (check database URL, connectivity, and credentials)")
-		exitFunc(ExitConnectFailure)
+// Daemon mode (interval > 0) logs and returns so a transient outage does not kill the process.
+func exitConnectFailureIf(cfg *config.Config, targets []config.DatabaseTarget) {
+	if len(targets) != 1 {
+		return
 	}
+	log.Printf("postgres connect failed (check database URL, connectivity, and credentials)")
+	if cfg != nil && cfg.Interval > 0 {
+		return
+	}
+	exitFunc(ExitConnectFailure)
 }
 
 // exitQueryErrorIf exits with ExitQueryError on one-shot single-target stats query failure.
@@ -499,7 +504,7 @@ func exitQueryErrorIf(cfg *config.Config, targets []config.DatabaseTarget, query
 func handleConnectFailure(ctx context.Context, senders []notify.Sender, targetCfg *config.Config, cluster, client, ns, db string, connectErr error, targets []config.DatabaseTarget) {
 	exitStrictIf(targetCfg, run.NotifyConnectFailure(ctx, senders, targetCfg, cluster, client, ns, db, connectErr))
 	if len(targets) == 1 {
-		exitConnectFailureIf(targets)
+		exitConnectFailureIf(targetCfg, targets)
 		return
 	}
 	log.Printf("postgres connect failed [%s]: %v", client, connectErr)

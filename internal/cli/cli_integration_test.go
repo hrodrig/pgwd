@@ -95,7 +95,7 @@ func TestSetupKubeLoki_noop(t *testing.T) {
 }
 
 func TestRunOneTarget_badURL(t *testing.T) {
-	cfg := &config.Config{Client: "x", DryRun: true}
+	cfg := &config.Config{Client: "x", DryRun: true, Interval: 0}
 	ctx := context.Background()
 	var gotExit int
 	prev := exitFunc
@@ -106,6 +106,45 @@ func TestRunOneTarget_badURL(t *testing.T) {
 	runOneTarget(ctx, config.DatabaseTarget{Client: "x", URL: bad}, cfg, nil, nil, []config.DatabaseTarget{{Client: "x", URL: bad}})
 	if gotExit != ExitConnectFailure {
 		t.Fatalf("exit = %d, want %d", gotExit, ExitConnectFailure)
+	}
+}
+
+func TestRunOneTarget_daemonBadURL_noExit(t *testing.T) {
+	cfg := &config.Config{Client: "x", DryRun: true, Interval: 30}
+	ctx := context.Background()
+	var gotExit int
+	prev := exitFunc
+	exitFunc = func(code int) { gotExit = code }
+	t.Cleanup(func() { exitFunc = prev })
+
+	bad := "postgres://127.0.0.1:1/nope?sslmode=disable"
+	runOneTarget(ctx, config.DatabaseTarget{Client: "x", URL: bad}, cfg, nil, nil, []config.DatabaseTarget{{Client: "x", URL: bad}})
+	if gotExit != 0 {
+		t.Fatalf("daemon must not exit on connect failure, got %d", gotExit)
+	}
+}
+
+func TestExitConnectFailureIf_oneShot(t *testing.T) {
+	var gotExit int
+	prev := exitFunc
+	exitFunc = func(code int) { gotExit = code }
+	t.Cleanup(func() { exitFunc = prev })
+
+	exitConnectFailureIf(&config.Config{Interval: 0}, []config.DatabaseTarget{{Client: "a"}})
+	if gotExit != ExitConnectFailure {
+		t.Fatalf("exit = %d, want %d", gotExit, ExitConnectFailure)
+	}
+}
+
+func TestExitConnectFailureIf_daemonSkips(t *testing.T) {
+	var gotExit int
+	prev := exitFunc
+	exitFunc = func(code int) { gotExit = code }
+	t.Cleanup(func() { exitFunc = prev })
+
+	exitConnectFailureIf(&config.Config{Interval: 30}, []config.DatabaseTarget{{Client: "a"}})
+	if gotExit != 0 {
+		t.Fatalf("daemon must not exit on connect failure, got %d", gotExit)
 	}
 }
 
