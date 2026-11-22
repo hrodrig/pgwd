@@ -21,8 +21,8 @@ func (s *stubMetricsStore) Insert(_ context.Context, r store.Record) error {
 	s.records = append(s.records, r)
 	return nil
 }
-func (s *stubMetricsStore) Close() error                                      { return nil }
-func (s *stubMetricsStore) Ping(context.Context) error                        { return nil }
+func (s *stubMetricsStore) Close() error               { return nil }
+func (s *stubMetricsStore) Ping(context.Context) error { return nil }
 func (s *stubMetricsStore) LatestRecords(context.Context) ([]store.Record, error) {
 	return nil, nil
 }

@@ -10,9 +10,9 @@ import (
 
 func TestCheckTimeout(t *testing.T) {
 	tests := []struct {
-		name     string
-		cfg      *config.Config
-		want     time.Duration
+		name string
+		cfg  *config.Config
+		want time.Duration
 	}{
 		{"nil", nil, MaxCheckTimeout},
 		{"one-shot", &config.Config{Interval: 0}, MaxCheckTimeout},
