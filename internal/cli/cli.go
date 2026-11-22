@@ -117,7 +117,7 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	showVersionFlag := flag.Bool("version", false, "print version and exit")
 	configPath := config.ConfigPath()
 	flag.StringVar(&configPath, "config", configPath, "Config file path (PGWD_CONFIG); default /etc/pgwd/pgwd.conf")
-	flag.StringVar(&cfg.DBURL, "db-url", cfg.DBURL, "PostgreSQL connection URL (PGWD_DB_URL)")
+	flag.StringVar(&cfg.DBURL, "db-url", cfg.DBURL, "PostgreSQL connection URL (PGWD_DB_URL); prefer env or password_from_secret — the flag value is visible in ps")
 	flag.IntVar(&cfg.ThresholdIdle, "db-threshold-idle", cfg.ThresholdIdle, "Alert when idle connections >= N (PGWD_DB_THRESHOLD_IDLE)")
 	flag.IntVar(&cfg.StaleAge, "db-stale-age", cfg.StaleAge, "Consider connection stale if open longer than N seconds (PGWD_DB_STALE_AGE)")
 	flag.IntVar(&cfg.ThresholdStale, "db-threshold-stale", cfg.ThresholdStale, "Alert when stale connections (open > stale-age) >= N (PGWD_DB_THRESHOLD_STALE)")

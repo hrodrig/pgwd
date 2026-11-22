@@ -21,6 +21,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 - **Architecture diagram:** interactive Archify viewer (`docs/pgwd-architecture.html`) with flow animation, plus README/docs preview (`docs/pgwd-architecture.png`) and source (`docs/architecture.pgwd.json`).
 - **README:** Awesome Go “Mentioned in” badge.
 - **SPECIFICATIONS:** exit code 2 documents one-shot vs daemon connect-failure behavior.
+- **`-db-url`:** flag help and README warn that passwords in argv are visible in `ps`; prefer env / `password_from_secret` (#36).
 
 ## [1.2.0] - 2026-09-05
 

@@ -180,6 +180,8 @@ PGWD_CONFIG=/path/to/pgwd.conf pgwd
 
 **`-db-url` override (one-shot):** When the config file has `databases:` (multi-DB), passing `-db-url` and `-interval 0` runs against that single URL only, ignoring the databases from config for that run. Useful for quick ad-hoc checks without editing the config.
 
+**Password visibility:** Prefer `PGWD_DB_URL` (or a config file / `password_from_secret`) over `-db-url` with an embedded password — argv is visible in `ps` and process audits.
+
 ### Multi-database limitations
 
 - **`-kube-postgres` / `kube.postgres` and `databases:` are mutually exclusive.** Validation rejects that combination. Multi-DB mode expects **direct** Postgres URLs (e.g. in-cluster DNS, VPN, or `localhost` after manual port-forward). For port-forward from **outside** the cluster, use **N port-forwards + one `databases:` config**, or **one pgwd process per** forwarded instance — see **[docs/use-cases.md](docs/use-cases.md)** (UC-5, UC-6, UC-7).
