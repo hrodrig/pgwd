@@ -23,6 +23,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 - **`-validate-k8s-access`:** uses Discovery `ServerVersion` instead of listing pods across namespaces; SQLite/CSV parent dirs created with mode `0700` (#38).
 - **kube port-forward:** re-resolve pod and reconnect with backoff when the forward drops (e.g. Postgres pod restart) (#34).
 
+### Changed
+
+- **Test Postgres image:** `postgres:16-alpine` → `postgres:18-alpine` (Compose + kind e2e manifests + README example).
+
 ### Docs
 
 - **Architecture diagram:** interactive Archify viewer (`docs/pgwd-architecture.html`) with flow animation, plus README/docs preview (`docs/pgwd-architecture.png`) and source (`docs/architecture.pgwd.json`).

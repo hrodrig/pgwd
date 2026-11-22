@@ -845,7 +845,7 @@ docker run -d --name pgwd-pg \
   -e POSTGRES_PASSWORD=secret \
   -e POSTGRES_DB=postgres \
   -p 5433:5432 \
-  postgres:16-alpine
+  postgres:18-alpine
 ```
 
 **Connection URL** (host port 5433, `sslmode=disable`):
