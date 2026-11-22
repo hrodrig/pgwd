@@ -14,6 +14,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 ### Security
 
 - **Notify HTTP errors:** redact `*url.Error` webhook URLs to `scheme://host` before wrapping/logging so Slack/Teams/PagerDuty path secrets are not leaked (#30).
+- **Firing latch without store:** daemon keeps per-target previous severity in memory across ticks so transition-only alerts work when no SQLite/SQL store is configured (#32). `confirm_alert` / durable hysteresis still require a store.
 
 ### Docs
 

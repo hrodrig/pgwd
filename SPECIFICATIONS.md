@@ -331,7 +331,7 @@ After hysteresis and long-query cooldown, connection-threshold events (`total` /
 - **Default** (`notifications.repeat_while_firing: false`): notify when entering a bad state, on **escalation** (`attention` → `alert` → `danger`), or on **de-escalation**. Same severity while still firing → no outbound threshold notification.
 - **`repeat_while_firing: true`**: restore v1.0 behavior (notify every interval while bad).
 - `long_query`, `connect_failure`, `too_many_clients`, and `test` are not suppressed by this latch.
-- Previous state comes from the metrics store when configured; otherwise from in-memory state in the daemon loop.
+- Previous state comes from the metrics store when configured; otherwise from **process-local** in-memory state kept across ticks in the daemon loop (survives `MakeRunFunc` recreation each interval). Restart clears memory; `confirm_alert` / `confirm_ok` hysteresis still require a metrics store.
 
 CLI: `-notifications-repeat-while-firing`. Env: `PGWD_NOTIFICATIONS_REPEAT_WHILE_FIRING`.
 

@@ -412,7 +412,7 @@ func TestMakeRunFunc_insertsAndRuns(t *testing.T) {
 		DryRun:          true,
 	}
 	st := &memStore{}
-	fn := MakeRunFunc(ctx, q, cfg, nil, st, "cl", "c", "ns", "db")
+	fn := MakeRunFunc(ctx, q, cfg, nil, st, "cl", "c", "ns", "db", nil)
 	out := fn()
 	if out.QueryFailed || out.DeliveryFailed {
 		t.Fatalf("outcome = %+v", out)
@@ -424,7 +424,7 @@ func TestMakeRunFunc_suppressesSecondTickSameSeverity(t *testing.T) {
 	q := statsQuerierMock(100, 80, 10, 90, 0, 0) // 90% → alert
 	cfg := &config.Config{ThresholdLevels: "75,85,95"}
 	s := &fakeSender{}
-	fn := MakeRunFunc(ctx, q, cfg, []notify.Sender{s}, nil, "cl", "c", "ns", "db")
+	fn := MakeRunFunc(ctx, q, cfg, []notify.Sender{s}, nil, "cl", "c", "ns", "db", nil)
 	if out := fn(); out.QueryFailed {
 		t.Fatalf("first tick: %+v", out)
 	}
@@ -439,12 +439,32 @@ func TestMakeRunFunc_suppressesSecondTickSameSeverity(t *testing.T) {
 	}
 }
 
+func TestMakeRunFunc_externalMemPrevSurvivesNewClosure(t *testing.T) {
+	// Simulates daemon recreating MakeRunFunc each tick while sharing memPrev (#32).
+	ctx := context.Background()
+	q := statsQuerierMock(100, 80, 10, 90, 0, 0)
+	cfg := &config.Config{ThresholdLevels: "75,85,95"}
+	s := &fakeSender{}
+	var prev string
+	fn1 := MakeRunFunc(ctx, q, cfg, []notify.Sender{s}, nil, "cl", "c", "ns", "db", &prev)
+	if out := fn1(); out.QueryFailed {
+		t.Fatalf("first: %+v", out)
+	}
+	fn2 := MakeRunFunc(ctx, q, cfg, []notify.Sender{s}, nil, "cl", "c", "ns", "db", &prev)
+	if out := fn2(); out.QueryFailed {
+		t.Fatalf("second: %+v", out)
+	}
+	if s.n != 1 {
+		t.Fatalf("external memPrev latch: Send n=%d, want 1", s.n)
+	}
+}
+
 func TestMakeRunFunc_repeatWhileFiringSendsEveryTick(t *testing.T) {
 	ctx := context.Background()
 	q := statsQuerierMock(100, 80, 10, 90, 0, 0)
 	cfg := &config.Config{ThresholdLevels: "75,85,95", RepeatWhileFiring: true}
 	s := &fakeSender{}
-	fn := MakeRunFunc(ctx, q, cfg, []notify.Sender{s}, nil, "cl", "c", "ns", "db")
+	fn := MakeRunFunc(ctx, q, cfg, []notify.Sender{s}, nil, "cl", "c", "ns", "db", nil)
 	fn()
 	fn()
 	if s.n != 2 {
@@ -459,7 +479,7 @@ func TestMakeRunFunc_queryFailed(t *testing.T) {
 			return fakeRow{scan: func(...any) error { return errors.New("query boom") }}
 		},
 	}
-	fn := MakeRunFunc(ctx, q, &config.Config{DryRun: true}, nil, nil, "", "c", "", "db")
+	fn := MakeRunFunc(ctx, q, &config.Config{DryRun: true}, nil, nil, "", "c", "", "db", nil)
 	out := fn()
 	if !out.QueryFailed {
 		t.Fatal("want QueryFailed")

@@ -48,7 +48,7 @@ func TestRunOneTarget_dryRun(t *testing.T) {
 		ThresholdLevels: "75,85,95",
 	}
 	ctx := context.Background()
-	runOneTarget(ctx, config.DatabaseTarget{Client: cfg.Client, URL: dsn}, cfg, nil, nil, []config.DatabaseTarget{{Client: cfg.Client, URL: dsn}})
+	runOneTarget(ctx, config.DatabaseTarget{Client: cfg.Client, URL: dsn}, cfg, nil, nil, []config.DatabaseTarget{{Client: cfg.Client, URL: dsn}}, nil)
 }
 
 func TestExportMetricsFlow(t *testing.T) {
@@ -93,7 +93,7 @@ func TestRunOneTarget_withSQLite(t *testing.T) {
 	ctx := context.Background()
 	st := openStoreIfConfigured(cfg)
 	targets := []config.DatabaseTarget{{Client: cfg.Client, URL: dsn}}
-	runOneTarget(ctx, targets[0], cfg, nil, st, targets)
+	runOneTarget(ctx, targets[0], cfg, nil, st, targets, nil)
 	if st != nil {
 		st.Close()
 	}
@@ -121,7 +121,7 @@ func TestRunOneTarget_badURL(t *testing.T) {
 	t.Cleanup(func() { exitFunc = prev })
 
 	bad := "postgres://127.0.0.1:1/nope?sslmode=disable"
-	runOneTarget(ctx, config.DatabaseTarget{Client: "x", URL: bad}, cfg, nil, nil, []config.DatabaseTarget{{Client: "x", URL: bad}})
+	runOneTarget(ctx, config.DatabaseTarget{Client: "x", URL: bad}, cfg, nil, nil, []config.DatabaseTarget{{Client: "x", URL: bad}}, nil)
 	if gotExit != ExitConnectFailure {
 		t.Fatalf("exit = %d, want %d", gotExit, ExitConnectFailure)
 	}
@@ -137,7 +137,7 @@ func TestRunOneTarget_daemonBadURL_noExit(t *testing.T) {
 
 	bad := "postgres://127.0.0.1:1/nope?sslmode=disable"
 	st := &stubMetricsStore{}
-	runOneTarget(ctx, config.DatabaseTarget{Client: "x", URL: bad}, cfg, nil, st, []config.DatabaseTarget{{Client: "x", URL: bad}})
+	runOneTarget(ctx, config.DatabaseTarget{Client: "x", URL: bad}, cfg, nil, st, []config.DatabaseTarget{{Client: "x", URL: bad}}, nil)
 	if gotExit != 0 {
 		t.Fatalf("daemon must not exit on connect failure, got %d", gotExit)
 	}

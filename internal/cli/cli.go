@@ -388,13 +388,14 @@ func Run() {
 	defer httpCleanup()
 	maybeLogConfigTrace(&cfg, configPath, loaded, len(os.Args) > 1)
 
-	for _, t := range targets {
-		runOneTarget(ctx, t, &cfg, senders, st, targets)
+	prevStates := make([]string, len(targets))
+	for i, t := range targets {
+		runOneTarget(ctx, t, &cfg, senders, st, targets, &prevStates[i])
 	}
 	if cfg.Interval <= 0 {
 		return
 	}
-	runTickerLoop(ctx, &cfg, senders, st, targets)
+	runTickerLoop(ctx, &cfg, senders, st, targets, prevStates)
 }
 
 // loadAndParseConfig reads YAML (if present), applies defaults and env, parses CLI
@@ -534,7 +535,8 @@ func handleConnectFailure(ctx context.Context, senders []notify.Sender, targetCf
 // runOneTarget connects to one database target, applies threshold defaults, and
 // runs the first check. On connect or threshold errors it notifies (if configured)
 // and returns; one-shot single-target exits the process on connect failure (daemon continues).
-func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, targets []config.DatabaseTarget) {
+// memPrev is the per-target firing latch used when no metrics store is configured (#32).
+func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, targets []config.DatabaseTarget, memPrev *string) {
 	checkCtx, cancel := context.WithTimeout(ctx, CheckTimeout(cfg))
 	defer cancel()
 
@@ -560,14 +562,14 @@ func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Conf
 		exitQueryErrorIf(targetCfg, targets, true)
 		return
 	}
-	outcome := run.MakeRunFunc(checkCtx, pool, targetCfg, senders, st, runCluster, runClient, runNamespace, runDatabase)()
+	outcome := run.MakeRunFunc(checkCtx, pool, targetCfg, senders, st, runCluster, runClient, runNamespace, runDatabase, memPrev)()
 	exitStrictIf(targetCfg, outcome.DeliveryFailed)
 	exitQueryErrorIf(targetCfg, targets, outcome.QueryFailed)
 }
 
 // runTickerLoop repeats runOneTarget for every target every cfg.Interval seconds
 // until ctx is cancelled (SIGINT/SIGTERM).
-func runTickerLoop(ctx context.Context, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, targets []config.DatabaseTarget) {
+func runTickerLoop(ctx context.Context, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, targets []config.DatabaseTarget, prevStates []string) {
 	ticker := time.NewTicker(time.Duration(cfg.Interval) * time.Second)
 	defer ticker.Stop()
 	for {
@@ -575,8 +577,12 @@ func runTickerLoop(ctx context.Context, cfg *config.Config, senders []notify.Sen
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			for _, t := range targets {
-				runOneTarget(ctx, t, cfg, senders, st, targets)
+			for i, t := range targets {
+				var memPrev *string
+				if i < len(prevStates) {
+					memPrev = &prevStates[i]
+				}
+				runOneTarget(ctx, t, cfg, senders, st, targets, memPrev)
 			}
 		}
 	}

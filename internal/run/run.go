@@ -557,8 +557,13 @@ func persistCheckAndMaybeResolve(ctx context.Context, st store.MetricsStorer, cf
 }
 
 // MakeRunFunc returns the per-interval check closure for one target.
-func MakeRunFunc(ctx context.Context, pool postgres.Querier, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, cluster, client, ns, db string) func() CheckOutcome {
-	var memPrevState string
+// memPrev holds the last firing state across ticks when no metrics store is configured;
+// pass a stable pointer from the daemon loop (nil uses process-local storage for this closure only).
+func MakeRunFunc(ctx context.Context, pool postgres.Querier, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, cluster, client, ns, db string, memPrev *string) func() CheckOutcome {
+	var localPrev string
+	if memPrev == nil {
+		memPrev = &localPrev
+	}
 	return func() CheckOutcome {
 		res, err := DoRunCheck(ctx, pool, cfg, cluster, client, ns, db)
 		if err != nil {
@@ -569,7 +574,7 @@ func MakeRunFunc(ctx context.Context, pool postgres.Querier, cfg *config.Config,
 			LogDryRunStats(cluster, client, db, res)
 		}
 		var state, thr string
-		res.Events, state, thr, memPrevState = filterCheckEvents(ctx, st, cfg, client, cluster, db, memPrevState, res.Events)
+		res.Events, state, thr, *memPrev = filterCheckEvents(ctx, st, cfg, client, cluster, db, *memPrev, res.Events)
 		sent, deliveryFailed := SendEvents(ctx, senders, cfg, res.Events)
 		if sent["long_query"] && st != nil {
 			if cd, ok := st.(store.AlertCooldownRecorder); ok {
