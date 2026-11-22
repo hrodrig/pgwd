@@ -14,6 +14,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 ### Security
 
 - **Notify HTTP errors:** redact `*url.Error` webhook URLs to `scheme://host` before wrapping/logging so Slack/Teams/PagerDuty path secrets are not leaked (#30).
+- **HTTP `/metrics`:** `ReadHeaderTimeout` / `ReadTimeout` / `IdleTimeout` on the server; drop `?token=` (Bearer/basic only); `/healthz` no longer returns raw store errors; warn when anonymous `/metrics` binds non-loopback (#33).
+- **MPTCP listen:** `godebug multipathtcp=0` in `go.mod` and `ListenConfig.SetMultipathTCP(false)` on the metrics listener to avoid Go 1.24+ MPTCP listen default (CVE-2026-98432 exposure path). Patched kernel remains the real fix (#28).
 - **Firing latch without store:** daemon keeps per-target previous severity in memory across ticks so transition-only alerts work when no SQLite/SQL store is configured (#32). `confirm_alert` / durable hysteresis still require a store.
 
 ### Docs

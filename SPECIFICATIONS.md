@@ -234,7 +234,7 @@ When `databases:` is non-empty in the config file, each entry is one Postgres ta
 | `http.base_path` | string | `/api/pgwd/v1` | |
 | `http.health_path` | string | `/healthz` | |
 | `http.metrics_path` | string | `/metrics` | |
-| `http.metrics_token` | string | — | **Opt-in.** When set, `/metrics` requires Bearer token or `?token=`; leave empty for anonymous scrape (default). |
+| `http.metrics_token` | string | — | **Opt-in.** When set, `/metrics` requires `Authorization: Bearer <token>` (query `?token=` is **not** accepted); leave empty for anonymous scrape (default). |
 | `http.metrics_basic_user` | string | — | **Opt-in** with `http.metrics_basic_password`; Basic auth on `/metrics` only. |
 | `http.metrics_basic_password` | string | — | Pair with `http.metrics_basic_user`. |
 

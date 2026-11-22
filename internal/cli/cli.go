@@ -475,6 +475,9 @@ func setupHTTPIfConfigured(cfg *config.Config, st store.MetricsStorer) func() {
 	if cfg.HTTPListen == "" {
 		return func() {}
 	}
+	if httpsrv.WarnInsecureMetricsBind(cfg) {
+		log.Printf("pgwd: warning: http.listen %q exposes anonymous /metrics on a non-loopback address; set http.metrics_token or bind 127.0.0.1", cfg.HTTPListen)
+	}
 	httpSrv := httpsrv.New(cfg, st)
 	if err := httpSrv.Start(); err != nil {
 		log.Fatalf("http: %v", err)

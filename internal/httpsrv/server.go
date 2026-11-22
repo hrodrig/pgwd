@@ -5,9 +5,16 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/hrodrig/pgwd/internal/config"
 	"github.com/hrodrig/pgwd/internal/store"
+)
+
+const (
+	readHeaderTimeout = 10 * time.Second
+	readTimeout       = 30 * time.Second
+	idleTimeout       = 60 * time.Second
 )
 
 func escapePrometheusLabelValue(val string) string {
@@ -65,9 +72,19 @@ func (s *Server) Start() error {
 	if s.cfg.HTTPListen == "" {
 		return nil
 	}
-	s.server = &http.Server{Addr: s.cfg.HTTPListen, Handler: s.mux}
+	ln, err := listenTCP(s.cfg.HTTPListen)
+	if err != nil {
+		return fmt.Errorf("listen %s: %w", s.cfg.HTTPListen, err)
+	}
+	s.server = &http.Server{
+		Addr:              s.cfg.HTTPListen,
+		Handler:           s.mux,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		IdleTimeout:       idleTimeout,
+	}
 	go func() {
-		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := s.server.Serve(ln); err != nil && err != http.ErrServerClosed {
 			fmt.Printf("pgwd http: %v\n", err)
 		}
 	}()
@@ -85,7 +102,8 @@ func (s *Server) Stop(ctx context.Context) error {
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if s.st != nil {
 		if err := s.st.Ping(r.Context()); err != nil {
-			http.Error(w, "store unavailable: "+err.Error(), http.StatusServiceUnavailable)
+			// Do not leak internal store errors to clients.
+			http.Error(w, "store unavailable", http.StatusServiceUnavailable)
 			return
 		}
 	}

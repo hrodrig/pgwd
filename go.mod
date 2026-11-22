@@ -2,6 +2,8 @@ module github.com/hrodrig/pgwd
 
 go 1.26.6
 
+godebug multipathtcp=0
+
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/go-sql-driver/mysql v1.8.1

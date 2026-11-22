@@ -528,7 +528,7 @@ When you run pgwd as a Deployment (Docker image in K8s), use **direct service UR
 - **Postgres:** `databases[].url` with in-cluster DNS, e.g. `postgres://user:pass@postgres.default.svc.cluster.local:5432/mydb` (shorter: `postgres-service.namespace:5432`).
 - **Loki:** `notifications.loki.url` with in-cluster DNS, e.g. `http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push`.
 - **Passwords:** From a Secret via env (`PGWD_*` or `-config`). **Do not use `DISCOVER_MY_PASSWORD`** (deprecated; removed in 0.9.x).
-- **HTTP:** Set `http.listen: ":8080"` for `/healthz` and `/metrics` (liveness, Prometheus).
+- **HTTP:** Set `http.listen: ":8080"` for `/healthz` and `/metrics` (liveness, Prometheus). Optional `http.metrics_token` uses **Bearer** only (not `?token=`). Prefer `127.0.0.1` or auth when the bind is reachable beyond a trusted network. On Linux, the listener disables Multipath TCP (Go 1.24+ default); still patch the host kernel for CVE-2026-98432.
 - **CSV export (metrics store):** Check history is persisted under **`sqlite.path`** (SQLite) or **`metrics_store.driver`** + **`metrics_store.dsn`** (PostgreSQL / MySQL). **[TimescaleDB](https://www.timescale.com/)** works as **`driver: postgres`** pointing at your Timescale endpoint (plain `metrics` table; no pgwd-specific hypertable integration). To dump stored rows: **`pgwd -config /etc/pgwd/pgwd.conf -export-metrics-format csv -export-metrics-destination /path/out.csv`**. SQLite export opens the file **read-only** (safe while the daemon runs). Overwrites the CSV each run; use **cron** for periodic snapshots. See **`internal/metricsstore`** and **`contrib/pgwd.conf.example`**.
 
 Simplest: use env vars from Secrets (no config file). Example Deployment env:
