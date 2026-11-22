@@ -19,6 +19,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 - **Firing latch without store:** daemon keeps per-target previous severity in memory across ticks so transition-only alerts work when no SQLite/SQL store is configured (#32). `confirm_alert` / durable hysteresis still require a store.
 - **Generic webhook `body_template`:** JSON-escape interpolated string fields so names with `"` do not break the payload (#37).
 - **`-validate-k8s-access`:** uses Discovery `ServerVersion` instead of listing pods across namespaces; SQLite/CSV parent dirs created with mode `0700` (#38).
+- **kube port-forward:** re-resolve pod and reconnect with backoff when the forward drops (e.g. Postgres pod restart) (#34).
 
 ### Docs
 

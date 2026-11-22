@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	discoveryv1 "k8s.io/api/discovery/v1"
@@ -252,25 +253,84 @@ func StartPortForward(ctx context.Context, kubeContext, namespace, resource stri
 	return StartPortForwardTo(ctx, kubeContext, namespace, resource, localPort, 5432)
 }
 
-// StartPortForwardTo runs port-forward in the background (localPort:remotePort) and waits for the local port to be listening.
+// StartPortForwardTo runs port-forward in the background (localPort:remotePort) and waits
+// for the local port to be listening. If the forward drops (e.g. target pod restart), it
+// re-resolves the pod (for svc/) and reconnects until cleanup or ctx cancel.
 func StartPortForwardTo(ctx context.Context, kubeContext, namespace, resource string, localPort, remotePort int) (cleanup func(), err error) {
-	podName := resource
-	if strings.HasPrefix(resource, "svc/") {
-		podName, err = ResolvePod(ctx, kubeContext, namespace, resource)
-		if err != nil {
-			return nil, err
+	stopCh := make(chan struct{})
+	firstReady := make(chan struct{})
+	var readyOnce sync.Once
+
+	go maintainPortForward(ctx, stopCh, firstReady, &readyOnce, kubeContext, namespace, resource, localPort, remotePort)
+
+	cleanupFn := func() {
+		select {
+		case <-stopCh:
+		default:
+			close(stopCh)
 		}
-	} else if strings.HasPrefix(resource, "pod/") {
-		podName = strings.TrimPrefix(resource, "pod/")
-	} else {
-		return nil, fmt.Errorf("resource must be pod/name or svc/name, got %q", resource)
 	}
 
+	select {
+	case <-firstReady:
+		return cleanupFn, nil
+	case <-ctx.Done():
+		cleanupFn()
+		return nil, ctx.Err()
+	case <-time.After(10 * time.Second):
+		cleanupFn()
+		return nil, fmt.Errorf("port %d did not become ready in time (port-forward may have failed)", localPort)
+	}
+}
+
+func resolveForwardPod(ctx context.Context, kubeContext, namespace, resource string) (string, error) {
+	if strings.HasPrefix(resource, "svc/") {
+		return ResolvePod(ctx, kubeContext, namespace, resource)
+	}
+	if strings.HasPrefix(resource, "pod/") {
+		return strings.TrimPrefix(resource, "pod/"), nil
+	}
+	return "", fmt.Errorf("resource must be pod/name or svc/name, got %q", resource)
+}
+
+func maintainPortForward(ctx context.Context, stopCh <-chan struct{}, firstReady chan<- struct{}, readyOnce *sync.Once, kubeContext, namespace, resource string, localPort, remotePort int) {
+	backoff := time.Second
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-ctx.Done():
+			return
+		default:
+		}
+		becameReady, err := runPortForwardSession(ctx, stopCh, firstReady, readyOnce, kubeContext, namespace, resource, localPort, remotePort)
+		if becameReady {
+			backoff = time.Second
+		}
+		if err != nil && ctx.Err() == nil {
+			fmt.Fprintf(os.Stderr, "pgwd: port-forward: %v (reconnecting)\n", err)
+		}
+		select {
+		case <-stopCh:
+			return
+		case <-ctx.Done():
+			return
+		case <-time.After(backoff):
+		}
+		if backoff < 30*time.Second {
+			backoff *= 2
+			if backoff > 30*time.Second {
+				backoff = 30 * time.Second
+			}
+		}
+	}
+}
+
+func newPortForwarder(kubeContext, namespace, podName string, localPort, remotePort int, sessionStop, readyCh chan struct{}, errOut *bytes.Buffer) (*portforward.PortForwarder, error) {
 	config, err := getConfig(kubeContext)
 	if err != nil {
 		return nil, fmt.Errorf("load kubeconfig: %w", err)
 	}
-
 	path := fmt.Sprintf("/api/v1/namespaces/%s/pods/%s/portforward", namespace, podName)
 	fwdURL, err := url.Parse(config.Host)
 	if err != nil {
@@ -278,45 +338,101 @@ func StartPortForwardTo(ctx context.Context, kubeContext, namespace, resource st
 	}
 	fwdURL.Path = path
 	fwdURL.RawQuery = ""
-
 	transport, upgrader, err := spdy.RoundTripperFor(config)
 	if err != nil {
 		return nil, fmt.Errorf("spdy round tripper: %w", err)
 	}
 	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, "POST", fwdURL)
-
-	stopCh := make(chan struct{})
-	readyCh := make(chan struct{})
-	var errOut bytes.Buffer
-	pf, err := portforward.New(dialer, []string{fmt.Sprintf("%d:%d", localPort, remotePort)}, stopCh, readyCh, io.Discard, &errOut)
+	pf, err := portforward.New(dialer, []string{fmt.Sprintf("%d:%d", localPort, remotePort)}, sessionStop, readyCh, io.Discard, errOut)
 	if err != nil {
 		return nil, fmt.Errorf("create port-forward: %w", err)
 	}
+	return pf, nil
+}
 
-	go func() {
-		if err := pf.ForwardPorts(); err != nil && ctx.Err() == nil {
-			fmt.Fprintf(os.Stderr, "pgwd: port-forward: %v\n", err)
-		}
-	}()
-
-	cleanupFn := func() {
-		close(stopCh)
-		pf.Close()
+func closeOnce(ch chan struct{}) {
+	select {
+	case <-ch:
+	default:
+		close(ch)
 	}
+}
 
+func waitPortForwardReady(ctx context.Context, stopCh, readyCh <-chan struct{}, errCh <-chan error, errOut *bytes.Buffer, localPort int, stopSession func()) error {
 	select {
 	case <-readyCh:
-		return cleanupFn, nil
-	case <-ctx.Done():
-		cleanupFn()
-		return nil, ctx.Err()
-	case <-time.After(10 * time.Second):
-		cleanupFn()
+		return nil
+	case err := <-errCh:
 		if errOut.Len() > 0 {
-			return nil, fmt.Errorf("port %d did not become ready in time: %s", localPort, errOut.String())
+			return fmt.Errorf("%w: %s", err, errOut.String())
 		}
-		return nil, fmt.Errorf("port %d did not become ready in time (port-forward may have failed)", localPort)
+		return err
+	case <-stopCh:
+		stopSession()
+		return errPortForwardStopped
+	case <-ctx.Done():
+		stopSession()
+		return ctx.Err()
+	case <-time.After(10 * time.Second):
+		stopSession()
+		if errOut.Len() > 0 {
+			return fmt.Errorf("port %d not ready: %s", localPort, errOut.String())
+		}
+		return fmt.Errorf("port %d not ready in time", localPort)
 	}
+}
+
+var errPortForwardStopped = errors.New("port-forward stopped")
+
+func waitPortForwardEnd(ctx context.Context, stopCh <-chan struct{}, errCh <-chan error, stopSession func()) error {
+	select {
+	case err := <-errCh:
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("port-forward ended")
+	case <-stopCh:
+		stopSession()
+		return errPortForwardStopped
+	case <-ctx.Done():
+		stopSession()
+		return ctx.Err()
+	}
+}
+
+func runPortForwardSession(ctx context.Context, stopCh <-chan struct{}, firstReady chan<- struct{}, readyOnce *sync.Once, kubeContext, namespace, resource string, localPort, remotePort int) (bool, error) {
+	podName, err := resolveForwardPod(ctx, kubeContext, namespace, resource)
+	if err != nil {
+		return false, err
+	}
+	sessionStop := make(chan struct{})
+	readyCh := make(chan struct{})
+	var errOut bytes.Buffer
+	pf, err := newPortForwarder(kubeContext, namespace, podName, localPort, remotePort, sessionStop, readyCh, &errOut)
+	if err != nil {
+		return false, err
+	}
+	defer pf.Close()
+	stopSession := func() { closeOnce(sessionStop) }
+
+	errCh := make(chan error, 1)
+	go func() { errCh <- pf.ForwardPorts() }()
+
+	if err := waitPortForwardReady(ctx, stopCh, readyCh, errCh, &errOut, localPort, stopSession); err != nil {
+		if errors.Is(err, errPortForwardStopped) {
+			return true, nil
+		}
+		return false, err
+	}
+	readyOnce.Do(func() { close(firstReady) })
+
+	if err := waitPortForwardEnd(ctx, stopCh, errCh, stopSession); err != nil {
+		if errors.Is(err, errPortForwardStopped) {
+			return true, nil
+		}
+		return true, err
+	}
+	return true, nil
 }
 
 // ReplaceDBURLForKube returns a new connection URL with host set to localhost:localPort and, if newPassword is non-empty, the user info password replaced.
