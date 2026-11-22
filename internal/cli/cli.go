@@ -34,6 +34,25 @@ const (
 	ExitStrictNotify   = 4 // -strict and notifier delivery failed
 )
 
+// MaxCheckTimeout caps each target check (connect + queries) so a hung peer cannot stall the daemon.
+const MaxCheckTimeout = 30 * time.Second
+
+// CheckTimeout returns the per-check context deadline: min(interval, MaxCheckTimeout).
+// One-shot (interval ≤ 0) uses MaxCheckTimeout.
+func CheckTimeout(cfg *config.Config) time.Duration {
+	if cfg == nil || cfg.Interval <= 0 {
+		return MaxCheckTimeout
+	}
+	d := time.Duration(cfg.Interval) * time.Second
+	if d > MaxCheckTimeout {
+		return MaxCheckTimeout
+	}
+	if d < time.Second {
+		return time.Second
+	}
+	return d
+}
+
 // exitFunc is os.Exit; tests may replace it to avoid killing the test process.
 var exitFunc = os.Exit
 
@@ -512,31 +531,34 @@ func handleConnectFailure(ctx context.Context, senders []notify.Sender, targetCf
 
 // runOneTarget connects to one database target, applies threshold defaults, and
 // runs the first check. On connect or threshold errors it notifies (if configured)
-// and returns; single-target mode exits the process on connect failure.
+// and returns; one-shot single-target exits the process on connect failure (daemon continues).
 func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, targets []config.DatabaseTarget) {
-	targetCfg := cfg.ConfigForTarget(t)
-	runCluster, runClient, runNamespace, runDatabase := run.RunContextStrings(ctx, targetCfg, t.URL)
+	checkCtx, cancel := context.WithTimeout(ctx, CheckTimeout(cfg))
+	defer cancel()
 
-	pool, err := postgres.Pool(ctx, t.URL)
+	targetCfg := cfg.ConfigForTarget(t)
+	runCluster, runClient, runNamespace, runDatabase := run.RunContextStrings(checkCtx, targetCfg, t.URL)
+
+	pool, err := postgres.Pool(checkCtx, t.URL)
 	if err != nil {
-		handleConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err, targets)
+		handleConnectFailure(checkCtx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err, targets)
 		return
 	}
 	defer pool.Close()
 
-	// pgxpool.New is lazy; Ping forces a real connection so connect failures map to exit 2.
-	if err := pool.Ping(ctx); err != nil {
-		handleConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err, targets)
+	// pgxpool is lazy; Ping forces a real connection so connect failures map to exit 2 (one-shot).
+	if err := pool.Ping(checkCtx); err != nil {
+		handleConnectFailure(checkCtx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err, targets)
 		return
 	}
 
-	if err := run.ApplyThresholdDefaults(ctx, pool, targetCfg); err != nil {
-		exitStrictIf(targetCfg, run.NotifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err))
+	if err := run.ApplyThresholdDefaults(checkCtx, pool, targetCfg); err != nil {
+		exitStrictIf(targetCfg, run.NotifyConnectFailure(checkCtx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err))
 		log.Printf("threshold config error [%s]: %v", t.Client, err)
 		exitQueryErrorIf(targetCfg, targets, true)
 		return
 	}
-	outcome := run.MakeRunFunc(ctx, pool, targetCfg, senders, st, runCluster, runClient, runNamespace, runDatabase)()
+	outcome := run.MakeRunFunc(checkCtx, pool, targetCfg, senders, st, runCluster, runClient, runNamespace, runDatabase)()
 	exitStrictIf(targetCfg, outcome.DeliveryFailed)
 	exitQueryErrorIf(targetCfg, targets, outcome.QueryFailed)
 }

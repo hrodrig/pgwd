@@ -3,9 +3,33 @@ package cli
 import (
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hrodrig/pgwd/internal/config"
 )
+
+func TestCheckTimeout(t *testing.T) {
+	tests := []struct {
+		name     string
+		cfg      *config.Config
+		want     time.Duration
+	}{
+		{"nil", nil, MaxCheckTimeout},
+		{"one-shot", &config.Config{Interval: 0}, MaxCheckTimeout},
+		{"short interval", &config.Config{Interval: 10}, 10 * time.Second},
+		{"one second", &config.Config{Interval: 1}, time.Second},
+		{"caps at max", &config.Config{Interval: 120}, MaxCheckTimeout},
+		{"negative interval like one-shot", &config.Config{Interval: -5}, MaxCheckTimeout},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CheckTimeout(tt.cfg)
+			if got != tt.want {
+				t.Fatalf("CheckTimeout() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestApplyDBURLOverride_clearsDatabases(t *testing.T) {
 	cfg := &config.Config{
