@@ -7,6 +7,24 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+func TestPool_badDSN(t *testing.T) {
+	_, err := Pool(t.Context(), "://not-a-dsn")
+	if err == nil {
+		t.Fatal("want parse error")
+	}
+}
+
+func TestApplyDefaultConnectTimeout_zeroDuration(t *testing.T) {
+	cfg, err := pgxpool.ParseConfig("postgres://u:p@127.0.0.1:5432/db?sslmode=disable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ApplyDefaultConnectTimeout(cfg, 0)
+	if cfg.ConnConfig.ConnectTimeout != 0 {
+		t.Fatalf("got %v", cfg.ConnConfig.ConnectTimeout)
+	}
+}
+
 func TestApplyDefaultConnectTimeout_setsWhenZero(t *testing.T) {
 	cfg, err := pgxpool.ParseConfig("postgres://u:p@127.0.0.1:5432/db?sslmode=disable")
 	if err != nil {

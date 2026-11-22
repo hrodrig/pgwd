@@ -248,6 +248,12 @@ func containsDiscoverPassword(dbURL string) bool {
 	return strings.Contains(dbURL, "DISCOVER_MY_PASSWORD")
 }
 
+// Timeouts for port-forward readiness (overridable in tests).
+var (
+	portForwardReadyTimeout = 10 * time.Second
+	portForwardStartTimeout = 10 * time.Second
+)
+
 // StartPortForward runs port-forward to localPort:5432 (Postgres).
 func StartPortForward(ctx context.Context, kubeContext, namespace, resource string, localPort int) (cleanup func(), err error) {
 	return StartPortForwardTo(ctx, kubeContext, namespace, resource, localPort, 5432)
@@ -277,7 +283,7 @@ func StartPortForwardTo(ctx context.Context, kubeContext, namespace, resource st
 	case <-ctx.Done():
 		cleanupFn()
 		return nil, ctx.Err()
-	case <-time.After(10 * time.Second):
+	case <-time.After(portForwardStartTimeout):
 		cleanupFn()
 		return nil, fmt.Errorf("port %d did not become ready in time (port-forward may have failed)", localPort)
 	}
@@ -293,7 +299,16 @@ func resolveForwardPod(ctx context.Context, kubeContext, namespace, resource str
 	return "", fmt.Errorf("resource must be pod/name or svc/name, got %q", resource)
 }
 
+// portForwardSessionRunner runs one port-forward attempt. becameReady is true if the
+// forward reached ready (or was stopped after ready); err is set when the session ends
+// with a failure that should trigger reconnect.
+type portForwardSessionRunner func(ctx context.Context, stopCh <-chan struct{}, firstReady chan<- struct{}, readyOnce *sync.Once, kubeContext, namespace, resource string, localPort, remotePort int) (becameReady bool, err error)
+
 func maintainPortForward(ctx context.Context, stopCh <-chan struct{}, firstReady chan<- struct{}, readyOnce *sync.Once, kubeContext, namespace, resource string, localPort, remotePort int) {
+	maintainPortForwardWith(ctx, stopCh, firstReady, readyOnce, runPortForwardSession, kubeContext, namespace, resource, localPort, remotePort)
+}
+
+func maintainPortForwardWith(ctx context.Context, stopCh <-chan struct{}, firstReady chan<- struct{}, readyOnce *sync.Once, runSession portForwardSessionRunner, kubeContext, namespace, resource string, localPort, remotePort int) {
 	backoff := time.Second
 	for {
 		select {
@@ -303,7 +318,7 @@ func maintainPortForward(ctx context.Context, stopCh <-chan struct{}, firstReady
 			return
 		default:
 		}
-		becameReady, err := runPortForwardSession(ctx, stopCh, firstReady, readyOnce, kubeContext, namespace, resource, localPort, remotePort)
+		becameReady, err := runSession(ctx, stopCh, firstReady, readyOnce, kubeContext, namespace, resource, localPort, remotePort)
 		if becameReady {
 			backoff = time.Second
 		}
@@ -373,7 +388,7 @@ func waitPortForwardReady(ctx context.Context, stopCh, readyCh <-chan struct{}, 
 	case <-ctx.Done():
 		stopSession()
 		return ctx.Err()
-	case <-time.After(10 * time.Second):
+	case <-time.After(portForwardReadyTimeout):
 		stopSession()
 		if errOut.Len() > 0 {
 			return fmt.Errorf("port %d not ready: %s", localPort, errOut.String())

@@ -51,3 +51,22 @@ func TestPersistConnectFailure_tooManyClients(t *testing.T) {
 		t.Fatalf("state = %q", st.inserted[0].State)
 	}
 }
+
+type failStore struct{}
+
+func (failStore) Insert(context.Context, store.Record) error {
+	return errors.New("disk full")
+}
+func (failStore) Close() error { return nil }
+func (failStore) Ping(context.Context) error {
+	return nil
+}
+func (failStore) LatestRecords(context.Context) ([]store.Record, error) { return nil, nil }
+func (failStore) LastStates(context.Context, string, string, string, int) ([]string, error) {
+	return nil, nil
+}
+
+func TestPersistConnectFailure_insertErrorLogged(t *testing.T) {
+	// Exercise the Insert error branch (log only; must not panic).
+	PersistConnectFailure(context.Background(), failStore{}, "cl", "c", "ns", "db", errors.New("down"))
+}
