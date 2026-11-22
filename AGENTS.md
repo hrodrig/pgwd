@@ -24,7 +24,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 - **Integration tests:** `make test-integration` (requires Docker). Starts Postgres and Loki via `testing/compose.yaml` and `testing/compose-loki.yaml`, runs integration tests, then stops. Must pass before release (see `.cursor/rules/release-tests.mdc`).
 - Tests exist in `internal/config`, `internal/notify` (unit + Loki integration), `internal/checker`, `internal/validator`, `internal/store`, `internal/httpsrv`, `internal/kube`, and `internal/postgres` (integration, requires `PGWD_TEST_DB_URL`). `cmd/pgwd` has black-box tests (version, help, validation exits).
 - **Platform tests:** `make test-platforms` (requires Ansible + VMs). Ansible playbooks under `testing/platforms/` automate install, daemon, notification (Loki+Slack mock), timer, and uninstall validation across Linux and BSD. See `testing/platforms/README.md`. Target one platform: `make test-platforms PLATFORM=pgwd-ubuntu`. Quick connectivity check: `make test-platforms-ping` runs `playbooks/ping.yml` using Ansible's **`ping`** module (not ICMP); a healthy host responds with **`pong`**.
-- **Lint:** `make lint` runs **gofmt -s**, **`go vet ./...`**, and **gocyclo** (complexity ≤ 14); the CI **lint** job does the same.
+- **Lint:** `make lint` runs **`check-x-net-pin`**, **gofmt -s**, **`go vet ./...`**, and **gocyclo** (complexity ≤ 14); the CI **lint** job does the same.
 - Before committing or proposing changes, ensure `go test ./...` passes. Before release, run **`make release-check`** (includes **`make cover-check`** and **`make test-integration`**).
 - **Before a release:** run `make test-platforms` (or at minimum the platforms affected by the change) to validate install, daemon, notifications, and uninstall on real OS targets. This is not automated in CI (requires VMs) but is a manual pre-release gate.
 
@@ -32,6 +32,7 @@ Context and instructions for AI coding agents working on **pgwd** (Postgres Watc
 
 - **Language:** English only. Code, comments, commit messages, docs, and variable/function names must be in English (see `.cursor/rules/language-english.mdc`).
 - **Go:** Standard Go style. Use `gofmt`/`goimports` if available. Module path: `github.com/hrodrig/pgwd`.
+- **`golang.org/x/net` floor:** Keep the **`replace golang.org/x/net => golang.org/x/net v0.62.0`** directive in **`go.mod`** (`X_NET_MIN_VERSION` in **`GNUmakefile`**). A plain **`require`** is not a durable floor when nothing imports an `x/net` package (`go mod tidy` drops it). **`make check-x-net-pin`** only **verifies** (it never edits **`go.mod`**). CI **`make lint`** enforces the floor. After **`go mod tidy`** or a Dependabot dependency PR, run **`make check-x-net-pin`**.
 - **Version:** Canonical version lives in the `VERSION` file (e.g. `0.2.0`). Makefile and Docker build use it; keep README badges and `go.mod` in sync when versions change (see `.cursor/rules/readme-badges-version.mdc`).
 
 ## Git flow
