@@ -6,10 +6,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ## [Unreleased]
 
+### Fixed
+
+- **Daemon connect failure:** with `interval > 0`, a single-target Postgres connect/`Ping` failure no longer exits 2 (CrashLoop). Process notifies, persists `connect_failure` when a metrics store is configured, and retries on the next tick. One-shot still exits 2.
+- **Check hang:** each target check uses `min(interval, 30s)` context timeout; DSN without `connect_timeout` gets a 30s pgx default so a hung peer cannot block the loop indefinitely.
+
 ### Docs
 
 - **Architecture diagram:** interactive Archify viewer (`docs/pgwd-architecture.html`) with flow animation, plus README/docs preview (`docs/pgwd-architecture.png`) and source (`docs/architecture.pgwd.json`).
 - **README:** Awesome Go “Mentioned in” badge.
+- **SPECIFICATIONS:** exit code 2 documents one-shot vs daemon connect-failure behavior.
 
 ## [1.2.0] - 2026-09-05
 

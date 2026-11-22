@@ -107,9 +107,10 @@ Last audit: 2026-07-18 (1.0: removed notify-on-connect-failure surface, connect 
 | build connect_failure event (message + run context) | 255–269 `notify.Event{ Threshold: "connect_failure", Cluster, Client, Namespace, Database }` |
 | loop Send to Slack/Loki | 271–278 |
 | opt at least one Send ok → log Notification sent | 279–281 |
-| log + exit 2 | `exitConnectFailureIf` / `handleConnectFailure` after Pool or Ping fail (message omits error detail intentionally) |
+| notify + optional store insert | `handleConnectFailure` → `NotifyConnectFailure` + `PersistConnectFailure` |
+| one-shot single-target → exit 2; daemon continues | `exitConnectFailureIf` checks `Interval > 0` (same idea as `exitQueryErrorIf`) |
 
-**Verdict:** Matches.
+**Verdict:** Matches (updated for daemon survive + persist, 2026-11-22 / #29).
 
 ---
 
