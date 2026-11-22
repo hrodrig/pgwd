@@ -519,9 +519,11 @@ func exitQueryErrorIf(cfg *config.Config, targets []config.DatabaseTarget, query
 	exitFunc(ExitQueryError)
 }
 
-// handleConnectFailure notifies (if configured) then exits 2 for single-target, or logs for multi-DB.
-func handleConnectFailure(ctx context.Context, senders []notify.Sender, targetCfg *config.Config, cluster, client, ns, db string, connectErr error, targets []config.DatabaseTarget) {
+// handleConnectFailure notifies (if configured), persists connect_failure when a store is set,
+// then exits 2 for one-shot single-target (daemon continues), or logs for multi-DB.
+func handleConnectFailure(ctx context.Context, senders []notify.Sender, targetCfg *config.Config, cluster, client, ns, db string, connectErr error, targets []config.DatabaseTarget, st store.MetricsStorer) {
 	exitStrictIf(targetCfg, run.NotifyConnectFailure(ctx, senders, targetCfg, cluster, client, ns, db, connectErr))
+	run.PersistConnectFailure(ctx, st, cluster, client, ns, db, connectErr)
 	if len(targets) == 1 {
 		exitConnectFailureIf(targetCfg, targets)
 		return
@@ -541,14 +543,14 @@ func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Conf
 
 	pool, err := postgres.Pool(checkCtx, t.URL)
 	if err != nil {
-		handleConnectFailure(checkCtx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err, targets)
+		handleConnectFailure(checkCtx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err, targets, st)
 		return
 	}
 	defer pool.Close()
 
 	// pgxpool is lazy; Ping forces a real connection so connect failures map to exit 2 (one-shot).
 	if err := pool.Ping(checkCtx); err != nil {
-		handleConnectFailure(checkCtx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err, targets)
+		handleConnectFailure(checkCtx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err, targets, st)
 		return
 	}
 

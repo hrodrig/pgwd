@@ -12,6 +12,24 @@ import (
 	"github.com/hrodrig/pgwd/internal/store"
 )
 
+// stubMetricsStore records Insert calls for connect-failure persistence tests.
+type stubMetricsStore struct {
+	records []store.Record
+}
+
+func (s *stubMetricsStore) Insert(_ context.Context, r store.Record) error {
+	s.records = append(s.records, r)
+	return nil
+}
+func (s *stubMetricsStore) Close() error                                      { return nil }
+func (s *stubMetricsStore) Ping(context.Context) error                        { return nil }
+func (s *stubMetricsStore) LatestRecords(context.Context) ([]store.Record, error) {
+	return nil, nil
+}
+func (s *stubMetricsStore) LastStates(context.Context, string, string, string, int) ([]string, error) {
+	return nil, nil
+}
+
 func testDBURL(t *testing.T) string {
 	t.Helper()
 	dsn := os.Getenv("PGWD_TEST_DB_URL")
@@ -118,9 +136,13 @@ func TestRunOneTarget_daemonBadURL_noExit(t *testing.T) {
 	t.Cleanup(func() { exitFunc = prev })
 
 	bad := "postgres://127.0.0.1:1/nope?sslmode=disable"
-	runOneTarget(ctx, config.DatabaseTarget{Client: "x", URL: bad}, cfg, nil, nil, []config.DatabaseTarget{{Client: "x", URL: bad}})
+	st := &stubMetricsStore{}
+	runOneTarget(ctx, config.DatabaseTarget{Client: "x", URL: bad}, cfg, nil, st, []config.DatabaseTarget{{Client: "x", URL: bad}})
 	if gotExit != 0 {
 		t.Fatalf("daemon must not exit on connect failure, got %d", gotExit)
+	}
+	if len(st.records) != 1 || st.records[0].State != "connect_failure" {
+		t.Fatalf("want one connect_failure store row, got %+v", st.records)
 	}
 }
 
