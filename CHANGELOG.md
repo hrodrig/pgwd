@@ -13,7 +13,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ### Security
 
-- **Go toolchain:** bump to **1.26.11** (stdlib: GO-2026-6859, GO-2026-6809, GO-2026-6612, and related); transitive **`golang.org/x/net` v0.60.0** (GO-2026-6612 / 6603 / 6611 / 6617 / 6610).
+- **Go toolchain:** bump to **1.27.4** (`go.mod`, Dockerfile `golang:1.27.4-alpine3.24`); transitive **`golang.org/x/net` v0.60.0**. Clears CI Grype/govulncheck High/Critical on 1.26.6 (GO-2026-6859, GO-2026-6809, GO-2026-6612 family, and related).
 - **Notify HTTP errors:** redact `*url.Error` webhook URLs to `scheme://host` before wrapping/logging so Slack/Teams/PagerDuty path secrets are not leaked (#30).
 - **HTTP `/metrics`:** `ReadHeaderTimeout` / `ReadTimeout` / `IdleTimeout` on the server; drop `?token=` (Bearer/basic only); `/healthz` no longer returns raw store errors; warn when anonymous `/metrics` binds non-loopback (#33).
 - **MPTCP listen:** `godebug multipathtcp=0` in `go.mod` and `ListenConfig.SetMultipathTCP(false)` on the metrics listener to avoid Go 1.24+ MPTCP listen default (CVE-2026-98432 exposure path). Patched kernel remains the real fix (#28).

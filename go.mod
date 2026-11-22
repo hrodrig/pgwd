@@ -1,6 +1,6 @@
 module github.com/hrodrig/pgwd
 
-go 1.26.11
+go 1.27.4
 
 godebug multipathtcp=0
 
