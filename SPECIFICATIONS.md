@@ -68,7 +68,7 @@ Documented operator-facing gaps; planned hardening is in [ROADMAP.md](ROADMAP.md
 | `pgwd --print-sample-config` | Writes annotated sample YAML to **stdout** and exits 0. |
 | `pgwd -dry-run` | Runs normally but skips all outbound HTTP notifications (Slack, Loki, PagerDuty, Teams, generic webhook, etc.). Logs every event as `[dry-run] would send: …`. |
 | `pgwd -force-notification` | Sends one test event to all configured notifiers after a successful Postgres connect, regardless of thresholds. |
-| `pgwd -validate-k8s-access` | Validates cluster connectivity (lists pods), then exits. Uses `-kube-context` when set. Does not require `-kube-postgres`. |
+| `pgwd -validate-k8s-access` | Validates cluster connectivity via API Discovery (server version), then exits. Uses `-kube-context` when set. Does not require `-kube-postgres`. |
 | `pgwd -export-metrics-format csv -export-metrics-destination <path>` | Dumps persisted metrics from the configured store to a CSV file, then exits. |
 
 ### Exit codes

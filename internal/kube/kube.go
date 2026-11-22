@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -68,22 +67,18 @@ func RequireKubectl() error {
 	return nil
 }
 
-// ValidateKubernetesAccess lists pods across all namespaces to verify cluster connectivity.
+// ValidateKubernetesAccess checks API reachability via Discovery (no pod list / names printed).
+// Requires only authentication to the API server, not cluster-wide pods list RBAC.
 func ValidateKubernetesAccess(ctx context.Context, kubeContext string) error {
 	_, clientset, err := getConfigAndClientset(kubeContext)
 	if err != nil {
 		return fmt.Errorf("load kubeconfig: %w", err)
 	}
-	opts := metav1.ListOptions{Limit: 10}
-	_, err = clientset.CoreV1().Pods(corev1.NamespaceAll).List(ctx, opts)
+	info, err := clientset.Discovery().ServerVersion()
 	if err != nil {
-		return fmt.Errorf("list pods failed: %w", err)
+		return fmt.Errorf("kubernetes API unreachable: %w", err)
 	}
-	// Stream a subset to stdout (mimic kubectl get pods -A brevity)
-	pods, _ := clientset.CoreV1().Pods(corev1.NamespaceAll).List(ctx, metav1.ListOptions{Limit: 20})
-	for _, p := range pods.Items {
-		fmt.Fprintf(os.Stdout, "%-50s %s\n", p.Namespace+"/"+p.Name, p.Status.Phase)
-	}
+	fmt.Fprintf(os.Stdout, "kubernetes ok: version %s\n", info.GitVersion)
 	return nil
 }
 
