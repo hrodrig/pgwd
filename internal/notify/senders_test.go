@@ -280,8 +280,8 @@ func TestGenericWebhookSend_BodyTemplate_escapesJSON(t *testing.T) {
 		Client:       srv.Client(),
 	}
 	ev := Event{
-		Database: `db"prod`,
-		Message:  `say "hi"`,
+		Database:  `db"prod`,
+		Message:   `say "hi"`,
 		Threshold: "test",
 	}
 	if err := gw.Send(context.Background(), ev); err != nil {
