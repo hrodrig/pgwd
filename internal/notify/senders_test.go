@@ -3,6 +3,7 @@ package notify
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -255,6 +256,46 @@ func TestGenericWebhookSend_InvalidTemplateJSON(t *testing.T) {
 	err := gw.Send(context.Background(), Event{Threshold: "test", Message: "x"})
 	if err == nil || !strings.Contains(err.Error(), "invalid JSON") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestGenericWebhookSend_BodyTemplate_escapesJSON(t *testing.T) {
+	t.Cleanup(func() { ApplyRetryConfig(DefaultRetryConfig) })
+	ApplyRetryConfig(RetryConfig{MaxAttempts: 1, InitialBackoff: 0, MaxBackoff: 0})
+
+	var raw []byte
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		raw, err = io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read: %v", err)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	gw := &GenericWebhook{
+		WebhookURL:   srv.URL,
+		BodyTemplate: `{"database":"{{.Database}}","message":"{{.Message}}"}`,
+		Client:       srv.Client(),
+	}
+	ev := Event{
+		Database: `db"prod`,
+		Message:  `say "hi"`,
+		Threshold: "test",
+	}
+	if err := gw.Send(context.Background(), ev); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if !json.Valid(raw) {
+		t.Fatalf("invalid JSON: %s", raw)
+	}
+	var got map[string]string
+	if err := json.Unmarshal(raw, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["database"] != `db"prod` || got["message"] != `say "hi"` {
+		t.Fatalf("got %#v", got)
 	}
 }
 
