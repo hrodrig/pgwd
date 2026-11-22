@@ -232,8 +232,8 @@ test-platforms-ping:
 # Install optional dev tools (govulncheck, gocyclo)
 .PHONY: tools
 tools:
-	go install golang.org/x/vuln/cmd/govulncheck@latest
-	go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+	go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
+	go install github.com/fzipp/gocyclo/cmd/gocyclo@v0.6.0
 
 # Lint: gofmt + go vet + gocyclo (run during development; CI runs this too)
 lint:
@@ -242,7 +242,7 @@ lint:
 	@echo "Running go vet..."
 	@go vet ./...
 	@echo "Checking gocyclo (complexity <= 14)..."
-	@command -v gocyclo >/dev/null 2>&1 || go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+	@command -v gocyclo >/dev/null 2>&1 || go install github.com/fzipp/gocyclo/cmd/gocyclo@v0.6.0
 	@gocyclo -over 14 .
 
 # Fix formatting only (gofmt -s -w); re-run make lint to verify go vet and gocyclo
@@ -292,7 +292,7 @@ docker-scan:
 		grype pgwd:scan --fail-on $(GRYPE_FAIL_ON); \
 	else \
 		echo "grype not on PATH; using anchore/grype container..."; \
-		docker run --rm --pull=always -v /var/run/docker.sock:/var/run/docker.sock anchore/grype:latest \
+		docker run --rm --pull=always -v /var/run/docker.sock:/var/run/docker.sock anchore/grype:v0.122.1 \
 			pgwd:scan --fail-on $(GRYPE_FAIL_ON); \
 	fi
 

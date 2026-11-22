@@ -26,6 +26,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 - **README:** Awesome Go “Mentioned in” badge.
 - **SPECIFICATIONS:** exit code 2 documents one-shot vs daemon connect-failure behavior.
 - **`-db-url`:** flag help and README warn that passwords in argv are visible in `ps`; prefer env / `password_from_secret` (#36).
+- **Metrics scope:** README/SPEC document `current_database()` vs `max_connections` and the need for `pg_monitor` (#31).
+- **Supply chain:** Dependabot (`gomod`, `github-actions`, `docker`); pin `govulncheck@v1.10.0`, `gocyclo@v0.6.0`, `anchore/grype:v0.122.1`; drop `curl | sh` Grype install in CI (#35).
 
 ## [1.2.0] - 2026-09-05
 

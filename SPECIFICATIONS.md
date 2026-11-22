@@ -302,12 +302,16 @@ All config keys map to `PGWD_<UPPER_SNAKE>` equivalents. Notifier env vars:
 
 ### Connection stats
 
-Queried from `pg_stat_activity`:
-- **Total:** count of all connections (including idle, active, etc.), excluding the monitor's own connection
+Queried from `pg_stat_activity` with **`datname = current_database()`** (current database only):
+- **Total:** count of backends for this database (including idle, active, etc.)
 - **Active:** `state = 'active'`
 - **Idle:** `state = 'idle'`
 - **Stale:** `backend_start` older than `stale_age` seconds
 - **Long-running queries:** `state = 'active'` and `query_start` older than `long_query_min_seconds`
+
+**Denominator:** level-mode percentages use cluster-wide `max_connections` (reserved slots not subtracted). Other databases, replication, and background workers are outside the numerator.
+
+**Privileges:** the monitor role should have **`pg_monitor`** (or equivalent). Without it, `state` for other sessions may be NULL and active/idle/long_query counts under-report.
 
 ### Threshold evaluation order (each check cycle)
 

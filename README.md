@@ -272,6 +272,8 @@ pgwd -db-threshold-levels 5,10,15 -dry-run
 | **idle** | Pool size / connections sitting idle | `-db-threshold-idle 40` |
 | **stale** | Connections open too long (leaks, never closed) | `-db-stale-age 600 -db-threshold-stale 1` |
 
+**Metrics scope and privileges:** Connection counts come from `pg_stat_activity` filtered to **`datname = current_database()`**, but level thresholds compare those counts to cluster-wide **`max_connections`** (reserved slots are not subtracted). Other databases, replication, and background workers are therefore outside the numerator. Grant the monitor role **`pg_monitor`** (or equivalent) so `state` is visible for other sessions; without it, active/idle/long_query counts can under-report.
+
 ```bash
 # 3-tier levels (default 75,85,95% of max_connections) — one-shot, Slack
 pgwd -db-url "postgres://user:pass@localhost:5432/mydb" \
