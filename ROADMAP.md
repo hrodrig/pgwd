@@ -1,8 +1,8 @@
 # pgwd roadmap
 
-**Current release:** [v1.1.1](VERSION) · **Branch:** `develop` · **Next:** remaining [plan-1.1.1](docs/plan-1.1.1.md) contract repair (latch without store, SPEC, YAML), then [1.2.x](docs/plan-1.2.x.md) (hygiene)
+**Current release:** [v1.2.1](VERSION) · **Branch:** `develop` · **Next:** remaining [plan-1.2.x.md](docs/plan-1.2.x.md) hygiene (KnownFields, env honesty) as needed
 
-**Status (2026-08-31):** **v1.1.1** shipped (Go **1.26.6** + `golang.org/x/net` **v0.56.0**). **v1.1.0** incident hygiene remains. Leftover **plan-1.1.1** work (daemon latch without store, SPEC dry-run/Stats, YAML examples) is not in this tag. **1.2.x** planned — Dependabot, KnownFields, env honesty, HTTP timeouts, docs/packaging sync. Stable API remains **v1.0.0** (+ additive 1.1+ keys). Distro packaging continues in **1.x** (not a hard tag gate).
+**Status (2026-11-24):** **v1.2.1** shipped (security/reliability: Go **1.27.4**, `golang.org/x/net` **v0.62.0**, daemon connect survival, `/metrics`+notify hardening, kube reconnect). **v1.2.0** SQLite packaging bump remains. Stable API remains **v1.0.0** (+ additive 1.1+/1.2 keys). Distro packaging continues in **1.x** (not a hard tag gate).
 
 This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → … → [docs/plan-1.1.x.md](docs/plan-1.1.x.md) → [docs/plan-1.1.1.md](docs/plan-1.1.1.md) → [docs/plan-1.2.x.md](docs/plan-1.2.x.md).
 
@@ -25,7 +25,8 @@ flowchart LR
   E --> F["1.0.1 ✅"]
   F --> G["1.1.0 ✅"]
   G --> H["1.1.1 ✅"]
-  H --> I["1.2.0 planned"]
+  H --> I["1.2.0 ✅"]
+  I --> J["1.2.1 ✅"]
 ```
 
 | Band | Status | Target | Theme | Plan |
@@ -38,7 +39,8 @@ flowchart LR
 | **1.0.1** | ✅ Shipped | Aug 2026 | `golang.org/x/text` security bump + docs | [CHANGELOG](CHANGELOG.md#101---2026-08-01) |
 | **1.1.x** | ✅ Shipped (v1.1.0) | Aug 2026 | Incident hygiene: PagerDuty dedup/resolve + threshold anti-spam latch | [plan-1.1.x.md](docs/plan-1.1.x.md) · [CHANGELOG](CHANGELOG.md#110---2026-08-10) |
 | **1.1.1** | ✅ Shipped | Aug 2026 | Security: Go 1.26.6 + `x/net` v0.56.0. Remaining latch/SPEC/YAML in [plan-1.1.1.md](docs/plan-1.1.1.md) | [CHANGELOG](CHANGELOG.md#111---2026-08-31) |
-| **1.2.x** | 📋 Planned | — | Hygiene: Dependabot, KnownFields, env honesty, HTTP timeouts, docs/packaging | [plan-1.2.x.md](docs/plan-1.2.x.md) |
+| **1.2.0** | ✅ Shipped | Sep 2026 | SQLite driver bump for Debian packaging | [CHANGELOG](CHANGELOG.md#120---2026-09-05) |
+| **1.2.1** | ✅ Shipped | Nov 2026 | Security/reliability audit hardening (Go 1.27.4, daemon, `/metrics`, notify, kube) | [CHANGELOG](CHANGELOG.md#121---2026-11-24) · [plan-1.2.x.md](docs/plan-1.2.x.md) |
 
 **Suggested calendar** (from band plans — **slip OK**; 0.7.x started 2026-07-02):
 
@@ -52,7 +54,8 @@ flowchart LR
 | Aug 1 | v1.0.1 ✅ |
 | Aug 10 | v1.1.0 ✅ |
 | Aug 31 | v1.1.1 ✅ (security; leftover [plan-1.1.1.md](docs/plan-1.1.1.md) after this tag) |
-| After 1.1.1 | v1.2.0 planned ([plan-1.2.x.md](docs/plan-1.2.x.md)) |
+| Sep 5 | v1.2.0 ✅ |
+| Nov 24 | v1.2.1 ✅ (security/reliability; leftover [plan-1.2.x.md](docs/plan-1.2.x.md) items optional) |
 
 Each band: design → implement → test → `make release-check` → docs → tag from `main`.
 

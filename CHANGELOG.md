@@ -6,6 +6,10 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-24
+
+Security and reliability hardening from the Nov 2026 audit (#28–#38). Operators pulling the published binary and GHCR image get Go **1.27.4**, `x/net` **v0.62.0**, daemon connect survival, and `/metrics`/notify hardening.
+
 ### Fixed
 
 - **Daemon connect failure:** with `interval > 0`, a single-target Postgres connect/`Ping` failure no longer exits 2 (CrashLoop). Process notifies, persists `connect_failure` when a metrics store is configured, and retries on the next tick. One-shot still exits 2.
@@ -577,7 +581,8 @@ Pre-1.0 security and operator polish: removes insecure Kubernetes password disco
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/hrodrig/pgwd/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/hrodrig/pgwd/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/hrodrig/pgwd/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/hrodrig/pgwd/compare/v1.0.1...v1.1.0
