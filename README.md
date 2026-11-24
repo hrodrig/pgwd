@@ -10,13 +10,13 @@
   <em>Watch your PostgreSQL connections</em>
 </p>
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue)](https://github.com/hrodrig/pgwd/releases)
+[![Version](https://img.shields.io/badge/version-1.2.1-blue)](https://github.com/hrodrig/pgwd/releases)
 [![Release](https://img.shields.io/github/v/release/hrodrig/pgwd)](https://github.com/hrodrig/pgwd/releases)
 [![CI](https://github.com/hrodrig/pgwd/actions/workflows/ci.yml/badge.svg)](https://github.com/hrodrig/pgwd/actions)
 [![codecov](https://codecov.io/gh/hrodrig/pgwd/graph/badge.svg)](https://codecov.io/gh/hrodrig/pgwd)
 [![gghstats clones](https://gghstats.hermesrodriguez.com/api/v1/badge/hrodrig/pgwd?metric=clones)](https://gghstats.hermesrodriguez.com/hrodrig/pgwd)
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
-[![Go 1.26.6](https://img.shields.io/badge/go-1.26.6-00ADD8?logo=go)](https://go.dev/)
+[![Go 1.27.4](https://img.shields.io/badge/go-1.27.4-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![pkg.go.dev](https://pkg.go.dev/badge/github.com/hrodrig/pgwd)](https://pkg.go.dev/github.com/hrodrig/pgwd)
 [![deps.dev](https://img.shields.io/badge/deps.dev-go%20module-blue)](https://deps.dev/go/github.com%2Fhrodrig%2Fpgwd)
@@ -180,6 +180,8 @@ PGWD_CONFIG=/path/to/pgwd.conf pgwd
 
 **`-db-url` override (one-shot):** When the config file has `databases:` (multi-DB), passing `-db-url` and `-interval 0` runs against that single URL only, ignoring the databases from config for that run. Useful for quick ad-hoc checks without editing the config.
 
+**Password visibility:** Prefer `PGWD_DB_URL` (or a config file / `password_from_secret`) over `-db-url` with an embedded password — argv is visible in `ps` and process audits.
+
 ### Multi-database limitations
 
 - **`-kube-postgres` / `kube.postgres` and `databases:` are mutually exclusive.** Validation rejects that combination. Multi-DB mode expects **direct** Postgres URLs (e.g. in-cluster DNS, VPN, or `localhost` after manual port-forward). For port-forward from **outside** the cluster, use **N port-forwards + one `databases:` config**, or **one pgwd process per** forwarded instance — see **[docs/use-cases.md](docs/use-cases.md)** (UC-5, UC-6, UC-7).
@@ -207,7 +209,7 @@ The ingest host is [collect.gghstats.com](https://collect.gghstats.com) (shared 
 
 ```json
 {
-  "version": "1.2.0",
+  "version": "1.2.1",
   "commit": "abc1234",
   "build_date": "2026-07-18T12:00:00Z",
   "hash": "a1b2c3d4e5f67890",
@@ -269,6 +271,8 @@ pgwd -db-threshold-levels 5,10,15 -dry-run
 | **levels** (3-tier) | % of `max_connections` — attention / alert / danger (default mode) | `-db-threshold-levels 75,85,95` (default) or `-db-threshold-levels 70,85,90` |
 | **idle** | Pool size / connections sitting idle | `-db-threshold-idle 40` |
 | **stale** | Connections open too long (leaks, never closed) | `-db-stale-age 600 -db-threshold-stale 1` |
+
+**Metrics scope and privileges:** Connection counts come from `pg_stat_activity` filtered to **`datname = current_database()`**, but level thresholds compare those counts to cluster-wide **`max_connections`** (reserved slots are not subtracted). Other databases, replication, and background workers are therefore outside the numerator. Grant the monitor role **`pg_monitor`** (or equivalent) so `state` is visible for other sessions; without it, active/idle/long_query counts can under-report.
 
 ```bash
 # 3-tier levels (default 75,85,95% of max_connections) — one-shot, Slack
@@ -526,7 +530,7 @@ When you run pgwd as a Deployment (Docker image in K8s), use **direct service UR
 - **Postgres:** `databases[].url` with in-cluster DNS, e.g. `postgres://user:pass@postgres.default.svc.cluster.local:5432/mydb` (shorter: `postgres-service.namespace:5432`).
 - **Loki:** `notifications.loki.url` with in-cluster DNS, e.g. `http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push`.
 - **Passwords:** From a Secret via env (`PGWD_*` or `-config`). **Do not use `DISCOVER_MY_PASSWORD`** (deprecated; removed in 0.9.x).
-- **HTTP:** Set `http.listen: ":8080"` for `/healthz` and `/metrics` (liveness, Prometheus).
+- **HTTP:** Set `http.listen: ":8080"` for `/healthz` and `/metrics` (liveness, Prometheus). Optional `http.metrics_token` uses **Bearer** only (not `?token=`). Prefer `127.0.0.1` or auth when the bind is reachable beyond a trusted network. On Linux, the listener disables Multipath TCP (Go 1.24+ default); still patch the host kernel for CVE-2026-98432.
 - **CSV export (metrics store):** Check history is persisted under **`sqlite.path`** (SQLite) or **`metrics_store.driver`** + **`metrics_store.dsn`** (PostgreSQL / MySQL). **[TimescaleDB](https://www.timescale.com/)** works as **`driver: postgres`** pointing at your Timescale endpoint (plain `metrics` table; no pgwd-specific hypertable integration). To dump stored rows: **`pgwd -config /etc/pgwd/pgwd.conf -export-metrics-format csv -export-metrics-destination /path/out.csv`**. SQLite export opens the file **read-only** (safe while the daemon runs). Overwrites the CSV each run; use **cron** for periodic snapshots. See **`internal/metricsstore`** and **`contrib/pgwd.conf.example`**.
 
 Simplest: use env vars from Secrets (no config file). Example Deployment env:
@@ -688,17 +692,17 @@ curl -sSL https://raw.githubusercontent.com/hrodrig/pgwd/main/scripts/install.sh
 | Platform | Command |
 |----------|---------|
 | **Homebrew (macOS)** | `brew install hrodrig/pgwd/pgwd` |
-| **Debian/Ubuntu** | `wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v1.2.0/pgwd_v1.2.0_linux_amd64.deb && sudo dpkg -i /tmp/pgwd.deb` |
-| **Fedora / RHEL / AlmaLinux / Rocky / Oracle Linux** | Same `.rpm`: `sudo dnf install https://github.com/hrodrig/pgwd/releases/download/v1.2.0/pgwd_v1.2.0_linux_amd64.rpm` |
+| **Debian/Ubuntu** | `wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v1.2.1/pgwd_v1.2.1_linux_amd64.deb && sudo dpkg -i /tmp/pgwd.deb` |
+| **Fedora / RHEL / AlmaLinux / Rocky / Oracle Linux** | Same `.rpm`: `sudo dnf install https://github.com/hrodrig/pgwd/releases/download/v1.2.1/pgwd_v1.2.1_linux_amd64.rpm` |
 | **OpenSUSE** | Same `.rpm` via zypper: see [OpenSUSE](#opensuse) |
-| **Alpine** | `wget -qO- https://github.com/hrodrig/pgwd/releases/download/v1.2.0/pgwd_v1.2.0_linux_amd64.tar.gz \| tar -xzf - -C /usr/local/bin` — see [Alpine (OpenRC)](#alpine-linux-openrc) |
+| **Alpine** | `wget -qO- https://github.com/hrodrig/pgwd/releases/download/v1.2.1/pgwd_v1.2.1_linux_amd64.tar.gz \| tar -xzf - -C /usr/local/bin` — see [Alpine (OpenRC)](#alpine-linux-openrc) |
 | **OpenBSD** | tarball with rc.d: see [OpenBSD](#openbsd) |
 | **FreeBSD** | port or tarball: see [FreeBSD](#freebsd) |
 | **NetBSD** | tarball with rc.d: see [NetBSD](#netbsd) |
 | **DragonFly BSD** | tarball with rc.d: see [DragonFly BSD](#dragonfly-bsd) |
 | **illumos / Solaris** | tarball with SMF: see [Solaris](#solaris) |
 
-Replace `v1.2.0` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets. If a tag is not published yet, build packages locally with `make snapshot` and install the `.rpm` / `.deb` from `dist/`. **AlmaLinux 8/9:** see [AlmaLinux](#almalinux).
+Replace `v1.2.1` and `amd64` with your desired version and arch (e.g. `arm64`). See [Releases](https://github.com/hrodrig/pgwd/releases) for all assets. If a tag is not published yet, build packages locally with `make snapshot` and install the `.rpm` / `.deb` from `dist/`. **AlmaLinux 8/9:** see [AlmaLinux](#almalinux).
 
 **Pre-built binaries:** [Releases](https://github.com/hrodrig/pgwd/releases) provide binaries (tar.gz, zip), `.deb`, and `.rpm` packages for Linux, macOS, and Windows (amd64 and arm64). The `.deb` and `.rpm` packages include the man page (`man pgwd`) and install `/etc/pgwd/pgwd.conf` (edit before use). The `.rpm` is the same artifact for Fedora, RHEL, AlmaLinux, Rocky Linux, and Oracle Linux (`dnf`); **AlmaLinux** + **systemd** were validated (install, `pgwd -dry-run -interval 0`, `systemctl enable --now pgwd.service`).
 
@@ -715,11 +719,11 @@ make install
 
 **FreeBSD:** `/usr/bin/make` is **BSD Make**; the repo ships a small **`Makefile`** stub that forwards to **`gmake`** (uses **`all`** + **`.DEFAULT`** with **`gmake $@`**, not **`$(.MAKE.CMDGOALS)`**, which can be empty under BSD Make). Install **`devel/gmake`** (`pkg install gmake`) and a **Go** toolchain on **`PATH`** (`pkg install go` — binary is usually **`/usr/local/bin/go`**). Then **`make build`** or **`gmake build`**. Linux, macOS, and CI use **GNU Make**, which reads **`GNUmakefile`** first.
 
-**Release (GitHub):** See [Release steps](#release-steps) below for the full workflow. Quick: from `main`, `git tag v1.2.0`, `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
+**Release (GitHub):** See [Release steps](#release-steps) below for the full workflow. Quick: from `main`, `git tag v1.2.1`, `make release`. Requires [goreleaser](https://goreleaser.com) (`brew install goreleaser`). For a local snapshot build without publishing: `make snapshot` (outputs to `dist/`).
 
 ### Release steps
 
-Example: releasing **v1.2.0**. Copy, adjust the version and token, then run.
+Example: releasing **v1.2.1**. Copy, adjust the version and token, then run.
 
 **1. Prerequisites** (install once):
 
@@ -743,13 +747,13 @@ make release-check
 **3. Update version** — edit `VERSION` and `CHANGELOG.md`:
 
 ```bash
-echo "1.2.0" > VERSION
-# Edit CHANGELOG.md: move [Unreleased] items into [1.2.0], update compare links
+echo "1.2.1" > VERSION
+# Edit CHANGELOG.md: move [Unreleased] items into [1.2.1], update compare links
 # Regenerate docs/demo.gif so embedded version matches (from repo root):
 make install && bash -c "vhs docs/demo.tape"
 # Update contrib/man/man1/pgwd.1 — .TH date and version (see man-page-sync rule)
 git add VERSION CHANGELOG.md README.md docs/demo.gif contrib/man/man1/pgwd.1  # README badge if needed
-git commit -m "Release 1.2.0"
+git commit -m "Release 1.2.1"
 git push origin develop
 ```
 
@@ -761,8 +765,8 @@ git pull origin main
 git merge develop
 git push origin main
 
-git tag -a v1.2.0 -m "Release 1.2.0"
-git push origin v1.2.0
+git tag -a v1.2.1 -m "Release 1.2.1"
+git push origin v1.2.1
 ```
 
 **5. Publish release** — tokens required:
@@ -795,7 +799,7 @@ From **v0.8.0**, GitHub Releases include **SPDX** and **CycloneDX** SBOMs and **
 **Verify the container image** (replace the tag):
 
 ```bash
-cosign verify ghcr.io/hrodrig/pgwd:v1.2.0 \
+cosign verify ghcr.io/hrodrig/pgwd:v1.2.1 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity-regexp '^https://github\.com/hrodrig/pgwd/\.github/workflows/release\.yml@refs/tags/v'
 ```
@@ -808,7 +812,7 @@ cosign verify-blob \
   checksums.txt
 ```
 
-**Inspect SBOMs:** download `pgwd_<version>_sbom.spdx.json` or `pgwd_<version>_sbom.cyclonedx.json` from the release page, or scan with Grype: `grype sbom:pgwd_v1.2.0_sbom.spdx.json`.
+**Inspect SBOMs:** download `pgwd_<version>_sbom.spdx.json` or `pgwd_<version>_sbom.cyclonedx.json` from the release page, or scan with Grype: `grype sbom:pgwd_v1.2.1_sbom.spdx.json`.
 
 Local `make release` does not sign artifacts — use the tag-push CI workflow for signed releases.
 
@@ -841,7 +845,7 @@ docker run -d --name pgwd-pg \
   -e POSTGRES_PASSWORD=secret \
   -e POSTGRES_DB=postgres \
   -p 5433:5432 \
-  postgres:16-alpine
+  postgres:18-alpine
 ```
 
 **Connection URL** (host port 5433, `sslmode=disable`):
@@ -1048,12 +1052,12 @@ When you use `-db-threshold-levels 75,85,95` (default), pgwd fires one alert per
 **Published image (each release):** Multi-arch images (linux/amd64, linux/arm64) are published to [GitHub Container Registry](https://github.com/hrodrig/pgwd/pkgs/container/pgwd) as `ghcr.io/hrodrig/pgwd`. Use a version tag or `latest`:
 
 ```bash
-docker pull ghcr.io/hrodrig/pgwd:v1.2.0
+docker pull ghcr.io/hrodrig/pgwd:v1.2.1
 # or
 docker pull ghcr.io/hrodrig/pgwd:latest
 ```
 
-**Build from source:** Multi-stage **Dockerfile** (Go 1.26.6 build; **distroless/static-debian13:nonroot** runtime): static binary, non-root, no Alpine OS packages. Use `make docker-build` locally; release images via GoReleaser + **`Dockerfile.release`** (same distroless base).
+**Build from source:** Multi-stage **Dockerfile** (Go 1.27.4 build; **distroless/static-debian13:nonroot** runtime): static binary, non-root, no Alpine OS packages. Use `make docker-build` locally; release images via GoReleaser + **`Dockerfile.release`** (same distroless base).
 
 **Image details**
 
@@ -1074,13 +1078,13 @@ This runs `docker build` with `--build-arg VERSION=...`, `--build-arg COMMIT=...
 
 **Validate the image**
 
-Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v1.2.0`), or `pgwd` if you built locally with `make docker-build`:
+Use the published image `ghcr.io/hrodrig/pgwd:latest` (or `:v1.2.1`), or `pgwd` if you built locally with `make docker-build`:
 
 ```bash
 # Help (no DB needed)
 docker run --rm ghcr.io/hrodrig/pgwd:latest -h
 
-# Version (should show e.g. pgwd v1.2.0 (branch develop, commit ..., built ...))
+# Version (should show e.g. pgwd v1.2.1 (branch develop, commit ..., built ...))
 docker run --rm ghcr.io/hrodrig/pgwd:latest --version
 
 # Expect "missing database URL" (validates startup path)
@@ -1186,14 +1190,14 @@ Debian and Ubuntu use **systemd** and **`.deb`** packages. The same `.deb` works
 **Install from GitHub** (replace version / arch):
 
 ```bash
-wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v1.2.0/pgwd_v1.2.0_linux_amd64.deb
+wget -q -O /tmp/pgwd.deb https://github.com/hrodrig/pgwd/releases/download/v1.2.1/pgwd_v1.2.1_linux_amd64.deb
 sudo dpkg -i /tmp/pgwd.deb
 ```
 
 **Local `.deb`** (e.g. from `make snapshot` → `dist/`):
 
 ```bash
-sudo dpkg -i ./pgwd_v1.2.0_linux_amd64.deb
+sudo dpkg -i ./pgwd_v1.2.1_linux_amd64.deb
 ```
 
 **Configure and test**
@@ -1220,13 +1224,13 @@ sudo systemctl status pgwd.service
 **Install from GitHub** (replace version / arch):
 
 ```bash
-sudo dnf install -y "https://github.com/hrodrig/pgwd/releases/download/v1.2.0/pgwd_v1.2.0_linux_amd64.rpm"
+sudo dnf install -y "https://github.com/hrodrig/pgwd/releases/download/v1.2.1/pgwd_v1.2.1_linux_amd64.rpm"
 ```
 
 **Local `.rpm`** (e.g. from `make snapshot` → `dist/`, when a release is not on GitHub yet):
 
 ```bash
-sudo dnf install -y ./pgwd_v1.2.0_linux_amd64.rpm
+sudo dnf install -y ./pgwd_v1.2.1_linux_amd64.rpm
 ```
 
 **Configure and test**
@@ -1252,13 +1256,13 @@ sudo systemctl status pgwd.service
 
 ```bash
 sudo zypper --non-interactive install --allow-unsigned-rpm \
-  "https://github.com/hrodrig/pgwd/releases/download/v1.2.0/pgwd_v1.2.0_linux_amd64.rpm"
+  "https://github.com/hrodrig/pgwd/releases/download/v1.2.1/pgwd_v1.2.1_linux_amd64.rpm"
 ```
 
 **Local `.rpm`** (e.g. from `make snapshot` → `dist/`):
 
 ```bash
-sudo zypper --non-interactive install --allow-unsigned-rpm ./pgwd_v1.2.0_linux_amd64.rpm
+sudo zypper --non-interactive install --allow-unsigned-rpm ./pgwd_v1.2.1_linux_amd64.rpm
 ```
 
 **Configure and test**
@@ -1282,10 +1286,10 @@ sudo systemctl status pgwd.service
 
 Arch Linux uses **systemd**. There is no official **`pacman`** package in the Arch repos yet; install the **Linux release tarball** from [Releases](https://github.com/hrodrig/pgwd/releases) or a community **[AUR](https://aur.archlinux.org/)** package (e.g. `pgwd-bin`) when one exists — verify the PKGBUILD and checksums.
 
-**Tarball install** — extract the archive, then install the binary and config layout (replace `v1.2.0` / `amd64` as needed):
+**Tarball install** — extract the archive, then install the binary and config layout (replace `v1.2.1` / `amd64` as needed):
 
 ```bash
-wget -qO- https://github.com/hrodrig/pgwd/releases/download/v1.2.0/pgwd_v1.2.0_linux_amd64.tar.gz | tar -xzf -
+wget -qO- https://github.com/hrodrig/pgwd/releases/download/v1.2.1/pgwd_v1.2.1_linux_amd64.tar.gz | tar -xzf -
 sudo install -Dm755 pgwd /usr/local/bin/pgwd
 sudo ln -sf /usr/local/bin/pgwd /usr/bin/pgwd
 sudo install -Dm644 share/man/man1/pgwd.1 /usr/local/share/man/man1/pgwd.1
@@ -1319,7 +1323,7 @@ Alpine uses **OpenRC** (rc.d), not systemd. Config: `/etc/pgwd/pgwd.conf`.
 **Install** — tar.gz (binario estático, musl-compatible):
 
 ```bash
-wget -qO- https://github.com/hrodrig/pgwd/releases/download/v1.2.0/pgwd_v1.2.0_linux_amd64.tar.gz | tar -xzf - -C /usr/local/bin
+wget -qO- https://github.com/hrodrig/pgwd/releases/download/v1.2.1/pgwd_v1.2.1_linux_amd64.tar.gz | tar -xzf - -C /usr/local/bin
 # arm64: replace amd64 with arm64
 ```
 
@@ -1355,7 +1359,7 @@ OpenBSD uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-ku
 **Install** — tarball includes binary, rc.d script, and config example:
 
 ```bash
-tar xzf pgwd_v1.2.0_openbsd_amd64.tar.gz
+tar xzf pgwd_v1.2.1_openbsd_amd64.tar.gz
 doas install -m755 pgwd /usr/local/bin/
 doas install -m555 share/openbsd/rc.d/pgwd /etc/rc.d/pgwd
 doas mkdir -p /etc/pgwd
@@ -1393,7 +1397,7 @@ make install
 **Install from tarball** (or use the [one-liner](#install) which works on FreeBSD and installs only the binary):
 
 ```bash
-fetch -o /tmp/pgwd.tgz https://github.com/hrodrig/pgwd/releases/download/v1.2.0/pgwd_v1.2.0_freebsd_amd64.tar.gz
+fetch -o /tmp/pgwd.tgz https://github.com/hrodrig/pgwd/releases/download/v1.2.1/pgwd_v1.2.1_freebsd_amd64.tar.gz
 tar -xzf /tmp/pgwd.tgz -C /tmp
 sudo install -m755 /tmp/pgwd /usr/local/bin/
 sudo mkdir -p /usr/local/etc/pgwd
@@ -1422,7 +1426,7 @@ NetBSD uses **rc.d**, not systemd. Config: `/etc/pgwd/pgwd.conf`. Supports `-kub
 **Install** — tarball includes binary, rc.d script, and config example:
 
 ```bash
-tar xzf pgwd_v1.2.0_netbsd_amd64.tar.gz
+tar xzf pgwd_v1.2.1_netbsd_amd64.tar.gz
 install -m755 pgwd /usr/local/bin/
 install -m555 share/netbsd/rc.d/pgwd /etc/rc.d/pgwd
 mkdir -p /etc/pgwd
@@ -1445,7 +1449,7 @@ See [contrib/netbsd/README.md](contrib/netbsd/README.md) for details.
 **Install** — tarball includes binary, rc.d script, and config example:
 
 ```bash
-tar xzf pgwd_v1.2.0_dragonfly_amd64.tar.gz
+tar xzf pgwd_v1.2.1_dragonfly_amd64.tar.gz
 install -m755 pgwd /usr/local/bin/
 install -m555 share/dragonfly/rc.d/pgwd /etc/rc.d/pgwd
 mkdir -p /etc/pgwd
@@ -1470,7 +1474,7 @@ See [contrib/dragonflybsd/README.md](contrib/dragonflybsd/README.md) for details
 **Install** — tarball includes binary, SMF manifest, method script, and config example:
 
 ```bash
-curl -L -o /tmp/pgwd.tar.gz "https://github.com/hrodrig/pgwd/releases/download/v1.2.0/pgwd_v1.2.0_solaris_amd64.tar.gz"
+curl -L -o /tmp/pgwd.tar.gz "https://github.com/hrodrig/pgwd/releases/download/v1.2.1/pgwd_v1.2.1_solaris_amd64.tar.gz"
 cd /tmp && tar xzf pgwd.tar.gz
 
 pfexec mkdir -p /usr/local/bin /lib/svc/manifest/site /etc/pgwd
@@ -1495,7 +1499,7 @@ See [contrib/solaris/README.md](contrib/solaris/README.md) for details.
 
 **Canonical roadmap:** **[ROADMAP.md](ROADMAP.md)** — current release, release bands (0.8 → 1.0), calendar, key decisions, document map.
 
-Summary: **v1.2.0** (SQLite driver bump `go-sqlite3` v0.35.4 for Debian packaging). Stable API: **v1.0.0**. Behavior contract: [SPECIFICATIONS.md](SPECIFICATIONS.md). Shipped releases: [CHANGELOG.md](CHANGELOG.md).
+Summary: **v1.2.1** (security/reliability hardening: Go 1.27.4, daemon connect survival, /metrics + notify). Stable API: **v1.0.0**. Behavior contract: [SPECIFICATIONS.md](SPECIFICATIONS.md). Shipped releases: [CHANGELOG.md](CHANGELOG.md).
 
 | Band | Status | Plan |
 |------|--------|------|
@@ -1505,9 +1509,10 @@ Summary: **v1.2.0** (SQLite driver bump `go-sqlite3` v0.35.4 for Debian packagin
 | **1.1.0** | ✅ Ready Aug 2026 | [plan-1.1.x.md](docs/plan-1.1.x.md) · [CHANGELOG](CHANGELOG.md#110---2026-08-10) |
 | **1.1.1** | ✅ Ready Aug 2026 | [CHANGELOG](CHANGELOG.md#111---2026-08-31) |
 | **1.2.0** | ✅ Ready Sep 2026 | [CHANGELOG](CHANGELOG.md#120---2026-09-05) |
+| **1.2.1** | ✅ Ready Nov 2026 | [CHANGELOG](CHANGELOG.md#121---2026-11-24) |
 
 <details>
-<summary>Shipped history (0.4 – 1.2.0)</summary>
+<summary>Shipped history (0.4 – 1.2.1)</summary>
 
 | Version | Target | Scope |
 |---------|--------|-------|
@@ -1525,6 +1530,7 @@ Summary: **v1.2.0** (SQLite driver bump `go-sqlite3` v0.35.4 for Debian packagin
 | **1.1.0** | Aug 2026 ✅ | PagerDuty dedup/resolve; threshold alert latch (`repeat_while_firing`) |
 | **1.1.1** | Aug 2026 ✅ | Go 1.26.6; `golang.org/x/net` v0.56.0 (GO-2026-5942) |
 | **1.2.0** | Sep 2026 ✅ | SQLite driver bump `go-sqlite3` v0.35.4 (Debian packaging) |
+| **1.2.1** | Nov 2026 ✅ | Security/reliability: Go 1.27.4, x/net v0.62.0, daemon connect survival, /metrics+notify hardening |
 
 </details>
 

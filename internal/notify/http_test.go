@@ -112,3 +112,19 @@ func TestPostJSONWithRetry_contextCancelDuringBackoff(t *testing.T) {
 		t.Fatalf("err=%v", err)
 	}
 }
+
+func TestPostJSONWithRetryClient_redactsURLOnDialError(t *testing.T) {
+	t.Cleanup(func() { ApplyRetryConfig(DefaultRetryConfig) })
+	ApplyRetryConfig(RetryConfig{MaxAttempts: 1, InitialBackoff: time.Millisecond, MaxBackoff: time.Millisecond})
+
+	cli := &http.Client{Timeout: 200 * time.Millisecond}
+	secretURL := "http://127.0.0.1:1/services/T00/B00/super-secret"
+	err := postJSONWithRetryClient(context.Background(), cli, secretURL, []byte(`{}`), nil)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "super-secret") || strings.Contains(msg, "/services/") {
+		t.Fatalf("leaked webhook path in error: %q", msg)
+	}
+}

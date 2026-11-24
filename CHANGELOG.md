@@ -6,10 +6,39 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-24
+
+Security and reliability hardening from the Nov 2026 audit (#28–#38). Operators pulling the published binary and GHCR image get Go **1.27.4**, `x/net` **v0.62.0**, daemon connect survival, and `/metrics`/notify hardening.
+
+### Fixed
+
+- **Daemon connect failure:** with `interval > 0`, a single-target Postgres connect/`Ping` failure no longer exits 2 (CrashLoop). Process notifies, persists `connect_failure` when a metrics store is configured, and retries on the next tick. One-shot still exits 2.
+- **Check hang:** each target check uses `min(interval, 30s)` context timeout; DSN without `connect_timeout` gets a 30s pgx default so a hung peer cannot block the loop indefinitely.
+
+### Security
+
+- **Go toolchain:** bump to **1.27.4** (`go.mod`, Dockerfile `golang:1.27.4-alpine3.24`). Clears CI Grype/govulncheck High/Critical on 1.26.6 (GO-2026-6859, GO-2026-6809, GO-2026-6612 family, and related).
+- **`golang.org/x/net` floor:** `replace` pin **v0.62.0** + **`make check-x-net-pin`** (wired into **`make lint`**, family OSS policy).
+- **Notify HTTP errors:** redact `*url.Error` webhook URLs to `scheme://host` before wrapping/logging so Slack/Teams/PagerDuty path secrets are not leaked (#30).
+- **HTTP `/metrics`:** `ReadHeaderTimeout` / `ReadTimeout` / `IdleTimeout` on the server; drop `?token=` (Bearer/basic only); `/healthz` no longer returns raw store errors; warn when anonymous `/metrics` binds non-loopback (#33).
+- **MPTCP listen:** `godebug multipathtcp=0` in `go.mod` and `ListenConfig.SetMultipathTCP(false)` on the metrics listener to avoid Go 1.24+ MPTCP listen default (CVE-2026-98432 exposure path). Patched kernel remains the real fix (#28).
+- **Firing latch without store:** daemon keeps per-target previous severity in memory across ticks so transition-only alerts work when no SQLite/SQL store is configured (#32). `confirm_alert` / durable hysteresis still require a store.
+- **Generic webhook `body_template`:** JSON-escape interpolated string fields so names with `"` do not break the payload (#37).
+- **`-validate-k8s-access`:** uses Discovery `ServerVersion` instead of listing pods across namespaces; SQLite/CSV parent dirs created with mode `0700` (#38).
+- **kube port-forward:** re-resolve pod and reconnect with backoff when the forward drops (e.g. Postgres pod restart) (#34).
+
+### Changed
+
+- **Test Postgres image:** `postgres:16-alpine` → `postgres:18-alpine` (Compose + kind e2e manifests + README example).
+
 ### Docs
 
 - **Architecture diagram:** interactive Archify viewer (`docs/pgwd-architecture.html`) with flow animation, plus README/docs preview (`docs/pgwd-architecture.png`) and source (`docs/architecture.pgwd.json`).
 - **README:** Awesome Go “Mentioned in” badge.
+- **SPECIFICATIONS:** exit code 2 documents one-shot vs daemon connect-failure behavior.
+- **`-db-url`:** flag help and README warn that passwords in argv are visible in `ps`; prefer env / `password_from_secret` (#36).
+- **Metrics scope:** README/SPEC document `current_database()` vs `max_connections` and the need for `pg_monitor` (#31).
+- **Supply chain:** Dependabot (`gomod`, `github-actions`, `docker`); pin `govulncheck@v1.10.0`, `gocyclo@v0.6.0`, `anchore/grype:v0.122.1`; drop `curl | sh` Grype install in CI (#35).
 
 ## [1.2.0] - 2026-09-05
 
@@ -552,7 +581,8 @@ Pre-1.0 security and operator polish: removes insecure Kubernetes password disco
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/hrodrig/pgwd/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/hrodrig/pgwd/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/hrodrig/pgwd/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/hrodrig/pgwd/compare/v1.0.1...v1.1.0

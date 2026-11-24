@@ -118,7 +118,7 @@ When `PGWD_HTTP_LISTEN` is set, default paths are `/api/pgwd/v1/healthz` and `/a
 | Setting | Effect |
 |---------|--------|
 | *(empty)* | In-cluster scrape without auth — typical `ServiceMonitor` / `PodMonitor` setup |
-| `http.metrics_token` | `/metrics` requires `Authorization: Bearer <token>` or `?token=`; `/healthz` unchanged |
+| `http.metrics_token` | `/metrics` requires `Authorization: Bearer <token>` (not `?token=`); `/healthz` unchanged |
 | `http.metrics_basic_user` + `password` | `/metrics` requires HTTP Basic auth; `/healthz` unchanged |
 
 **When to enable:** pgwd listens on a host network, VM, or `port-forward` where firewall / NetworkPolicy alone is not enough. **In-cluster:** prefer ClusterIP + NetworkPolicy; auth is optional extra.

@@ -65,7 +65,7 @@ func postJSONWithRetryClient(ctx context.Context, client *http.Client, url strin
 
 		resp, err := client.Do(req)
 		if err != nil {
-			lastErr = fmt.Errorf("send request: %w", err)
+			lastErr = fmt.Errorf("send request: %w", RedactNetError(err))
 		} else {
 			_, _ = io.Copy(io.Discard, resp.Body)
 			resp.Body.Close()

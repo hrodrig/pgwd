@@ -70,7 +70,7 @@ type Store struct {
 // Open opens or creates the SQLite database and applies the schema.
 // Creates parent directory if needed.
 func Open(path string, maxMetrics int) (*Store, error) {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return nil, fmt.Errorf("mkdir %s: %w", filepath.Dir(path), err)
 	}
 	db, err := sql.Open("sqlite3", "file:"+path)

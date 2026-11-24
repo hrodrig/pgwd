@@ -38,9 +38,7 @@ func metricsTokenOK(r *http.Request, want string) bool {
 		got := strings.TrimSpace(strings.TrimPrefix(auth, "Bearer "))
 		return subtle.ConstantTimeCompare([]byte(got), []byte(want)) == 1
 	}
-	if q := r.URL.Query().Get("token"); q != "" {
-		return subtle.ConstantTimeCompare([]byte(q), []byte(want)) == 1
-	}
+	// Query ?token= is not accepted: it lands in proxy/access logs.
 	return false
 }
 
