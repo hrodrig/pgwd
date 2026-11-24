@@ -1,32 +1,43 @@
-# Sequence: Connection failure — send alert and exit
+# Sequence: Connection failure — notify (and exit only in one-shot)
 
-When Postgres connection fails and at least one notifier (Slack and/or Loki) is configured, pgwd **always** sends a connect-failure event (or `too_many_clients` if the error is "too many clients already") to all notifiers before exiting. No extra flag is required. Use this to get an infrastructure alert when the database is unreachable.
+When Postgres connection fails and at least one notifier is configured, pgwd **always** sends a connect-failure event (or `too_many_clients` if the error is "too many clients already") to all notifiers. No extra flag is required.
+
+- **One-shot** (`interval == 0`), single target: log and **exit 2**.
+- **Daemon** (`interval > 0`): log, persist `connect_failure` when a metrics store is configured, and **continue** to the next tick (no process exit). Multi-DB always logs and skips the failed target.
 
 ```mermaid
 sequenceDiagram
     participant User
     participant pgwd
     participant Postgres
+    participant Store
     participant Slack
     participant Loki
 
-    User->>pgwd: pgwd -db-url ... -notifications-slack-webhook ... (or -notifications-loki-url)
-    Note over pgwd: validations, build senders (before Pool)
-    pgwd->>Postgres: Pool(ctx, dbURL)
-    Postgres-->>pgwd: error (e.g. connection refused, timeout)
-    pgwd->>pgwd: build connect_failure event (message + run context)
+    User->>pgwd: pgwd with notifiers configured
+    Note over pgwd: validations, build senders before Pool
+    pgwd->>Postgres: Pool and Ping with check timeout
+    Postgres-->>pgwd: error (connection refused, timeout)
+    pgwd->>pgwd: build connect_failure or too_many_clients event
     alt Slack configured
-        pgwd->>Slack: Send(ctx, connect_failure event)
+        pgwd->>Slack: Send connect_failure event
         Slack-->>pgwd: ok or error log
     end
     alt Loki configured
-        pgwd->>Loki: Send(ctx, connect_failure event)
+        pgwd->>Loki: Send connect_failure event
         Loki-->>pgwd: ok or error log
     end
     opt at least one Send ok
         pgwd->>pgwd: log Notification sent
     end
-    pgwd->>User: log "postgres connect failed...", exit 2
+    opt metrics store configured
+        pgwd->>Store: Insert state connect_failure
+    end
+    alt one-shot single target
+        pgwd->>User: log postgres connect failed, exit 2
+    else daemon or multi-DB
+        pgwd->>User: log postgres connect failed, continue
+    end
 ```
 
 **Slack:** connect_failure is sent with attachment color `danger` (red bar). Threshold-exceeded events use `warning` (yellow bar).

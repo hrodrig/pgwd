@@ -12,6 +12,24 @@ import (
 	"github.com/hrodrig/pgwd/internal/store"
 )
 
+// stubMetricsStore records Insert calls for connect-failure persistence tests.
+type stubMetricsStore struct {
+	records []store.Record
+}
+
+func (s *stubMetricsStore) Insert(_ context.Context, r store.Record) error {
+	s.records = append(s.records, r)
+	return nil
+}
+func (s *stubMetricsStore) Close() error               { return nil }
+func (s *stubMetricsStore) Ping(context.Context) error { return nil }
+func (s *stubMetricsStore) LatestRecords(context.Context) ([]store.Record, error) {
+	return nil, nil
+}
+func (s *stubMetricsStore) LastStates(context.Context, string, string, string, int) ([]string, error) {
+	return nil, nil
+}
+
 func testDBURL(t *testing.T) string {
 	t.Helper()
 	dsn := os.Getenv("PGWD_TEST_DB_URL")
@@ -30,7 +48,7 @@ func TestRunOneTarget_dryRun(t *testing.T) {
 		ThresholdLevels: "75,85,95",
 	}
 	ctx := context.Background()
-	runOneTarget(ctx, config.DatabaseTarget{Client: cfg.Client, URL: dsn}, cfg, nil, nil, []config.DatabaseTarget{{Client: cfg.Client, URL: dsn}})
+	runOneTarget(ctx, config.DatabaseTarget{Client: cfg.Client, URL: dsn}, cfg, nil, nil, []config.DatabaseTarget{{Client: cfg.Client, URL: dsn}}, nil)
 }
 
 func TestExportMetricsFlow(t *testing.T) {
@@ -75,7 +93,7 @@ func TestRunOneTarget_withSQLite(t *testing.T) {
 	ctx := context.Background()
 	st := openStoreIfConfigured(cfg)
 	targets := []config.DatabaseTarget{{Client: cfg.Client, URL: dsn}}
-	runOneTarget(ctx, targets[0], cfg, nil, st, targets)
+	runOneTarget(ctx, targets[0], cfg, nil, st, targets, nil)
 	if st != nil {
 		st.Close()
 	}
@@ -95,7 +113,7 @@ func TestSetupKubeLoki_noop(t *testing.T) {
 }
 
 func TestRunOneTarget_badURL(t *testing.T) {
-	cfg := &config.Config{Client: "x", DryRun: true}
+	cfg := &config.Config{Client: "x", DryRun: true, Interval: 0}
 	ctx := context.Background()
 	var gotExit int
 	prev := exitFunc
@@ -103,9 +121,52 @@ func TestRunOneTarget_badURL(t *testing.T) {
 	t.Cleanup(func() { exitFunc = prev })
 
 	bad := "postgres://127.0.0.1:1/nope?sslmode=disable"
-	runOneTarget(ctx, config.DatabaseTarget{Client: "x", URL: bad}, cfg, nil, nil, []config.DatabaseTarget{{Client: "x", URL: bad}})
+	runOneTarget(ctx, config.DatabaseTarget{Client: "x", URL: bad}, cfg, nil, nil, []config.DatabaseTarget{{Client: "x", URL: bad}}, nil)
 	if gotExit != ExitConnectFailure {
 		t.Fatalf("exit = %d, want %d", gotExit, ExitConnectFailure)
+	}
+}
+
+func TestRunOneTarget_daemonBadURL_noExit(t *testing.T) {
+	cfg := &config.Config{Client: "x", DryRun: true, Interval: 30}
+	ctx := context.Background()
+	var gotExit int
+	prev := exitFunc
+	exitFunc = func(code int) { gotExit = code }
+	t.Cleanup(func() { exitFunc = prev })
+
+	bad := "postgres://127.0.0.1:1/nope?sslmode=disable"
+	st := &stubMetricsStore{}
+	runOneTarget(ctx, config.DatabaseTarget{Client: "x", URL: bad}, cfg, nil, st, []config.DatabaseTarget{{Client: "x", URL: bad}}, nil)
+	if gotExit != 0 {
+		t.Fatalf("daemon must not exit on connect failure, got %d", gotExit)
+	}
+	if len(st.records) != 1 || st.records[0].State != "connect_failure" {
+		t.Fatalf("want one connect_failure store row, got %+v", st.records)
+	}
+}
+
+func TestExitConnectFailureIf_oneShot(t *testing.T) {
+	var gotExit int
+	prev := exitFunc
+	exitFunc = func(code int) { gotExit = code }
+	t.Cleanup(func() { exitFunc = prev })
+
+	exitConnectFailureIf(&config.Config{Interval: 0}, []config.DatabaseTarget{{Client: "a"}})
+	if gotExit != ExitConnectFailure {
+		t.Fatalf("exit = %d, want %d", gotExit, ExitConnectFailure)
+	}
+}
+
+func TestExitConnectFailureIf_daemonSkips(t *testing.T) {
+	var gotExit int
+	prev := exitFunc
+	exitFunc = func(code int) { gotExit = code }
+	t.Cleanup(func() { exitFunc = prev })
+
+	exitConnectFailureIf(&config.Config{Interval: 30}, []config.DatabaseTarget{{Client: "a"}})
+	if gotExit != 0 {
+		t.Fatalf("daemon must not exit on connect failure, got %d", gotExit)
 	}
 }
 

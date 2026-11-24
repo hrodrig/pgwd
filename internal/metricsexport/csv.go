@@ -31,7 +31,7 @@ func sanitizeCSVField(s string) string {
 // writeCSV writes rows to path (truncates). RFC4180. Uses ts from each stored row.
 func writeCSV(path string, rows []store.ExportRow) error {
 	if parent := filepath.Dir(path); parent != "." && parent != "" {
-		if err := os.MkdirAll(parent, 0755); err != nil {
+		if err := os.MkdirAll(parent, 0700); err != nil {
 			return err
 		}
 	}

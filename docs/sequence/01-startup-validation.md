@@ -58,7 +58,11 @@ sequenceDiagram
                 pgwd->>pgwd: log Notification sent
             end
         end
-        pgwd->>User: log connect failed, exit 2
+        alt one-shot single target
+            pgwd->>User: log connect failed, exit 2
+        else daemon or multi-DB
+            pgwd->>User: log connect failed, continue
+        end
     end
     Postgres-->>pgwd: pool
     pgwd->>Postgres: MaxConnections(ctx, pool)

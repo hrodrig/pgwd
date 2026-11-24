@@ -95,18 +95,18 @@ func (g *GenericWebhook) renderTemplateBody(ev Event) ([]byte, error) {
 		return nil, fmt.Errorf("generic webhook body_template: %w", g.tmplErr)
 	}
 	data := genericTemplateData{
-		Message:   ev.Message,
-		Threshold: ev.Threshold,
-		Level:     eventLevel(ev),
+		Message:   jsonEscapeString(ev.Message),
+		Threshold: jsonEscapeString(ev.Threshold),
+		Level:     jsonEscapeString(eventLevel(ev)),
 		Total:     ev.Stats.Total,
 		Active:    ev.Stats.Active,
 		Idle:      ev.Stats.Idle,
 		MaxConn:   ev.MaxConnections,
-		Cluster:   ev.Cluster,
-		Client:    ev.Client,
-		Database:  ev.Database,
-		Namespace: ev.Namespace,
-		EventType: ev.Threshold,
+		Cluster:   jsonEscapeString(ev.Cluster),
+		Client:    jsonEscapeString(ev.Client),
+		Database:  jsonEscapeString(ev.Database),
+		Namespace: jsonEscapeString(ev.Namespace),
+		EventType: jsonEscapeString(ev.Threshold),
 	}
 	var buf bytes.Buffer
 	if err := g.tmpl.Execute(&buf, data); err != nil {
@@ -117,6 +117,16 @@ func (g *GenericWebhook) renderTemplateBody(ev Event) ([]byte, error) {
 		return nil, fmt.Errorf("generic webhook body_template rendered invalid JSON")
 	}
 	return raw, nil
+}
+
+// jsonEscapeString returns s escaped for embedding inside a JSON string literal
+// (no surrounding quotes), so body_template values with " or \ stay valid JSON.
+func jsonEscapeString(s string) string {
+	b, err := json.Marshal(s)
+	if err != nil || len(b) < 2 {
+		return ""
+	}
+	return string(b[1 : len(b)-1])
 }
 
 func signHMACBody(body []byte, secret string) string {

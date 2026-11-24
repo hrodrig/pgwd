@@ -19,8 +19,8 @@ func TestMetricsAuthorized(t *testing.T) {
 		t.Fatal("want bearer authorized")
 	}
 	req = httptest.NewRequest(http.MethodGet, "/metrics?token=secret-token", nil)
-	if !metricsAuthorized(req, cfg) {
-		t.Fatal("want query token authorized")
+	if metricsAuthorized(req, cfg) {
+		t.Fatal("query ?token= must not authorize (leaks into proxy logs)")
 	}
 	req = httptest.NewRequest(http.MethodGet, "/metrics", nil)
 	req.Header.Set("Authorization", "Bearer wrong")

@@ -34,6 +34,45 @@ func TestServer_HandleHealth_NoStore(t *testing.T) {
 	}
 }
 
+type pingFailStore struct{}
+
+func (pingFailStore) Insert(context.Context, store.Record) error { return nil }
+func (pingFailStore) Close() error                               { return nil }
+func (pingFailStore) Ping(context.Context) error {
+	return errString("boom detail must not leak")
+}
+func (pingFailStore) LatestRecords(context.Context) ([]store.Record, error) { return nil, nil }
+func (pingFailStore) LastStates(context.Context, string, string, string, int) ([]string, error) {
+	return nil, nil
+}
+
+type errString string
+
+func (e errString) Error() string { return string(e) }
+
+func TestServer_HandleHealth_storeErrorNoLeak(t *testing.T) {
+	cfg := &config.Config{
+		HTTPListen:      ":0",
+		HTTPBasePath:    "/api/pgwd/v1",
+		HTTPHealthPath:  "/healthz",
+		HTTPMetricsPath: "/metrics",
+	}
+	srv := New(cfg, pingFailStore{})
+	req := httptest.NewRequest(http.MethodGet, "/api/pgwd/v1/healthz", nil)
+	rec := httptest.NewRecorder()
+	srv.mux.ServeHTTP(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	body := rec.Body.String()
+	if strings.Contains(body, "boom detail") {
+		t.Fatalf("leaked store error: %q", body)
+	}
+	if !strings.Contains(body, "store unavailable") {
+		t.Fatalf("body = %q", body)
+	}
+}
+
 func TestServer_HandleHealth_WithStore(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "pgwd.db")

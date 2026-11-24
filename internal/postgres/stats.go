@@ -2,9 +2,24 @@ package postgres
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+// DefaultConnectTimeout is used when the DSN does not set connect_timeout.
+const DefaultConnectTimeout = 30 * time.Second
+
+// ApplyDefaultConnectTimeout sets cfg.ConnConfig.ConnectTimeout when it is unset (≤ 0).
+func ApplyDefaultConnectTimeout(cfg *pgxpool.Config, d time.Duration) {
+	if cfg == nil || d <= 0 {
+		return
+	}
+	if cfg.ConnConfig.ConnectTimeout <= 0 {
+		cfg.ConnConfig.ConnectTimeout = d
+	}
+}
 
 // ConnectionStats holds counts from pg_stat_activity.
 type ConnectionStats struct {
@@ -63,8 +78,15 @@ WHERE datname = current_database()
 }
 
 // Pool creates a connection pool for the given DSN.
+// When the DSN omits connect_timeout, DefaultConnectTimeout is applied so a hung
+// peer cannot block the process indefinitely (pgxpool alone would wait up to 2m).
 func Pool(ctx context.Context, dsn string) (*pgxpool.Pool, error) {
-	return pgxpool.New(ctx, dsn)
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("parse dsn: %w", err)
+	}
+	ApplyDefaultConnectTimeout(cfg, DefaultConnectTimeout)
+	return pgxpool.NewWithConfig(ctx, cfg)
 }
 
 // MaxConnections returns the server's max_connections setting.

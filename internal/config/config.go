@@ -133,7 +133,7 @@ type Config struct {
 	HTTPBasePath             string // e.g. "/api/pgwd/v1"; paths relative to this
 	HTTPHealthPath           string // e.g. "/healthz" → base_path + health_path
 	HTTPMetricsPath          string // e.g. "/metrics" → base_path + metrics_path
-	HTTPMetricsToken         string // optional; when set, /metrics requires Bearer token or ?token=
+	HTTPMetricsToken         string // optional; when set, /metrics requires Authorization Bearer token
 	HTTPMetricsBasicUser     string // optional basic auth user for /metrics only
 	HTTPMetricsBasicPassword string // optional basic auth password for /metrics only
 }

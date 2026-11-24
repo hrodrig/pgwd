@@ -8,6 +8,10 @@ check-docker = @docker info >/dev/null 2>&1 || { echo "Error: Docker is not runn
 DIST     := dist
 # Grype image scan (docker-scan): anchore/grype default gate; override e.g. GRYPE_FAIL_ON=critical
 GRYPE_FAIL_ON ?= high
+# Minimum golang.org/x/net for the whole module graph. Enforced with a replace
+# directive in go.mod: `go mod tidy` can drop a plain require for a module whose
+# packages are not imported, so a require line alone is not a durable floor.
+X_NET_MIN_VERSION ?= v0.62.0
 # Minimum total statement coverage for `make cover-check` (library packages; see COVER_TEST_PKGS).
 COVERAGE_MIN ?= 80
 # Packages measured by cover-check (excludes internal/cli — exercised via cmd/pgwd black-box tests).
@@ -58,8 +62,9 @@ help:
 	@echo "  $(GREEN)test-platforms-ping$(RESET)  Ansible ping (pong) + Postgres TCP preflight; same inventory"
 	@echo ""
 	@echo "$(YELLOW)Quality:$(RESET)"
-	@echo "  $(GREEN)lint$(RESET)               Check gofmt, go vet, and gocyclo"
+	@echo "  $(GREEN)lint$(RESET)               Check gofmt, go vet, gocyclo, and x/net security pin"
 	@echo "  $(GREEN)lint-fix$(RESET)           Fix formatting (gofmt -s -w)"
+	@echo "  $(GREEN)check-x-net-pin$(RESET)    Verify the golang.org/x/net floor in go.mod (see X_NET_MIN_VERSION)"
 	@echo "  $(GREEN)cover$(RESET)              Unit tests with coverage (coverage.out + summary line)"
 	@echo "  $(GREEN)cover-check$(RESET)        Fail if library coverage < $(COVERAGE_MIN)% (Docker + Postgres; see COVER_TEST_PKGS)"
 	@echo "  $(GREEN)cover-integration$(RESET)  Same stack as test-integration; go test ./... with coverage (coverage-integration.out)"
@@ -232,18 +237,43 @@ test-platforms-ping:
 # Install optional dev tools (govulncheck, gocyclo)
 .PHONY: tools
 tools:
-	go install golang.org/x/vuln/cmd/govulncheck@latest
-	go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+	go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
+	go install github.com/fzipp/gocyclo/cmd/gocyclo@v0.6.0
 
-# Lint: gofmt + go vet + gocyclo (run during development; CI runs this too)
+# Lint: x/net floor + gofmt + go vet + gocyclo (run during development; CI runs this too)
 lint:
+	@$(MAKE) check-x-net-pin
 	@echo "Checking gofmt -s..."
 	@unformatted=$$(gofmt -s -l .); [ -z "$$unformatted" ] || { echo "Files not formatted (run make lint-fix):"; echo "$$unformatted"; exit 1; }
 	@echo "Running go vet..."
 	@go vet ./...
 	@echo "Checking gocyclo (complexity <= 14)..."
-	@command -v gocyclo >/dev/null 2>&1 || go install github.com/fzipp/gocyclo/cmd/gocyclo@latest
+	@command -v gocyclo >/dev/null 2>&1 || go install github.com/fzipp/gocyclo/cmd/gocyclo@v0.6.0
 	@gocyclo -over 14 .
+
+# Verify the golang.org/x/net floor (see X_NET_MIN_VERSION).
+# The floor is a replace directive in go.mod, because `go mod tidy` can drop a
+# plain require for a module whose packages are not imported. This target only
+# verifies: it never edits go.mod.
+.PHONY: check-x-net-pin
+check-x-net-pin:
+	@echo "Checking golang.org/x/net floor (minimum $(X_NET_MIN_VERSION))..."
+	@if ! grep -qE '^replace golang\.org/x/net => golang\.org/x/net v[0-9]' go.mod; then \
+		echo "go.mod is missing the golang.org/x/net replace directive."; \
+		echo "add it with: go mod edit -replace golang.org/x/net=golang.org/x/net@$(X_NET_MIN_VERSION)"; \
+		exit 1; \
+	fi
+	@resolved=$$(go list -m -f '{{if .Replace}}{{.Replace.Version}}{{else}}{{.Version}}{{end}}' golang.org/x/net 2>/dev/null); \
+	if [ -z "$$resolved" ]; then \
+		echo "golang.org/x/net is not in the module graph: no dependency imports it, the floor is inert."; \
+		exit 0; \
+	fi; \
+	lowest=$$(printf '%s\n%s\n' "$(X_NET_MIN_VERSION)" "$$resolved" | sort -V | head -n1); \
+	if [ "$$lowest" != "$(X_NET_MIN_VERSION)" ]; then \
+		echo "golang.org/x/net resolves to $$resolved (< $(X_NET_MIN_VERSION))."; \
+		exit 1; \
+	fi; \
+	echo "golang.org/x/net floor OK ($$resolved >= $(X_NET_MIN_VERSION))"
 
 # Fix formatting only (gofmt -s -w); re-run make lint to verify go vet and gocyclo
 lint-fix:
@@ -292,7 +322,7 @@ docker-scan:
 		grype pgwd:scan --fail-on $(GRYPE_FAIL_ON); \
 	else \
 		echo "grype not on PATH; using anchore/grype container..."; \
-		docker run --rm --pull=always -v /var/run/docker.sock:/var/run/docker.sock anchore/grype:latest \
+		docker run --rm --pull=always -v /var/run/docker.sock:/var/run/docker.sock anchore/grype:v0.122.1 \
 			pgwd:scan --fail-on $(GRYPE_FAIL_ON); \
 	fi
 
@@ -316,7 +346,7 @@ release-check:
 	@echo "All release checks passed."
 
 # Release: only from main. Requires release-check to pass. Merge develop → main, update VERSION, then: git tag v0.1.0 && make release
-.PHONY: help release snapshot dist-freebsd dist-openbsd docker-build docker-buildx-amd64 docker-buildx-amd64-push docker-scan security lint lint-fix test-integration port-openbsd-sync cover cover-check cover-integration integration-compose-up integration-compose-down tools
+.PHONY: help release snapshot dist-freebsd dist-openbsd docker-build docker-buildx-amd64 docker-buildx-amd64-push docker-scan security lint lint-fix check-x-net-pin test-integration port-openbsd-sync cover cover-check cover-integration integration-compose-up integration-compose-down tools
 release: release-check
 	$(check-docker)
 	@branch=$$(git branch --show-current 2>/dev/null); \

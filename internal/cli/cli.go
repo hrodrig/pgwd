@@ -34,6 +34,25 @@ const (
 	ExitStrictNotify   = 4 // -strict and notifier delivery failed
 )
 
+// MaxCheckTimeout caps each target check (connect + queries) so a hung peer cannot stall the daemon.
+const MaxCheckTimeout = 30 * time.Second
+
+// CheckTimeout returns the per-check context deadline: min(interval, MaxCheckTimeout).
+// One-shot (interval ≤ 0) uses MaxCheckTimeout.
+func CheckTimeout(cfg *config.Config) time.Duration {
+	if cfg == nil || cfg.Interval <= 0 {
+		return MaxCheckTimeout
+	}
+	d := time.Duration(cfg.Interval) * time.Second
+	if d > MaxCheckTimeout {
+		return MaxCheckTimeout
+	}
+	if d < time.Second {
+		return time.Second
+	}
+	return d
+}
+
 // exitFunc is os.Exit; tests may replace it to avoid killing the test process.
 var exitFunc = os.Exit
 
@@ -98,7 +117,7 @@ func parseFlags(cfg *config.Config) (showVersion bool) {
 	showVersionFlag := flag.Bool("version", false, "print version and exit")
 	configPath := config.ConfigPath()
 	flag.StringVar(&configPath, "config", configPath, "Config file path (PGWD_CONFIG); default /etc/pgwd/pgwd.conf")
-	flag.StringVar(&cfg.DBURL, "db-url", cfg.DBURL, "PostgreSQL connection URL (PGWD_DB_URL)")
+	flag.StringVar(&cfg.DBURL, "db-url", cfg.DBURL, "PostgreSQL connection URL (PGWD_DB_URL); prefer env or password_from_secret — the flag value is visible in ps")
 	flag.IntVar(&cfg.ThresholdIdle, "db-threshold-idle", cfg.ThresholdIdle, "Alert when idle connections >= N (PGWD_DB_THRESHOLD_IDLE)")
 	flag.IntVar(&cfg.StaleAge, "db-stale-age", cfg.StaleAge, "Consider connection stale if open longer than N seconds (PGWD_DB_STALE_AGE)")
 	flag.IntVar(&cfg.ThresholdStale, "db-threshold-stale", cfg.ThresholdStale, "Alert when stale connections (open > stale-age) >= N (PGWD_DB_THRESHOLD_STALE)")
@@ -369,13 +388,14 @@ func Run() {
 	defer httpCleanup()
 	maybeLogConfigTrace(&cfg, configPath, loaded, len(os.Args) > 1)
 
-	for _, t := range targets {
-		runOneTarget(ctx, t, &cfg, senders, st, targets)
+	prevStates := make([]string, len(targets))
+	for i, t := range targets {
+		runOneTarget(ctx, t, &cfg, senders, st, targets, &prevStates[i])
 	}
 	if cfg.Interval <= 0 {
 		return
 	}
-	runTickerLoop(ctx, &cfg, senders, st, targets)
+	runTickerLoop(ctx, &cfg, senders, st, targets, prevStates)
 }
 
 // loadAndParseConfig reads YAML (if present), applies defaults and env, parses CLI
@@ -455,6 +475,9 @@ func setupHTTPIfConfigured(cfg *config.Config, st store.MetricsStorer) func() {
 	if cfg.HTTPListen == "" {
 		return func() {}
 	}
+	if httpsrv.WarnInsecureMetricsBind(cfg) {
+		log.Printf("pgwd: warning: http.listen %q exposes anonymous /metrics on a non-loopback address; set http.metrics_token or bind 127.0.0.1", cfg.HTTPListen)
+	}
 	httpSrv := httpsrv.New(cfg, st)
 	if err := httpSrv.Start(); err != nil {
 		log.Fatalf("http: %v", err)
@@ -478,11 +501,16 @@ func exitStrictIf(cfg *config.Config, deliveryFailed bool) {
 }
 
 // exitConnectFailureIf exits with ExitConnectFailure for single-target connect failure.
-func exitConnectFailureIf(targets []config.DatabaseTarget) {
-	if len(targets) == 1 {
-		log.Printf("postgres connect failed (check database URL, connectivity, and credentials)")
-		exitFunc(ExitConnectFailure)
+// Daemon mode (interval > 0) logs and returns so a transient outage does not kill the process.
+func exitConnectFailureIf(cfg *config.Config, targets []config.DatabaseTarget) {
+	if len(targets) != 1 {
+		return
 	}
+	log.Printf("postgres connect failed (check database URL, connectivity, and credentials)")
+	if cfg != nil && cfg.Interval > 0 {
+		return
+	}
+	exitFunc(ExitConnectFailure)
 }
 
 // exitQueryErrorIf exits with ExitQueryError on one-shot single-target stats query failure.
@@ -495,11 +523,13 @@ func exitQueryErrorIf(cfg *config.Config, targets []config.DatabaseTarget, query
 	exitFunc(ExitQueryError)
 }
 
-// handleConnectFailure notifies (if configured) then exits 2 for single-target, or logs for multi-DB.
-func handleConnectFailure(ctx context.Context, senders []notify.Sender, targetCfg *config.Config, cluster, client, ns, db string, connectErr error, targets []config.DatabaseTarget) {
+// handleConnectFailure notifies (if configured), persists connect_failure when a store is set,
+// then exits 2 for one-shot single-target (daemon continues), or logs for multi-DB.
+func handleConnectFailure(ctx context.Context, senders []notify.Sender, targetCfg *config.Config, cluster, client, ns, db string, connectErr error, targets []config.DatabaseTarget, st store.MetricsStorer) {
 	exitStrictIf(targetCfg, run.NotifyConnectFailure(ctx, senders, targetCfg, cluster, client, ns, db, connectErr))
+	run.PersistConnectFailure(ctx, st, cluster, client, ns, db, connectErr)
 	if len(targets) == 1 {
-		exitConnectFailureIf(targets)
+		exitConnectFailureIf(targetCfg, targets)
 		return
 	}
 	log.Printf("postgres connect failed [%s]: %v", client, connectErr)
@@ -507,38 +537,42 @@ func handleConnectFailure(ctx context.Context, senders []notify.Sender, targetCf
 
 // runOneTarget connects to one database target, applies threshold defaults, and
 // runs the first check. On connect or threshold errors it notifies (if configured)
-// and returns; single-target mode exits the process on connect failure.
-func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, targets []config.DatabaseTarget) {
-	targetCfg := cfg.ConfigForTarget(t)
-	runCluster, runClient, runNamespace, runDatabase := run.RunContextStrings(ctx, targetCfg, t.URL)
+// and returns; one-shot single-target exits the process on connect failure (daemon continues).
+// memPrev is the per-target firing latch used when no metrics store is configured (#32).
+func runOneTarget(ctx context.Context, t config.DatabaseTarget, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, targets []config.DatabaseTarget, memPrev *string) {
+	checkCtx, cancel := context.WithTimeout(ctx, CheckTimeout(cfg))
+	defer cancel()
 
-	pool, err := postgres.Pool(ctx, t.URL)
+	targetCfg := cfg.ConfigForTarget(t)
+	runCluster, runClient, runNamespace, runDatabase := run.RunContextStrings(checkCtx, targetCfg, t.URL)
+
+	pool, err := postgres.Pool(checkCtx, t.URL)
 	if err != nil {
-		handleConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err, targets)
+		handleConnectFailure(checkCtx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err, targets, st)
 		return
 	}
 	defer pool.Close()
 
-	// pgxpool.New is lazy; Ping forces a real connection so connect failures map to exit 2.
-	if err := pool.Ping(ctx); err != nil {
-		handleConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err, targets)
+	// pgxpool is lazy; Ping forces a real connection so connect failures map to exit 2 (one-shot).
+	if err := pool.Ping(checkCtx); err != nil {
+		handleConnectFailure(checkCtx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err, targets, st)
 		return
 	}
 
-	if err := run.ApplyThresholdDefaults(ctx, pool, targetCfg); err != nil {
-		exitStrictIf(targetCfg, run.NotifyConnectFailure(ctx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err))
+	if err := run.ApplyThresholdDefaults(checkCtx, pool, targetCfg); err != nil {
+		exitStrictIf(targetCfg, run.NotifyConnectFailure(checkCtx, senders, targetCfg, runCluster, runClient, runNamespace, runDatabase, err))
 		log.Printf("threshold config error [%s]: %v", t.Client, err)
 		exitQueryErrorIf(targetCfg, targets, true)
 		return
 	}
-	outcome := run.MakeRunFunc(ctx, pool, targetCfg, senders, st, runCluster, runClient, runNamespace, runDatabase)()
+	outcome := run.MakeRunFunc(checkCtx, pool, targetCfg, senders, st, runCluster, runClient, runNamespace, runDatabase, memPrev)()
 	exitStrictIf(targetCfg, outcome.DeliveryFailed)
 	exitQueryErrorIf(targetCfg, targets, outcome.QueryFailed)
 }
 
 // runTickerLoop repeats runOneTarget for every target every cfg.Interval seconds
 // until ctx is cancelled (SIGINT/SIGTERM).
-func runTickerLoop(ctx context.Context, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, targets []config.DatabaseTarget) {
+func runTickerLoop(ctx context.Context, cfg *config.Config, senders []notify.Sender, st store.MetricsStorer, targets []config.DatabaseTarget, prevStates []string) {
 	ticker := time.NewTicker(time.Duration(cfg.Interval) * time.Second)
 	defer ticker.Stop()
 	for {
@@ -546,8 +580,12 @@ func runTickerLoop(ctx context.Context, cfg *config.Config, senders []notify.Sen
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			for _, t := range targets {
-				runOneTarget(ctx, t, cfg, senders, st, targets)
+			for i, t := range targets {
+				var memPrev *string
+				if i < len(prevStates) {
+					memPrev = &prevStates[i]
+				}
+				runOneTarget(ctx, t, cfg, senders, st, targets, memPrev)
 			}
 		}
 	}

@@ -25,7 +25,7 @@ jobs:
           go-version-file: go.mod
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.10.0
 
       - name: Run govulncheck
         run: govulncheck ./...
@@ -48,9 +48,10 @@ jobs:
           tags: pgwd:scan
           file: ./Dockerfile
 
-      - name: Install Grype
-        run: |
-          curl -sSfL https://get.anchore.io/grype | sh -s -- -b /usr/local/bin
-
+      # Pin Grype image tag (Dependabot docker ecosystem can refresh).
       - name: Run Grype on image
-        run: grype pgwd:scan --fail-on high
+        run: |
+          docker run --rm --pull=always \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            anchore/grype:v0.122.1 \
+            pgwd:scan --fail-on high

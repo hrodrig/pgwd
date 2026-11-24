@@ -16,7 +16,7 @@
 [![codecov](https://codecov.io/gh/hrodrig/pgwd/graph/badge.svg)](https://codecov.io/gh/hrodrig/pgwd)
 [![gghstats clones](https://gghstats.hermesrodriguez.com/api/v1/badge/hrodrig/pgwd?metric=clones)](https://gghstats.hermesrodriguez.com/hrodrig/pgwd)
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go)
-[![Go 1.26.6](https://img.shields.io/badge/go-1.26.6-00ADD8?logo=go)](https://go.dev/)
+[![Go 1.27.4](https://img.shields.io/badge/go-1.27.4-00ADD8?logo=go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![pkg.go.dev](https://pkg.go.dev/badge/github.com/hrodrig/pgwd)](https://pkg.go.dev/github.com/hrodrig/pgwd)
 [![deps.dev](https://img.shields.io/badge/deps.dev-go%20module-blue)](https://deps.dev/go/github.com%2Fhrodrig%2Fpgwd)
@@ -180,6 +180,8 @@ PGWD_CONFIG=/path/to/pgwd.conf pgwd
 
 **`-db-url` override (one-shot):** When the config file has `databases:` (multi-DB), passing `-db-url` and `-interval 0` runs against that single URL only, ignoring the databases from config for that run. Useful for quick ad-hoc checks without editing the config.
 
+**Password visibility:** Prefer `PGWD_DB_URL` (or a config file / `password_from_secret`) over `-db-url` with an embedded password — argv is visible in `ps` and process audits.
+
 ### Multi-database limitations
 
 - **`-kube-postgres` / `kube.postgres` and `databases:` are mutually exclusive.** Validation rejects that combination. Multi-DB mode expects **direct** Postgres URLs (e.g. in-cluster DNS, VPN, or `localhost` after manual port-forward). For port-forward from **outside** the cluster, use **N port-forwards + one `databases:` config**, or **one pgwd process per** forwarded instance — see **[docs/use-cases.md](docs/use-cases.md)** (UC-5, UC-6, UC-7).
@@ -269,6 +271,8 @@ pgwd -db-threshold-levels 5,10,15 -dry-run
 | **levels** (3-tier) | % of `max_connections` — attention / alert / danger (default mode) | `-db-threshold-levels 75,85,95` (default) or `-db-threshold-levels 70,85,90` |
 | **idle** | Pool size / connections sitting idle | `-db-threshold-idle 40` |
 | **stale** | Connections open too long (leaks, never closed) | `-db-stale-age 600 -db-threshold-stale 1` |
+
+**Metrics scope and privileges:** Connection counts come from `pg_stat_activity` filtered to **`datname = current_database()`**, but level thresholds compare those counts to cluster-wide **`max_connections`** (reserved slots are not subtracted). Other databases, replication, and background workers are therefore outside the numerator. Grant the monitor role **`pg_monitor`** (or equivalent) so `state` is visible for other sessions; without it, active/idle/long_query counts can under-report.
 
 ```bash
 # 3-tier levels (default 75,85,95% of max_connections) — one-shot, Slack
@@ -526,7 +530,7 @@ When you run pgwd as a Deployment (Docker image in K8s), use **direct service UR
 - **Postgres:** `databases[].url` with in-cluster DNS, e.g. `postgres://user:pass@postgres.default.svc.cluster.local:5432/mydb` (shorter: `postgres-service.namespace:5432`).
 - **Loki:** `notifications.loki.url` with in-cluster DNS, e.g. `http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push`.
 - **Passwords:** From a Secret via env (`PGWD_*` or `-config`). **Do not use `DISCOVER_MY_PASSWORD`** (deprecated; removed in 0.9.x).
-- **HTTP:** Set `http.listen: ":8080"` for `/healthz` and `/metrics` (liveness, Prometheus).
+- **HTTP:** Set `http.listen: ":8080"` for `/healthz` and `/metrics` (liveness, Prometheus). Optional `http.metrics_token` uses **Bearer** only (not `?token=`). Prefer `127.0.0.1` or auth when the bind is reachable beyond a trusted network. On Linux, the listener disables Multipath TCP (Go 1.24+ default); still patch the host kernel for CVE-2026-98432.
 - **CSV export (metrics store):** Check history is persisted under **`sqlite.path`** (SQLite) or **`metrics_store.driver`** + **`metrics_store.dsn`** (PostgreSQL / MySQL). **[TimescaleDB](https://www.timescale.com/)** works as **`driver: postgres`** pointing at your Timescale endpoint (plain `metrics` table; no pgwd-specific hypertable integration). To dump stored rows: **`pgwd -config /etc/pgwd/pgwd.conf -export-metrics-format csv -export-metrics-destination /path/out.csv`**. SQLite export opens the file **read-only** (safe while the daemon runs). Overwrites the CSV each run; use **cron** for periodic snapshots. See **`internal/metricsstore`** and **`contrib/pgwd.conf.example`**.
 
 Simplest: use env vars from Secrets (no config file). Example Deployment env:
@@ -841,7 +845,7 @@ docker run -d --name pgwd-pg \
   -e POSTGRES_PASSWORD=secret \
   -e POSTGRES_DB=postgres \
   -p 5433:5432 \
-  postgres:16-alpine
+  postgres:18-alpine
 ```
 
 **Connection URL** (host port 5433, `sslmode=disable`):
@@ -1053,7 +1057,7 @@ docker pull ghcr.io/hrodrig/pgwd:v1.2.0
 docker pull ghcr.io/hrodrig/pgwd:latest
 ```
 
-**Build from source:** Multi-stage **Dockerfile** (Go 1.26.6 build; **distroless/static-debian13:nonroot** runtime): static binary, non-root, no Alpine OS packages. Use `make docker-build` locally; release images via GoReleaser + **`Dockerfile.release`** (same distroless base).
+**Build from source:** Multi-stage **Dockerfile** (Go 1.27.4 build; **distroless/static-debian13:nonroot** runtime): static binary, non-root, no Alpine OS packages. Use `make docker-build` locally; release images via GoReleaser + **`Dockerfile.release`** (same distroless base).
 
 **Image details**
 

@@ -68,7 +68,7 @@ Documented operator-facing gaps; planned hardening is in [ROADMAP.md](ROADMAP.md
 | `pgwd --print-sample-config` | Writes annotated sample YAML to **stdout** and exits 0. |
 | `pgwd -dry-run` | Runs normally but skips all outbound HTTP notifications (Slack, Loki, PagerDuty, Teams, generic webhook, etc.). Logs every event as `[dry-run] would send: …`. |
 | `pgwd -force-notification` | Sends one test event to all configured notifiers after a successful Postgres connect, regardless of thresholds. |
-| `pgwd -validate-k8s-access` | Validates cluster connectivity (lists pods), then exits. Uses `-kube-context` when set. Does not require `-kube-postgres`. |
+| `pgwd -validate-k8s-access` | Validates cluster connectivity via API Discovery (server version), then exits. Uses `-kube-context` when set. Does not require `-kube-postgres`. |
 | `pgwd -export-metrics-format csv -export-metrics-destination <path>` | Dumps persisted metrics from the configured store to a CSV file, then exits. |
 
 ### Exit codes
@@ -77,7 +77,7 @@ Documented operator-facing gaps; planned hardening is in [ROADMAP.md](ROADMAP.md
 |------|---------|
 | 0 | Success (no thresholds exceeded, or dry-run, or force-notification delivered, or export complete) |
 | 1 | Config validation error (missing required flags, invalid combo, no notifier + no dry-run) |
-| 2 | Postgres connection failure (or too many clients) after config is valid — single-target; multi-DB logs and skips the target |
+| 2 | Postgres connection failure (or too many clients) after config is valid — **one-shot** (`interval == 0`) single-target only; **daemon** logs, notifies, persists `connect_failure` when a store is configured, and continues; multi-DB logs and skips the target |
 | 3 | Postgres query error during stats collection — **one-shot** (`interval == 0`) single-target only; daemon logs and continues |
 | 4 | Notifier delivery failure when **`-strict`** is set (threshold events only) |
 
@@ -234,7 +234,7 @@ When `databases:` is non-empty in the config file, each entry is one Postgres ta
 | `http.base_path` | string | `/api/pgwd/v1` | |
 | `http.health_path` | string | `/healthz` | |
 | `http.metrics_path` | string | `/metrics` | |
-| `http.metrics_token` | string | — | **Opt-in.** When set, `/metrics` requires Bearer token or `?token=`; leave empty for anonymous scrape (default). |
+| `http.metrics_token` | string | — | **Opt-in.** When set, `/metrics` requires `Authorization: Bearer <token>` (query `?token=` is **not** accepted); leave empty for anonymous scrape (default). |
 | `http.metrics_basic_user` | string | — | **Opt-in** with `http.metrics_basic_password`; Basic auth on `/metrics` only. |
 | `http.metrics_basic_password` | string | — | Pair with `http.metrics_basic_user`. |
 
@@ -302,12 +302,16 @@ All config keys map to `PGWD_<UPPER_SNAKE>` equivalents. Notifier env vars:
 
 ### Connection stats
 
-Queried from `pg_stat_activity`:
-- **Total:** count of all connections (including idle, active, etc.), excluding the monitor's own connection
+Queried from `pg_stat_activity` with **`datname = current_database()`** (current database only):
+- **Total:** count of backends for this database (including idle, active, etc.)
 - **Active:** `state = 'active'`
 - **Idle:** `state = 'idle'`
 - **Stale:** `backend_start` older than `stale_age` seconds
 - **Long-running queries:** `state = 'active'` and `query_start` older than `long_query_min_seconds`
+
+**Denominator:** level-mode percentages use cluster-wide `max_connections` (reserved slots not subtracted). Other databases, replication, and background workers are outside the numerator.
+
+**Privileges:** the monitor role should have **`pg_monitor`** (or equivalent). Without it, `state` for other sessions may be NULL and active/idle/long_query counts under-report.
 
 ### Threshold evaluation order (each check cycle)
 
@@ -331,7 +335,7 @@ After hysteresis and long-query cooldown, connection-threshold events (`total` /
 - **Default** (`notifications.repeat_while_firing: false`): notify when entering a bad state, on **escalation** (`attention` → `alert` → `danger`), or on **de-escalation**. Same severity while still firing → no outbound threshold notification.
 - **`repeat_while_firing: true`**: restore v1.0 behavior (notify every interval while bad).
 - `long_query`, `connect_failure`, `too_many_clients`, and `test` are not suppressed by this latch.
-- Previous state comes from the metrics store when configured; otherwise from in-memory state in the daemon loop.
+- Previous state comes from the metrics store when configured; otherwise from **process-local** in-memory state kept across ticks in the daemon loop (survives `MakeRunFunc` recreation each interval). Restart clears memory; `confirm_alert` / `confirm_ok` hysteresis still require a metrics store.
 
 CLI: `-notifications-repeat-while-firing`. Env: `PGWD_NOTIFICATIONS_REPEAT_WHILE_FIRING`.
 
@@ -532,14 +536,14 @@ Requires an active metrics store (sqlite.path or metrics_store.driver+dsn).
 ### Build
 
 - Go module: `github.com/hrodrig/pgwd`
-- Minimum Go: 1.26.6 (as of Unreleased / next patch)
+- Minimum Go: 1.27.4 (as of Unreleased / next patch)
 - `make build`: reads `VERSION`, injects `Version`/`Commit`/`BuildDate`/`Branch` via ldflags
 - `make install`: installs to `$GOBIN`
 - Cross-compile: `make build-linux`, `make build-darwin`, `make build-windows`, `make build-all` (output in `dist/`)
 
 ### Docker
 
-- Multi-stage build: `golang:1.26.6-alpine` → `gcr.io/distroless/static-debian13:nonroot`
+- Multi-stage build: `golang:1.27.4-alpine3.24` → `gcr.io/distroless/static-debian13:nonroot`
 - **Static binary** (`CGO_ENABLED=0`); runtime image has **no shell, kubectl, or OS packages**
 - **HTTPS notifiers** (Slack, Loki, PagerDuty, etc.): CA bundle included in distroless/static
 - **Kubernetes in-container:** `-kube-postgres` / `-kube-loki` use **client-go** (port-forward, API calls). **No kubectl binary** — mount kubeconfig or use in-cluster ServiceAccount + RBAC. **`DISCOVER_MY_PASSWORD` / `pods/exec` removed in 0.9.x**; use Secret-backed DSN or `kube.password_from_secret`.
