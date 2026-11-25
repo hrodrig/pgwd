@@ -6,6 +6,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Releas
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-11-25
+
+Dependency refresh after v1.2.1: Go modules and GitHub Actions bumps validated on `develop` (local + CI). No operator-facing behavior changes.
+
+### Changed
+
+- **Go modules:** `github.com/jackc/pgx/v5` **5.9.2 → 5.13.0**; `github.com/go-sql-driver/mysql` **1.8.1 → 1.10.2**; `github.com/ncruces/go-sqlite3` **0.35.4 → 0.38.0**; Kubernetes client stack (`k8s.io/api`, `apimachinery`, `client-go`) **0.35.0 → 0.37.2**.
+- **GitHub Actions:** `actions/checkout` 4→7, `actions/setup-go` 5→7, `codecov/codecov-action` 5→7, `docker/setup-qemu-action` 3→4, `docker/build-push-action` 6→7, `docker/login-action` 3→4, `docker/setup-buildx-action` 3→4, `goreleaser/goreleaser-action` 6→7.
+
 ## [1.2.1] - 2026-11-24
 
 Security and reliability hardening from the Nov 2026 audit (#28–#38). Operators pulling the published binary and GHCR image get Go **1.27.4**, `x/net` **v0.62.0**, daemon connect survival, and `/metrics`/notify hardening.
@@ -581,7 +590,8 @@ Pre-1.0 security and operator polish: removes insecure Kubernetes password disco
 
 ---
 
-[Unreleased]: https://github.com/hrodrig/pgwd/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/hrodrig/pgwd/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/hrodrig/pgwd/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/hrodrig/pgwd/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/hrodrig/pgwd/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/hrodrig/pgwd/compare/v1.1.0...v1.1.1

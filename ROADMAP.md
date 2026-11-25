@@ -1,8 +1,8 @@
 # pgwd roadmap
 
-**Current release:** [v1.2.1](VERSION) · **Branch:** `develop` · **Next:** remaining [plan-1.2.x.md](docs/plan-1.2.x.md) hygiene (KnownFields, env honesty) as needed
+**Current release:** [v1.2.2](VERSION) · **Branch:** `develop` · **Next:** remaining [plan-1.2.x.md](docs/plan-1.2.x.md) hygiene (KnownFields, env honesty) as needed
 
-**Status (2026-11-24):** **v1.2.1** shipped (security/reliability: Go **1.27.4**, `golang.org/x/net` **v0.62.0**, daemon connect survival, `/metrics`+notify hardening, kube reconnect). **v1.2.0** SQLite packaging bump remains. Stable API remains **v1.0.0** (+ additive 1.1+/1.2 keys). Distro packaging continues in **1.x** (not a hard tag gate).
+**Status (2026-11-25):** **v1.2.2** shipped (dependency refresh: pgx **5.13.0**, mysql **1.10.2**, go-sqlite3 **0.38.0**, k8s **0.37.2**, Actions majors). **v1.2.1** security/reliability hardening remains. Stable API remains **v1.0.0** (+ additive 1.1+/1.2 keys). Distro packaging continues in **1.x** (not a hard tag gate).
 
 This file is the **single roadmap index**. Shipped behavior: [SPECIFICATIONS.md](SPECIFICATIONS.md). Shipped releases: [CHANGELOG.md](CHANGELOG.md). Implementation detail per band: [docs/plan-0.7.x.md](docs/plan-0.7.x.md) → … → [docs/plan-1.1.x.md](docs/plan-1.1.x.md) → [docs/plan-1.1.1.md](docs/plan-1.1.1.md) → [docs/plan-1.2.x.md](docs/plan-1.2.x.md).
 
@@ -27,6 +27,7 @@ flowchart LR
   G --> H["1.1.1 ✅"]
   H --> I["1.2.0 ✅"]
   I --> J["1.2.1 ✅"]
+  J --> K["1.2.2 ✅"]
 ```
 
 | Band | Status | Target | Theme | Plan |
@@ -41,6 +42,7 @@ flowchart LR
 | **1.1.1** | ✅ Shipped | Aug 2026 | Security: Go 1.26.6 + `x/net` v0.56.0. Remaining latch/SPEC/YAML in [plan-1.1.1.md](docs/plan-1.1.1.md) | [CHANGELOG](CHANGELOG.md#111---2026-08-31) |
 | **1.2.0** | ✅ Shipped | Sep 2026 | SQLite driver bump for Debian packaging | [CHANGELOG](CHANGELOG.md#120---2026-09-05) |
 | **1.2.1** | ✅ Shipped | Nov 2026 | Security/reliability audit hardening (Go 1.27.4, daemon, `/metrics`, notify, kube) | [CHANGELOG](CHANGELOG.md#121---2026-11-24) · [plan-1.2.x.md](docs/plan-1.2.x.md) |
+| **1.2.2** | ✅ Shipped | Nov 2026 | Dependency refresh (pgx, mysql, sqlite3, k8s 0.37.2, Actions) | [CHANGELOG](CHANGELOG.md#122---2026-11-25) |
 
 **Suggested calendar** (from band plans — **slip OK**; 0.7.x started 2026-07-02):
 
@@ -56,6 +58,7 @@ flowchart LR
 | Aug 31 | v1.1.1 ✅ (security; leftover [plan-1.1.1.md](docs/plan-1.1.1.md) after this tag) |
 | Sep 5 | v1.2.0 ✅ |
 | Nov 24 | v1.2.1 ✅ (security/reliability; leftover [plan-1.2.x.md](docs/plan-1.2.x.md) items optional) |
+| Nov 25 | v1.2.2 ✅ (dependency refresh) |
 
 Each band: design → implement → test → `make release-check` → docs → tag from `main`.
 
