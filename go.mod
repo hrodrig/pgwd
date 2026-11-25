@@ -7,7 +7,7 @@ godebug multipathtcp=0
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/go-sql-driver/mysql v1.10.2
-	github.com/jackc/pgx/v5 v5.9.2
+	github.com/jackc/pgx/v5 v5.13.0
 	github.com/ncruces/go-sqlite3 v0.38.0
 	golang.org/x/sys v0.50.0
 	gopkg.in/yaml.v3 v3.0.1
@@ -41,7 +41,7 @@ require (
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/puddle/v2 v2.2.2 // indirect
+	github.com/jackc/puddle/v2 v2.2.3 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/moby/spdystream v0.5.1 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
